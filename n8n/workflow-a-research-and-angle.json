@@ -153,7 +153,7 @@
         "url": "={{$('A1 · Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ request_id: $json.requestId, stage: 'research_search', status: 'failed', detail: 'Search returned zero results for the stated idea.' }) }}",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('A1 · Map Results').first().json.requestId, stage: 'research_search', status: 'failed', detail: 'Search returned zero results for the stated idea.' }) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -232,7 +232,7 @@
     {
       "parameters": {
         "method": "PATCH",
-        "url": "={{$('A1 · Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.requestId}}",
+        "url": "={{$('A1 · Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('A1 · Map Results').first().json.requestId}}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ status: 'awaiting_source_selection' }) }}",
@@ -785,7 +785,7 @@
         "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ request_id: $json.requestId, stage: 'angle_proposal', status: 'failed', detail: $json.resonance_score <= 6 ? `Audience resonance too low (${$json.resonance_score}/15).` : `Sources do not support the idea. Alternative: ${$json.alternative_direction_if_unsupported}` }) }}",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('A2 · Parse Claude Response').first().json.requestId, stage: 'angle_proposal', status: 'failed', detail: $('A2 · Parse Claude Response').first().json.resonance_score <= 6 ? `Audience resonance too low (${$('A2 · Parse Claude Response').first().json.resonance_score}/15).` : `Sources do not support the idea. Alternative: ${$('A2 · Parse Claude Response').first().json.alternative_direction_if_unsupported}` }) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -816,7 +816,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'hard_block', resonance_score: $json.resonance_score, sources_support_idea: $json.sources_support_idea, alternative: $json.alternative_direction_if_unsupported }) }}"
+        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'hard_block', resonance_score: $('A2 · Parse Claude Response').first().json.resonance_score, sources_support_idea: $('A2 · Parse Claude Response').first().json.sources_support_idea, alternative: $('A2 · Parse Claude Response').first().json.alternative_direction_if_unsupported }) }}"
       },
       "id": "a2-respond-blocked",
       "name": "A2 · Respond (blocked)",
@@ -864,10 +864,10 @@
     {
       "parameters": {
         "method": "PATCH",
-        "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.requestId}}",
+        "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('A2 · Parse Claude Response').first().json.requestId}}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ status: 'awaiting_angle_selection', resolved_audience_profile_id: $json.matched_audience_profile_id }) }}",
+        "jsonBody": "={{ JSON.stringify({ status: 'awaiting_angle_selection', resolved_audience_profile_id: $('A2 · Parse Claude Response').first().json.matched_audience_profile_id }) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -901,7 +901,7 @@
         "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ request_id: $json.requestId, stage: 'angle_proposal', status: 'success', detail: `Resonance ${$json.resonance_score}/15. ${$json.angles.length} angle(s) proposed.` }) }}",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('A2 · Parse Claude Response').first().json.requestId, stage: 'angle_proposal', status: 'success', detail: `Resonance ${$('A2 · Parse Claude Response').first().json.resonance_score}/15. ${$('A2 · Parse Claude Response').first().json.angles.length} angle(s) proposed.` }) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
