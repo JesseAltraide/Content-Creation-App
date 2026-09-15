@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [usePassword, setUsePassword] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -12,6 +14,14 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     const supabase = createClient();
+
+    if (usePassword) {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) setError(error.message);
+      else window.location.href = "/";
+      return;
+    }
+
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
@@ -38,11 +48,28 @@ export default function LoginPage() {
             onChange={(e) => setEmail(e.target.value)}
             className="rounded-md border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-500"
           />
+          {usePassword && (
+            <input
+              type="password"
+              required
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="rounded-md border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-500"
+            />
+          )}
           <button
             type="submit"
             className="rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800"
           >
-            Send magic link
+            {usePassword ? "Sign in" : "Send magic link"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setUsePassword((v) => !v)}
+            className="text-xs text-neutral-500 underline"
+          >
+            {usePassword ? "Use a magic link instead" : "Use a password instead"}
           </button>
           {error && <p className="text-sm text-red-600">{error}</p>}
         </form>
