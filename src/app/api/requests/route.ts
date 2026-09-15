@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { intakeSchema, dedupeUrls } from "@/lib/intake-validation";
 import { logEvent } from "@/lib/events";
+import { triggerSearchSources, triggerScrapeAndProposeAngle } from "@/lib/n8n";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -68,11 +69,9 @@ export async function POST(request: Request) {
     }
   }
 
-  const nextStatus = input.inputPath === "raw_idea" ? "researching" : "researching";
-
   await admin
     .from("requests")
-    .update({ status: nextStatus })
+    .update({ status: "researching" })
     .eq("id", request_.id)
     .eq("status", "draft");
 
@@ -82,6 +81,14 @@ export async function POST(request: Request) {
     status: "success",
     detail: `Request created via ${input.inputPath} path with ${urls.length} source URL(s).`,
   });
+
+  // Path A (raw idea): kick off search for candidate sources, human picks after.
+  // Path B (URL provided): the URL(s) already are the curation — scrape straight away.
+  if (input.inputPath === "raw_idea") {
+    await triggerSearchSources(request_.id);
+  } else {
+    await triggerScrapeAndProposeAngle(request_.id);
+  }
 
   return NextResponse.json({ request: request_ }, { status: 201 });
 }

@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
+import SourceSelection from "./source-selection";
 
 export default async function RequestDetailPage({
   params,
@@ -43,6 +44,13 @@ export default async function RequestDetailPage({
         <dt className="text-neutral-500">Channels</dt>
         <dd>{req.channels.join(", ")}</dd>
       </dl>
+
+      {req.status === "awaiting_source_selection" && (
+        <SourceSelection
+          requestId={id}
+          sources={(sources ?? []).filter((s) => s.status === "pending_selection")}
+        />
+      )}
 
       {sources && sources.length > 0 && (
         <section className="mt-8">

@@ -48,7 +48,7 @@
         "url": "https://api.tavily.com/search",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ query: $json[0].raw_idea, max_results: 8, include_answer: false }) }}",
+        "jsonBody": "={{ JSON.stringify({ query: $json.raw_idea, max_results: 8, include_answer: false }) }}",
         "options": {},
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth"
@@ -71,7 +71,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Stage 2, Path A: search returned nothing useful -> tell the human plainly instead of proceeding on weak results.\nconst requestId = $('A1 · Fetch Request Row').first().json[0].id;\nconst results = $json.results || [];\n\nif (results.length === 0) {\n  return [{ json: { requestId, noResults: true } }];\n}\n\nreturn [{\n  json: {\n    requestId,\n    noResults: false,\n    sources: results.map(r => ({\n      request_id: requestId,\n      url: r.url,\n      title: r.title || null,\n      status: 'pending_selection'\n    }))\n  }\n}];"
+        "jsCode": "// Stage 2, Path A: search returned nothing useful -> tell the human plainly instead of proceeding on weak results.\nconst requestId = $('A1 · Fetch Request Row').first().json.id;\nconst results = $json.results || [];\n\nif (results.length === 0) {\n  return [{ json: { requestId, noResults: true } }];\n}\n\nreturn [{\n  json: {\n    requestId,\n    noResults: false,\n    sources: results.map(r => ({\n      request_id: requestId,\n      url: r.url,\n      title: r.title || null,\n      status: 'pending_selection'\n    }))\n  }\n}];"
       },
       "id": "a1-map-results",
       "name": "A1 · Map Results",
@@ -318,7 +318,7 @@
     {
       "parameters": {
         "method": "PATCH",
-        "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/sources?request_id=eq.{{$json[0].id}}&status=eq.pending_selection",
+        "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/sources?request_id=eq.{{$json.id}}&status=eq.pending_selection",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ status: 'selected' }) }}",
@@ -352,7 +352,7 @@
     },
     {
       "parameters": {
-        "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/sources?request_id=eq.{{$('A2 · Fetch Request Row').first().json[0].id}}&status=eq.selected&select=*",
+        "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/sources?request_id=eq.{{$('A2 · Fetch Request Row').first().json.id}}&status=eq.selected&select=*",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "supabaseApi"
       },
@@ -381,7 +381,7 @@
           },
           "conditions": [
             {
-              "leftValue": "={{$json.length}}",
+              "leftValue": "={{$json.count}}",
               "rightValue": 0,
               "operator": {
                 "type": "number",
@@ -398,7 +398,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        560,
+        800,
         200
       ],
       "notes": "Stage 2 hard block: human proceeded having selected zero sources. Should already be blocked client-side, but this is the server-side guard that actually matters."
@@ -500,7 +500,7 @@
     },
     {
       "parameters": {
-        "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/sources?request_id=eq.{{$('A2 · Fetch Request Row').first().json[0].id}}&status=eq.scraped&select=id,url,title,scraped_text",
+        "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/sources?request_id=eq.{{$('A2 · Fetch Request Row').first().json.id}}&status=eq.scraped&select=id,url,title,scraped_text",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "supabaseApi"
       },
@@ -529,7 +529,7 @@
           },
           "conditions": [
             {
-              "leftValue": "={{$json.length}}",
+              "leftValue": "={{$json.count}}",
               "rightValue": 0,
               "operator": {
                 "type": "number",
@@ -546,7 +546,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1040,
+        1280,
         60
       ],
       "notes": "Stage 2 hard block: every selected source failed to scrape. Stop before spending any AI tokens — do not generate from nothing."
@@ -554,7 +554,7 @@
     {
       "parameters": {
         "method": "PATCH",
-        "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('A2 · Fetch Request Row').first().json[0].id}}",
+        "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('A2 · Fetch Request Row').first().json.id}}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ status: 'needs_human_attention' }) }}",
@@ -591,7 +591,7 @@
         "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ request_id: $('A2 · Fetch Request Row').first().json[0].id, stage: 'research_scrape', status: 'failed', detail: 'All selected sources failed to scrape.' }) }}",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('A2 · Fetch Request Row').first().json.id, stage: 'research_scrape', status: 'failed', detail: 'All selected sources failed to scrape.' }) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -673,7 +673,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\n  model: 'claude-sonnet-5',\n  max_tokens: 2000,\n  tools: [{\n    name: 'propose_angle',\n    description: 'Judge audience resonance and source support, then propose one or more content angles.',\n    input_schema: {\n      type: 'object',\n      required: ['resonance_score', 'resonance_reasoning', 'sources_support_idea', 'angles'],\n      properties: {\n        resonance_score: { type: 'integer', minimum: 0, maximum: 15 },\n        resonance_reasoning: { type: 'string' },\n        matched_audience_profile_id: { type: ['string', 'null'] },\n        sources_support_idea: { type: 'boolean' },\n        alternative_direction_if_unsupported: { type: ['string', 'null'] },\n        angles: {\n          type: 'array',\n          items: {\n            type: 'object',\n            required: ['working_title', 'thesis', 'section_shape'],\n            properties: {\n              working_title: { type: 'string' },\n              thesis: { type: 'string' },\n              section_shape: { type: 'array', items: { type: 'string' } }\n            }\n          }\n        }\n      }\n    }\n  }],\n  tool_choice: { type: 'tool', name: 'propose_angle' },\n  messages: [{\n    role: 'user',\n    content: `You are planning content for a marketing team.\\n\\nContent idea / primary keyword: ${$('A2 · Fetch Request Row').first().json[0].raw_idea || $('A2 · Fetch Request Row').first().json[0].primary_keyword}\\nOptional context: ${$('A2 · Fetch Request Row').first().json[0].context || 'none'}\\n\\nAudience profile(s) to check resonance against:\\n${JSON.stringify($('A2 · Fetch Audience Profiles').first().json.map(p => ({ id: p.id, name: p.name, description: p.description })))}\\n\\nResolved audience profile id (if the human picked one explicitly, check only this one; otherwise check all and take the best match): ${$('A2 · Fetch Request Row').first().json[0].audience_profile_id || 'none - check all and take best match'}\\n\\nSources (light read only - judge relevance and support, do not extract passage-by-passage):\\n${$('A2 · Fetch Scraped Sources').first().json.map(s => `URL: ${s.url}\\nTITLE: ${s.title}\\n${s.scraped_text.slice(0, 4000)}`).join('\\n\\n---\\n\\n')}\\n\\nScore audience resonance 0-15. If the sources genuinely do not support the stated idea, set sources_support_idea to false and suggest a real alternative direction the sources DO support, and return an empty angles array. Otherwise propose 1 angle if a clear idea was stated, or 2-3 candidate angles if this came from a URL with no clear stated idea - each with a working title, one-sentence thesis, and a rough section shape (array of H2-level headings).`\n  }]\n}) }}",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'claude-sonnet-5',\n  max_tokens: 2000,\n  tools: [{\n    name: 'propose_angle',\n    description: 'Judge audience resonance and source support, then propose one or more content angles.',\n    input_schema: {\n      type: 'object',\n      required: ['resonance_score', 'resonance_reasoning', 'sources_support_idea', 'angles'],\n      properties: {\n        resonance_score: { type: 'integer', minimum: 0, maximum: 15 },\n        resonance_reasoning: { type: 'string' },\n        matched_audience_profile_id: { type: ['string', 'null'] },\n        sources_support_idea: { type: 'boolean' },\n        alternative_direction_if_unsupported: { type: ['string', 'null'] },\n        angles: {\n          type: 'array',\n          items: {\n            type: 'object',\n            required: ['working_title', 'thesis', 'section_shape'],\n            properties: {\n              working_title: { type: 'string' },\n              thesis: { type: 'string' },\n              section_shape: { type: 'array', items: { type: 'string' } }\n            }\n          }\n        }\n      }\n    }\n  }],\n  tool_choice: { type: 'tool', name: 'propose_angle' },\n  messages: [{\n    role: 'user',\n    content: `You are planning content for a marketing team.\\n\\nContent idea / primary keyword: ${$('A2 · Fetch Request Row').first().json.raw_idea || $('A2 · Fetch Request Row').first().json.primary_keyword}\\nOptional context: ${$('A2 · Fetch Request Row').first().json.context || 'none'}\\n\\nAudience profile(s) to check resonance against:\\n${JSON.stringify($('A2 · Fetch Audience Profiles').all().map(item => ({ id: item.json.id, name: item.json.name, description: item.json.description })))}\\n\\nResolved audience profile id (if the human picked one explicitly, check only this one; otherwise check all and take the best match): ${$('A2 · Fetch Request Row').first().json.audience_profile_id || 'none - check all and take best match'}\\n\\nSources (light read only - judge relevance and support, do not extract passage-by-passage):\\n${$('A2 · Count Scraped Sources').first().json.sources.map(s => `URL: ${s.url}\nTITLE: ${s.title}\n${s.scraped_text.slice(0, 4000)}`).join('\n\n---\n\n')}\\n\\nScore audience resonance 0-15. If the sources genuinely do not support the stated idea, set sources_support_idea to false and suggest a real alternative direction the sources DO support, and return an empty angles array. Otherwise propose 1 angle if a clear idea was stated, or 2-3 candidate angles if this came from a URL with no clear stated idea - each with a working title, one-sentence thesis, and a rough section shape (array of H2-level headings).`\n  }]\n}) }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "anthropicApi"
       },
@@ -694,7 +694,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const toolUse = $json.content.find(c => c.type === 'tool_use');\nconst result = toolUse.input;\nconst requestId = $('A2 · Fetch Request Row').first().json[0].id;\n\nreturn [{ json: { requestId, ...result } }];"
+        "jsCode": "const toolUse = $json.content.find(c => c.type === 'tool_use');\nconst result = toolUse.input;\nconst requestId = $('A2 · Fetch Request Row').first().json.id;\n\nreturn [{ json: { requestId, ...result } }];"
       },
       "id": "a2-parse-claude-response",
       "name": "A2 · Parse Claude Response",
@@ -970,6 +970,47 @@
         200
       ],
       "notes": "Non-secret config only. Supabase, Anthropic, Tavily, and Firecrawl secrets all live in n8n Credentials instead."
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nreturn [{ json: { count: items.length, sources: items.map(i => i.json) } }];"
+      },
+      "id": "a2-count-selected",
+      "name": "A2 · Count Selected Sources",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        360
+      ],
+      "notes": "HTTP Request auto-splits a JSON array response into N items — with zero rows that means zero items, and a downstream IF node never fires on zero input items (neither branch runs, hard block silently skipped). This node always emits exactly one item so the zero-sources hard block actually fires."
+    },
+    {
+      "parameters": {
+        "jsCode": "return $json.sources.map(s => ({ json: s }));"
+      },
+      "id": "a2-expand-selected",
+      "name": "A2 · Expand Selected Sources",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nreturn [{ json: { count: items.length, sources: items.map(i => i.json) } }];"
+      },
+      "id": "a2-count-scraped",
+      "name": "A2 · Count Scraped Sources",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        60
+      ],
+      "notes": "Same zero-item gap as A2 · Count Selected Sources — a GET returning zero scraped rows produces zero items, which would silently skip the 'all sources failed to scrape' hard block without this wrapper."
     }
   ],
   "connections": {
@@ -1116,7 +1157,7 @@
       "main": [
         [
           {
-            "node": "A2 · IF Zero Selected",
+            "node": "A2 · Count Selected Sources",
             "type": "main",
             "index": 0
           }
@@ -1134,7 +1175,7 @@
         ],
         [
           {
-            "node": "A2 · Loop Over Selected Sources",
+            "node": "A2 · Expand Selected Sources",
             "type": "main",
             "index": 0
           }
@@ -1152,18 +1193,7 @@
         ],
         [
           {
-            "node": "A2 · Scrape (Crawl4AI)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "A2 · Scrape (Crawl4AI)": {
-      "main": [
-        [
-          {
-            "node": "A2 · Evaluate Scrape Result",
+            "node": "A2 · Scrape (Firecrawl)",
             "type": "main",
             "index": 0
           }
@@ -1196,7 +1226,7 @@
       "main": [
         [
           {
-            "node": "A2 · IF Zero Scraped",
+            "node": "A2 · Count Scraped Sources",
             "type": "main",
             "index": 0
           }
@@ -1365,6 +1395,50 @@
         [
           {
             "node": "A2 · Fetch Request Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A2 · Count Selected Sources": {
+      "main": [
+        [
+          {
+            "node": "A2 · IF Zero Selected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A2 · Expand Selected Sources": {
+      "main": [
+        [
+          {
+            "node": "A2 · Loop Over Selected Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A2 · Count Scraped Sources": {
+      "main": [
+        [
+          {
+            "node": "A2 · IF Zero Scraped",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A2 · Scrape (Firecrawl)": {
+      "main": [
+        [
+          {
+            "node": "A2 · Evaluate Scrape Result",
             "type": "main",
             "index": 0
           }
