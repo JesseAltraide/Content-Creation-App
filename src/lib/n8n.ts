@@ -51,3 +51,14 @@ export function triggerScrapeAndProposeAngle(requestId: string) {
     "scrape_and_propose_trigger"
   );
 }
+
+// Human picked an angle — extract excerpts scoped to it, generate the main block,
+// evaluate against the Pass 1 rubric, and revise (capped at 2 rounds) if needed.
+export function triggerGenerateAndEvaluate(requestId: string, angleId: string) {
+  return pingWebhook(
+    "wf-b-generate-evaluate",
+    { request_id: requestId, angle_id: angleId },
+    requestId,
+    "generate_and_evaluate_trigger"
+  );
+}

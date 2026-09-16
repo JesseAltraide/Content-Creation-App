@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/ui/badge";
 import { ScoreBar } from "@/components/ui/score-bar";
 import { PipelineProgress } from "@/components/ui/pipeline-progress";
 import { friendlyStageMessage } from "@/lib/friendly-errors";
+import SelectAngleButton from "./select-angle-button";
 
 const SOURCE_STATUS_STYLES: Record<string, string> = {
   scraped: "bg-success-soft text-success",
@@ -141,6 +142,10 @@ export default async function RequestDetailPage({
                       ))}
                     </ol>
                   </div>
+                )}
+
+                {req.status === "awaiting_angle_selection" && (
+                  <SelectAngleButton requestId={id} angleId={a.id} />
                 )}
               </Card>
             ))}

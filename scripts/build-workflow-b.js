@@ -1,0 +1,609 @@
+// Authors n8n/workflow-b-generate-and-evaluate.json programmatically, mirroring every
+// lesson learned building Workflow A (logged as Errors #3-#7 in week4-progress.md):
+//  - alwaysOutputData on any fetch that could legitimately return zero rows where
+//    downstream logic (a hard block, a gate) must still run.
+//  - executeOnce on any HTTP Request node that could receive >1 input item.
+//  - never $json.X directly after a Prefer:return=minimal write - reference the real
+//    data-bearing node by name instead.
+//  - no raw newlines inside backtick template literals in expressions - always the
+//    2-character \n escape, built here via NL constants to avoid any transit-layer
+//    mangling through shell/heredoc layers (Error #6).
+//  - Count nodes filter alwaysOutputData's placeholder before counting (Error #7).
+//  - credentials: Supabase API / Anthropic dedicated types, never secrets inline.
+//  - explicit Claude error branch (onError: continueErrorOutput) so a Claude failure
+//    logs cleanly and leaves the request in its prior state, per the Retry feature.
+"use strict";
+const fs = require("fs");
+const path = require("path");
+
+const NL = String.fromCharCode(10);
+// Use inside any single/double-quoted string literal that itself sits within executable
+// ${} code in a Claude prompt - a raw newline there is a JS syntax error (Error #6);
+// this is the literal 2-character escape sequence instead, safe anywhere.
+const BSN = String.fromCharCode(92, 110);
+const SUPABASE_CRED = { id: "supabase-account", name: "Supabase account" };
+const ANTHROPIC_CRED = { id: "anthropic-account", name: "Anthropic account" };
+
+const nodes = [];
+const connections = {};
+let yCursor = -400;
+
+function addNode(n) {
+  n.position = n.position || [0, yCursor += 140];
+  nodes.push(n);
+  return n;
+}
+
+function connect(fromName, toName, outputIndex = 0) {
+  connections[fromName] = connections[fromName] || { main: [] };
+  while (connections[fromName].main.length <= outputIndex) connections[fromName].main.push([]);
+  connections[fromName].main[outputIndex].push({ node: toName, type: "main", index: 0 });
+}
+
+function supabaseGet(id, name, url, opts = {}) {
+  return addNode({
+    parameters: {
+      url,
+      options: {},
+      authentication: "predefinedCredentialType",
+      nodeCredentialType: "supabaseApi",
+    },
+    id,
+    name,
+    type: "n8n-nodes-base.httpRequest",
+    typeVersion: 4.2,
+    credentials: { supabaseApi: SUPABASE_CRED },
+    alwaysOutputData: opts.alwaysOutputData ?? true,
+    ...(opts.executeOnce ? { executeOnce: true } : {}),
+    ...(opts.notes ? { notes: opts.notes } : {}),
+  });
+}
+
+function supabaseWrite(id, name, method, url, jsonBody, opts = {}) {
+  const returnMinimal = opts.returnMinimal !== false;
+  return addNode({
+    parameters: {
+      method,
+      url,
+      sendBody: true,
+      specifyBody: "json",
+      jsonBody,
+      sendHeaders: true,
+      headerParameters: {
+        parameters: returnMinimal
+          ? [{ name: "Prefer", value: "return=minimal" }]
+          : [{ name: "Prefer", value: "return=representation" }],
+      },
+      authentication: "predefinedCredentialType",
+      nodeCredentialType: "supabaseApi",
+    },
+    id,
+    name,
+    type: "n8n-nodes-base.httpRequest",
+    typeVersion: 4.2,
+    credentials: { supabaseApi: SUPABASE_CRED },
+    ...(opts.alwaysOutputData ? { alwaysOutputData: true } : {}),
+    ...(opts.notes ? { notes: opts.notes } : {}),
+  });
+}
+
+function codeNode(id, name, jsCode, opts = {}) {
+  return addNode({
+    parameters: { jsCode },
+    id,
+    name,
+    type: "n8n-nodes-base.code",
+    typeVersion: 2,
+    ...(opts.notes ? { notes: opts.notes } : {}),
+  });
+}
+
+function ifNode(id, name, leftValue, rightValue, operator) {
+  return addNode({
+    parameters: {
+      conditions: {
+        options: { caseSensitive: true, leftValue: "", typeValidation: "loose" },
+        conditions: [{ leftValue, rightValue, operator }],
+        combinator: "and",
+      },
+      options: {},
+    },
+    id,
+    name,
+    type: "n8n-nodes-base.if",
+    typeVersion: 2.2,
+  });
+}
+
+function claudeNode(id, name, model, tool, promptExpr, maxTokens) {
+  const jsonBody =
+    "={{ JSON.stringify({" +
+    NL +
+    "  model: '" + model + "'," + NL +
+    "  max_tokens: " + maxTokens + "," + NL +
+    "  tools: [" + JSON.stringify(tool) + "]," + NL +
+    "  tool_choice: { type: 'tool', name: '" + tool.name + "' }," + NL +
+    "  messages: [{ role: 'user', content: " + promptExpr + " }]" + NL +
+    "}) }}";
+
+  return addNode({
+    parameters: {
+      method: "POST",
+      url: "https://api.anthropic.com/v1/messages",
+      sendHeaders: true,
+      headerParameters: {
+        parameters: [
+          { name: "anthropic-version", value: "2023-06-01" },
+          { name: "content-type", value: "application/json" },
+        ],
+      },
+      sendBody: true,
+      specifyBody: "json",
+      jsonBody,
+      authentication: "predefinedCredentialType",
+      nodeCredentialType: "anthropicApi",
+    },
+    id,
+    name,
+    type: "n8n-nodes-base.httpRequest",
+    typeVersion: 4.2,
+    credentials: { anthropicApi: ANTHROPIC_CRED },
+    onError: "continueErrorOutput",
+  });
+}
+
+function claudeErrorBranch(claudeNodeName, stage, requestIdExpr) {
+  const errId = claudeNodeName.replace(/[^a-z0-9]/gi, "-").toLowerCase();
+  codeNode(
+    `${errId}-error-extract`,
+    `${claudeNodeName}: Extract Error`,
+    "const err = $json.error || {};" + NL +
+      "const message = (err.message || JSON.stringify(err) || 'Unknown Claude API error').slice(0, 500);" + NL +
+      `return [{ json: { requestId: ${requestIdExpr}, message } }];`
+  );
+  connect(claudeNodeName, `${claudeNodeName}: Extract Error`, 1);
+
+  supabaseWrite(
+    `${errId}-log-failed`,
+    `${claudeNodeName}: Log Failed`,
+    "POST",
+    "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+    `={{ JSON.stringify({ request_id: $json.requestId, stage: '${stage}', status: 'failed', detail: \`Claude call failed: \${$json.message}\` }) }}`
+  );
+  connect(`${claudeNodeName}: Extract Error`, `${claudeNodeName}: Log Failed`);
+
+  respondNode(
+    `${errId}-respond-failed`,
+    `${claudeNodeName}: Respond Failed`,
+    "={{ JSON.stringify({ ok: false, reason: 'claude_failed', detail: $('" + claudeNodeName + ": Extract Error').first().json.message }) }}"
+  );
+  connect(`${claudeNodeName}: Log Failed`, `${claudeNodeName}: Respond Failed`);
+}
+
+function respondNode(id, name, bodyExpr) {
+  return addNode({
+    parameters: { respondWith: "json", responseBody: bodyExpr },
+    id,
+    name,
+    type: "n8n-nodes-base.respondToWebhook",
+    typeVersion: 1.4,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Trigger + shared setup
+// ---------------------------------------------------------------------------
+
+addNode({
+  parameters: { path: "wf-b-generate-evaluate", httpMethod: "POST", responseMode: "responseNode", options: {} },
+  id: "webhook",
+  name: "Webhook: Generate & Evaluate",
+  type: "n8n-nodes-base.webhook",
+  typeVersion: 2,
+});
+
+codeNode(
+  "config",
+  "Config",
+  "return [{ json: {" + NL +
+    "  request_id: $json.body.request_id," + NL +
+    "  angle_id: $json.body.angle_id," + NL +
+    "  SUPABASE_URL: 'https://klblroceyiirhaxaqflq.supabase.co'" + NL +
+    "} }];",
+  { notes: "Non-secret config only. Supabase/Anthropic secrets live in n8n Credentials." }
+);
+connect("Webhook: Generate & Evaluate", "Config");
+
+supabaseGet(
+  "fetch-request",
+  "Fetch Request Row",
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('Config').first().json.request_id}}&select=*"
+);
+connect("Config", "Fetch Request Row");
+
+supabaseGet(
+  "fetch-angle",
+  "Fetch Angle Row",
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/angles?id=eq.{{$('Config').first().json.angle_id}}&select=*"
+);
+connect("Fetch Request Row", "Fetch Angle Row");
+
+supabaseGet(
+  "fetch-scraped-sources",
+  "Fetch Scraped Sources",
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/sources?request_id=eq.{{$('Config').first().json.request_id}}&status=eq.scraped&select=id,url,title,scraped_text",
+  { executeOnce: true }
+);
+connect("Fetch Angle Row", "Fetch Scraped Sources");
+
+codeNode(
+  "count-scraped-sources",
+  "Count Scraped Sources",
+  "const items = $input.all().filter(i => i.json && i.json.id);" + NL +
+    "return [{ json: { count: items.length, sources: items.map(i => i.json) } }];",
+  { notes: "Filters alwaysOutputData's placeholder before counting - see Error #7." }
+);
+connect("Fetch Scraped Sources", "Count Scraped Sources");
+
+ifNode("if-zero-sources", "IF Zero Scraped Sources", "={{$json.count}}", 0, { type: "number", operation: "equals" });
+connect("Count Scraped Sources", "IF Zero Scraped Sources");
+
+supabaseWrite(
+  "mark-no-sources", "Mark Needs Attention (no sources)", "PATCH",
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('Config').first().json.request_id}}",
+  "={{ JSON.stringify({ status: 'needs_human_attention' }) }}"
+);
+connect("IF Zero Scraped Sources", "Mark Needs Attention (no sources)", 0);
+supabaseWrite(
+  "log-no-sources", "Log Event (no sources)", "POST",
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+  "={{ JSON.stringify({ request_id: $('Config').first().json.request_id, stage: 'excerpt_selection', status: 'failed', detail: 'No scraped sources available for excerpt extraction.' }) }}"
+);
+connect("Mark Needs Attention (no sources)", "Log Event (no sources)");
+respondNode("respond-no-sources", "Respond (no sources)", "={{ JSON.stringify({ ok: false, reason: 'no_scraped_sources' }) }}");
+connect("Log Event (no sources)", "Respond (no sources)");
+
+// ---------------------------------------------------------------------------
+// Stage 4 — excerpt selection scoped to the chosen angle
+// ---------------------------------------------------------------------------
+
+const EXCERPT_TOOL = {
+  name: "select_excerpts",
+  description: "Select the passages from the sources genuinely relevant to the chosen angle.",
+  input_schema: {
+    type: "object",
+    required: ["excerpts"],
+    properties: {
+      excerpts: {
+        type: "array",
+        items: {
+          type: "object",
+          required: ["source_url", "text", "reason"],
+          properties: {
+            source_url: { type: "string" },
+            text: { type: "string" },
+            reason: { type: "string" },
+          },
+        },
+      },
+    },
+  },
+};
+
+const excerptPrompt =
+  "`You are selecting source excerpts for a content angle.\\n\\nChosen angle: ${$('Fetch Angle Row').first().json.working_title}\\nThesis: ${$('Fetch Angle Row').first().json.thesis}\\nSection shape: ${JSON.stringify($('Fetch Angle Row').first().json.section_shape)}\\n\\nSources:\\n${$('Count Scraped Sources').first().json.sources.map(s => `URL: ${s.url}" + NL +
+  "TITLE: ${s.title}" + NL +
+  "${s.scraped_text.slice(0, 6000)}`).join('" + BSN + BSN + "---" + BSN + BSN + "')}\\n\\nSelect every passage genuinely relevant to this specific angle - not the whole source, just passages that actually support it. For each, give the exact excerpt text (a real quote, not a paraphrase), which source URL it came from, and a one-line reason. If nothing in a source is relevant, select nothing from it. Return an empty excerpts array if truly nothing across all sources supports this angle.`";
+
+claudeNode("claude-excerpts", "Claude: Select Excerpts", "claude-sonnet-5", EXCERPT_TOOL, excerptPrompt, 4000);
+connect("IF Zero Scraped Sources", "Claude: Select Excerpts", 1);
+claudeErrorBranch("Claude: Select Excerpts", "excerpt_selection", "$('Config').first().json.request_id");
+
+codeNode(
+  "parse-excerpts",
+  "Parse Excerpts",
+  "const toolUse = $json.content.find(c => c.type === 'tool_use');" + NL +
+    "const excerpts = toolUse.input.excerpts || [];" + NL +
+    "const sources = $('Count Scraped Sources').first().json.sources;" + NL +
+    "const requestId = $('Config').first().json.request_id;" + NL +
+    "const mapped = excerpts.map(e => {" + NL +
+    "  const source = sources.find(s => s.url === e.source_url);" + NL +
+    "  return { request_id: requestId, source_id: source ? source.id : null, text: e.text, reason: e.reason };" + NL +
+    "}).filter(e => e.source_id);" + NL +
+    "return [{ json: { requestId, excerpts: mapped } }];"
+);
+connect("Claude: Select Excerpts", "Parse Excerpts", 0);
+
+ifNode("if-zero-excerpts", "IF Zero Excerpts", "={{$json.excerpts.length}}", 0, { type: "number", operation: "equals" });
+connect("Parse Excerpts", "IF Zero Excerpts");
+
+supabaseWrite(
+  "mark-no-excerpts", "Mark Needs Attention (no excerpts)", "PATCH",
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.requestId}}",
+  "={{ JSON.stringify({ status: 'needs_human_attention' }) }}"
+);
+connect("IF Zero Excerpts", "Mark Needs Attention (no excerpts)", 0);
+supabaseWrite(
+  "log-no-excerpts", "Log Event (no excerpts)", "POST",
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+  "={{ JSON.stringify({ request_id: $('Parse Excerpts').first().json.requestId, stage: 'excerpt_selection', status: 'failed', detail: 'Sources loaded fine but none contained a passage relevant to the chosen angle.' }) }}"
+);
+connect("Mark Needs Attention (no excerpts)", "Log Event (no excerpts)");
+respondNode("respond-no-excerpts", "Respond (no excerpts)", "={{ JSON.stringify({ ok: false, reason: 'zero_relevant_excerpts' }) }}");
+connect("Log Event (no excerpts)", "Respond (no excerpts)");
+
+supabaseWrite(
+  "insert-excerpts", "Insert Excerpts", "POST",
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/excerpts",
+  "={{ JSON.stringify($json.excerpts) }}",
+  { returnMinimal: false }
+);
+connect("IF Zero Excerpts", "Insert Excerpts", 1);
+
+supabaseGet(
+  "fetch-excerpts", "Fetch Excerpts",
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/excerpts?request_id=eq.{{$('Config').first().json.request_id}}&select=id,text,reason,source_id"
+);
+connect("Insert Excerpts", "Fetch Excerpts");
+
+// ---------------------------------------------------------------------------
+// Stage 5 — generate the main block
+// ---------------------------------------------------------------------------
+
+const ARTICLE_TOOL = {
+  name: "write_article",
+  description: "Write the full grounded article for the chosen angle.",
+  input_schema: {
+    type: "object",
+    required: ["title", "body_markdown", "secondary_keywords"],
+    properties: {
+      title: { type: "string" },
+      body_markdown: { type: "string" },
+      secondary_keywords: { type: "array", items: { type: "string" } },
+    },
+  },
+};
+
+const generatePrompt =
+  "`Write a full SEO article grounded only in the excerpts below - no unsupported claims or invented statistics. If the excerpts can't adequately support the desired length, write a shorter, fully-grounded article and say so isn't needed in the output, just write what's honestly supportable.\\n\\nWorking title: ${$('Fetch Angle Row').first().json.working_title}\\nThesis: ${$('Fetch Angle Row').first().json.thesis}\\nSection shape: ${JSON.stringify($('Fetch Angle Row').first().json.section_shape)}\\nPrimary keyword (must appear naturally, including in a heading): ${$('Fetch Request Row').first().json.primary_keyword}\\nDesired length: ${$('Fetch Request Row').first().json.desired_length || 'no specific target'}\\nContext from the manager: ${$('Fetch Request Row').first().json.context || 'none'}\\n\\nGrounded excerpts (cite the source URL inline as [Source: url] after any claim drawn from it):\\n${$('Fetch Excerpts').all().map(item => item.json).map((e, i) => `[${i}] ${e.text} (reason selected: ${e.reason})`).join('" + BSN + BSN + "')}\\n\\nWrite in markdown with proper H1/H2 heading hierarchy.`";
+
+claudeNode("claude-generate", "Claude: Generate Article", "claude-sonnet-5", ARTICLE_TOOL, generatePrompt, 4000);
+connect("Fetch Excerpts", "Claude: Generate Article");
+claudeErrorBranch("Claude: Generate Article", "generation", "$('Config').first().json.request_id");
+
+codeNode(
+  "parse-generated",
+  "Parse Generated Article",
+  "const toolUse = $json.content.find(c => c.type === 'tool_use');" + NL +
+    "return [{ json: toolUse.input }];"
+);
+connect("Claude: Generate Article", "Parse Generated Article", 0);
+
+supabaseWrite(
+  "insert-section-v1", "Insert Section v1", "POST",
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/sections",
+  "={{ JSON.stringify({ request_id: $('Config').first().json.request_id, angle_id: $('Config').first().json.angle_id, version: 1, title: $json.title, body_markdown: $json.body_markdown, primary_keyword: $('Fetch Request Row').first().json.primary_keyword, secondary_keywords: $json.secondary_keywords, generation_status: 'generated' }) }}",
+  { returnMinimal: false }
+);
+connect("Parse Generated Article", "Insert Section v1");
+
+// ---------------------------------------------------------------------------
+// Stage 6 — Pass 1 evaluation, and Stage 7 — bounded revision loop (cap 2)
+// ---------------------------------------------------------------------------
+
+const EVAL_TOOL = {
+  name: "evaluate_article",
+  description: "Score the article against the Pass 1 rubric.",
+  input_schema: {
+    type: "object",
+    required: ["overall_score", "status", "criteria", "hard_block_triggered"],
+    properties: {
+      overall_score: { type: "integer" },
+      status: { type: "string", enum: ["pass", "revise", "reject"] },
+      criteria: {
+        type: "array",
+        items: {
+          type: "object",
+          required: ["name", "score", "max"],
+          properties: {
+            name: { type: "string" },
+            score: { type: "integer" },
+            max: { type: "integer" },
+            notes: { type: "string" },
+          },
+        },
+      },
+      unsupported_or_weak_claims: { type: "array", items: { type: "object" } },
+      sections_needing_revision: { type: "array", items: { type: "string" } },
+      recommended_changes: { type: "array", items: { type: "string" } },
+      weakest_criteria_suggestions: { type: "array", items: { type: "string" } },
+      hard_block_triggered: { type: "boolean" },
+      hard_block_reason: { type: ["string", "null"] },
+    },
+  },
+};
+
+const RUBRIC_TEXT =
+  "Score out of 100 across: Topic Relevance (20, floor 15), Source Grounding (20, floor 15), Factual Consistency (20, floor 15), Audience Fit (15, floor 6), SEO Fit (10, floor 4), Clarity (10, floor 4), Completeness (5, floor 2). Topic Relevance/Source Grounding/Factual Consistency are hard-block tier: if any scores below its floor, hard_block_triggered must be true regardless of the total. Verify every claim against the excerpt it cites and flag any claim citing nothing. Always populate weakest_criteria_suggestions, even on a passing score - a passing draft can still have one mediocre criterion worth naming.";
+
+function evalPrompt(bodyExpr) {
+  return (
+    "`Evaluate this article against the rubric. You have not seen how it was written or planned - judge only what's here.\\n\\nRubric: " +
+    RUBRIC_TEXT +
+    "\\n\\nArticle:\\n${" +
+    bodyExpr +
+    "}\\n\\nGrounded excerpts it should be checked against:\\n${$('Fetch Excerpts').all().map(item => item.json).map((e, i) => `[${i}] Source: ${e.source_id}" + NL + "${e.text}`).join('" + BSN + BSN + "')}`"
+  );
+}
+
+function gateCode(varName) {
+  return (
+    "const c = $json.criteria || [];" + NL +
+    "const floor = (name, f) => { const crit = c.find(x => x.name.toLowerCase().includes(name)); return crit ? crit.score < f : false; };" + NL +
+    "const hardBlock = $json.hard_block_triggered || floor('topic', 15) || floor('grounding', 15) || floor('factual', 15) || floor('consistency', 15);" + NL +
+    "const score = $json.overall_score;" + NL +
+    "let decision;" + NL +
+    "if (hardBlock) { decision = score < 60 ? 'reject' : 'revise'; }" + NL +
+    "else if (score >= 85) { decision = 'pass'; }" + NL +
+    "else if (score >= 60) { decision = 'revise'; }" + NL +
+    "else { decision = 'reject'; }" + NL +
+    "return [{ json: { ...$json, hardBlock, decision } }];"
+  );
+}
+
+function buildEvalRound(roundLabel, sectionSourceName, isFinalRound) {
+  const idBase = roundLabel.replace(/[^a-z0-9]/gi, "-").toLowerCase();
+
+  claudeNode(
+    `claude-eval-${idBase}`,
+    `Claude: Evaluate (${roundLabel})`,
+    "claude-opus-5",
+    EVAL_TOOL,
+    evalPrompt(`$('${sectionSourceName}').first().json.body_markdown`),
+    3000
+  );
+  connect(sectionSourceName, `Claude: Evaluate (${roundLabel})`);
+  claudeErrorBranch(`Claude: Evaluate (${roundLabel})`, "evaluation", "$('Config').first().json.request_id");
+
+  codeNode(
+    `parse-eval-${idBase}`,
+    `Parse Evaluation (${roundLabel})`,
+    "const toolUse = $json.content.find(c => c.type === 'tool_use');" + NL + "return [{ json: toolUse.input }];"
+  );
+  connect(`Claude: Evaluate (${roundLabel})`, `Parse Evaluation (${roundLabel})`, 0);
+
+  supabaseWrite(
+    `insert-eval-${idBase}`,
+    `Insert Evaluation (${roundLabel})`,
+    "POST",
+    "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/evaluation_results",
+    `={{ JSON.stringify({ request_id: $('Config').first().json.request_id, section_id: $('${sectionSourceName}').first().json.id, pass: 'pass_1_article', content_version: $('${sectionSourceName}').first().json.version, overall_score: $json.overall_score, status: $json.status, criteria: $json.criteria, unsupported_or_weak_claims: $json.unsupported_or_weak_claims, weakest_criteria_suggestions: $json.weakest_criteria_suggestions, hard_block_triggered: $json.hard_block_triggered, hard_block_reason: $json.hard_block_reason }) }}`,
+    { returnMinimal: false }
+  );
+  connect(`Parse Evaluation (${roundLabel})`, `Insert Evaluation (${roundLabel})`);
+
+  // Gate reads from the write's own return=representation output, not a separate
+  // reference back to Parse Evaluation - either works, but this keeps the chain
+  // linear and matches what actually got persisted (see Error #3 in
+  // week4-progress.md: never assume $json survives a return=minimal write).
+  codeNode(`gate-${idBase}`, `Gate (${roundLabel})`, gateCode());
+  connect(`Insert Evaluation (${roundLabel})`, `Gate (${roundLabel})`);
+
+  ifNode(`if-pass-${idBase}`, `IF Pass (${roundLabel})`, "={{$json.decision}}", "pass", { type: "string", operation: "equals" });
+  connect(`Gate (${roundLabel})`, `IF Pass (${roundLabel})`);
+
+  supabaseWrite(
+    `mark-approved-${idBase}`, `Mark Pending Approval (${roundLabel})`, "PATCH",
+    "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('Config').first().json.request_id}}",
+    "={{ JSON.stringify({ status: 'pending_approval' }) }}"
+  );
+  connect(`IF Pass (${roundLabel})`, `Mark Pending Approval (${roundLabel})`, 0);
+  supabaseWrite(
+    `log-approved-${idBase}`, `Log Event (pass, ${roundLabel})`, "POST",
+    "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+    `={{ JSON.stringify({ request_id: $('Config').first().json.request_id, stage: 'evaluation', status: 'success', detail: \`Pass 1 passed at ${roundLabel}: \${$('Gate (${roundLabel})').first().json.overall_score}/100.\` }) }}`
+  );
+  connect(`Mark Pending Approval (${roundLabel})`, `Log Event (pass, ${roundLabel})`);
+  respondNode(
+    `respond-pass-${idBase}`,
+    `Respond (pass, ${roundLabel})`,
+    `={{ JSON.stringify({ ok: true, status: 'pass', score: $('Gate (${roundLabel})').first().json.overall_score }) }}`
+  );
+  connect(`Log Event (pass, ${roundLabel})`, `Respond (pass, ${roundLabel})`);
+
+  // Not pass: either final-round-fail (needs_human_attention) or continue to next revision round.
+  if (isFinalRound) {
+    supabaseWrite(
+      `mark-cap-${idBase}`, `Mark Needs Attention (cap reached)`, "PATCH",
+      "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('Config').first().json.request_id}}",
+      "={{ JSON.stringify({ status: 'needs_human_attention' }) }}"
+    );
+    connect(`IF Pass (${roundLabel})`, `Mark Needs Attention (cap reached)`, 1);
+    supabaseWrite(
+      `log-cap-${idBase}`, `Log Event (cap reached)`, "POST",
+      "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+      `={{ JSON.stringify({ request_id: $('Config').first().json.request_id, stage: 'evaluation', status: 'failed', detail: \`Revision cap (2 rounds) reached, still \${$('Gate (${roundLabel})').first().json.decision} at \${$('Gate (${roundLabel})').first().json.overall_score}/100.\` }) }}`
+    );
+    connect(`Mark Needs Attention (cap reached)`, `Log Event (cap reached)`);
+    respondNode(
+      `respond-cap-${idBase}`,
+      `Respond (cap reached)`,
+      `={{ JSON.stringify({ ok: false, reason: 'revision_cap_reached', status: $('Gate (${roundLabel})').first().json.decision, score: $('Gate (${roundLabel})').first().json.overall_score }) }}`
+    );
+    connect(`Log Event (cap reached)`, `Respond (cap reached)`);
+    return null;
+  }
+
+  return `IF Pass (${roundLabel})`; // caller connects output 1 (not-pass) into the next round's revise step
+}
+
+const round0FailOutput = buildEvalRound("Round 0", "Insert Section v1", false);
+
+// Revision rounds: revise -> insert new section version -> evaluate -> gate.
+function buildRevisionRound(roundNum, prevGateIfName, prevSectionName) {
+  const label = `Round ${roundNum}`;
+  const idBase = `revise-${roundNum}`;
+
+  const revisePrompt =
+    "`Revise this article based on the evaluation feedback below. Address the flagged sections and unsupported claims specifically - stay grounded only in the excerpts, don't invent anything new to fill gaps.\\n\\nCurrent article:\\n${$('" +
+    prevSectionName +
+    "').first().json.body_markdown}\\n\\nSections needing revision: ${JSON.stringify($('Gate (" +
+    (roundNum === 1 ? "Round 0" : `Round ${roundNum - 1}`) +
+    ")').first().json.sections_needing_revision)}\\nRecommended changes: ${JSON.stringify($('Gate (" +
+    (roundNum === 1 ? "Round 0" : `Round ${roundNum - 1}`) +
+    ")').first().json.recommended_changes)}\\nUnsupported/weak claims flagged: ${JSON.stringify($('Gate (" +
+    (roundNum === 1 ? "Round 0" : `Round ${roundNum - 1}`) +
+    ")').first().json.unsupported_or_weak_claims)}\\n\\nGrounded excerpts available:\\n${$('Fetch Excerpts').all().map(item => item.json).map((e, i) => `[${i}] ${e.text}`).join('" +
+    BSN +
+    BSN +
+    "')}`";
+
+  claudeNode(`claude-${idBase}`, `Claude: Revise (${label})`, "claude-sonnet-5", ARTICLE_TOOL, revisePrompt, 4000);
+  connect(prevGateIfName, `Claude: Revise (${label})`, 1);
+  claudeErrorBranch(`Claude: Revise (${label})`, "revision", "$('Config').first().json.request_id");
+
+  codeNode(
+    `parse-${idBase}`,
+    `Parse Revised Article (${label})`,
+    "const toolUse = $json.content.find(c => c.type === 'tool_use');" + NL + "return [{ json: toolUse.input }];"
+  );
+  connect(`Claude: Revise (${label})`, `Parse Revised Article (${label})`, 0);
+
+  supabaseWrite(
+    `insert-section-${idBase}`,
+    `Insert Section v${roundNum + 1}`,
+    "POST",
+    "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/sections",
+    `={{ JSON.stringify({ request_id: $('Config').first().json.request_id, angle_id: $('Config').first().json.angle_id, version: ${roundNum + 1}, title: $json.title, body_markdown: $json.body_markdown, primary_keyword: $('Fetch Request Row').first().json.primary_keyword, secondary_keywords: $json.secondary_keywords, generation_status: 'generated' }) }}`,
+    { returnMinimal: false }
+  );
+  connect(`Parse Revised Article (${label})`, `Insert Section v${roundNum + 1}`);
+
+  return `Insert Section v${roundNum + 1}`;
+}
+
+if (round0FailOutput) {
+  const section2 = buildRevisionRound(1, round0FailOutput, "Insert Section v1");
+  const round1FailOutput = buildEvalRound("Round 1", section2, false);
+
+  if (round1FailOutput) {
+    const section3 = buildRevisionRound(2, round1FailOutput, section2);
+    buildEvalRound("Round 2", section3, true); // final round — cap reached on failure
+  }
+}
+
+const workflow = {
+  name: "Content Agent — Workflow B (Generate & Evaluate)",
+  meta: {
+    notes:
+      "Triggered when a human picks an angle. Stage 4 (excerpt extraction scoped to the angle) -> Stage 5 (generation, Sonnet) -> Stage 6 (Pass 1 evaluation, Opus) -> Stage 7 (revision loop, capped at 2 rounds, unrolled as three fixed blocks rather than a true n8n loop since regular nodes can't form cycles - SplitInBatches is the only looping construct n8n supports). SECRETS: Supabase API and Anthropic credentials, same as Workflow A - map both on import.",
+  },
+  nodes,
+  connections,
+};
+
+fs.writeFileSync(
+  path.join(__dirname, "..", "n8n", "workflow-b-generate-and-evaluate.json"),
+  JSON.stringify(workflow, null, 2)
+);
+console.log("Workflow B written. Node count:", nodes.length);
