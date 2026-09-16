@@ -7,6 +7,7 @@ import DeleteButton from "./delete-button";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/badge";
 import { ScoreBar } from "@/components/ui/score-bar";
+import { PipelineProgress } from "@/components/ui/pipeline-progress";
 
 const SOURCE_STATUS_STYLES: Record<string, string> = {
   scraped: "bg-success-soft text-success",
@@ -64,7 +65,11 @@ export default async function RequestDetailPage({
         <StatusBadge status={req.status} />
       </div>
 
-      <Card className="mt-6 grid grid-cols-2 gap-x-6 gap-y-3 p-5 text-sm">
+      <Card className="mt-6 p-5">
+        <PipelineProgress status={req.status} />
+      </Card>
+
+      <Card className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 p-5 text-sm">
         <dt className="text-muted">Path</dt>
         <dd className="text-right">{req.input_path === "raw_idea" ? "Raw idea" : "Source URL"}</dd>
         <dt className="text-muted">Primary keyword</dt>
@@ -161,21 +166,27 @@ export default async function RequestDetailPage({
         </section>
       )}
 
-      <section className="mt-8">
-        <h2 className="text-sm font-semibold text-muted">Activity</h2>
-        <Card className="mt-2 divide-y divide-border p-1">
-          {(events ?? []).map((ev) => (
-            <div key={ev.id} className="flex items-center justify-between gap-3 px-4 py-3">
-              <span className={`text-sm ${ev.status === "failed" ? "text-danger" : "text-foreground"}`}>
-                {ev.stage}: {ev.detail}
-              </span>
-              <span className="shrink-0 text-xs text-muted">
-                {new Date(ev.created_at).toLocaleTimeString()}
-              </span>
-            </div>
-          ))}
-        </Card>
-      </section>
+      {events && events.length > 0 && (
+        <details className="mt-8" open={events.some((ev) => ev.status === "failed")}>
+          <summary className="cursor-pointer text-sm font-semibold text-muted hover:text-foreground">
+            Technical log ({events.length} event{events.length === 1 ? "" : "s"})
+          </summary>
+          <Card className="mt-2 divide-y divide-border p-1">
+            {events.map((ev) => (
+              <div key={ev.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                <span
+                  className={`text-sm ${ev.status === "failed" ? "text-danger" : "text-foreground"}`}
+                >
+                  {ev.stage}: {ev.detail}
+                </span>
+                <span className="shrink-0 text-xs text-muted">
+                  {new Date(ev.created_at).toLocaleTimeString()}
+                </span>
+              </div>
+            ))}
+          </Card>
+        </details>
+      )}
 
       <section className="mt-10 border-t border-border pt-6">
         <DeleteButton requestId={id} title={req.raw_idea || req.primary_keyword} />
