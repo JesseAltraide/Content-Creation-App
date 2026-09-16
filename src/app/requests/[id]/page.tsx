@@ -206,6 +206,7 @@ export default async function RequestDetailPage({
       <ArticleReview
         requestId={id}
         requestStatus={req.status}
+        regenerationCount={req.regeneration_count ?? 0}
         sections={sections ?? []}
         evaluations={evaluations ?? []}
         excerpts={excerpts ?? []}

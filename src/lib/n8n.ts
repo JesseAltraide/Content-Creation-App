@@ -62,3 +62,22 @@ export function triggerGenerateAndEvaluate(requestId: string, angleId: string) {
     "generate_and_evaluate_trigger"
   );
 }
+
+// Human clicked Regenerate with a required comment on a pending_approval or
+// needs_human_attention article — reuses the existing chosen angle and excerpts,
+// re-runs generation + Pass 1 evaluation only (Workflow C, not the internal
+// capped auto-revision loop). priorStatus lets the workflow revert to wherever
+// the request actually started from on a Claude failure, not a hardcoded value.
+export function triggerRegenerate(
+  requestId: string,
+  comment: string,
+  isFinalAttempt: boolean,
+  priorStatus: string
+) {
+  return pingWebhook(
+    "wf-c-regenerate",
+    { request_id: requestId, comment, is_final_attempt: isFinalAttempt, prior_status: priorStatus },
+    requestId,
+    "regenerate_trigger"
+  );
+}

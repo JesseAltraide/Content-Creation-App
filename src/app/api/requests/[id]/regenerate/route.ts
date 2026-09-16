@@ -1,0 +1,94 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { logEvent } from "@/lib/events";
+import { triggerRegenerate } from "@/lib/n8n";
+
+const REGENERATION_CAP = 5;
+
+// Comment is mandatory (matches Decision #63's rule for every self-regeneration in
+// this system, not just this one) — it's what gives the next generation something
+// concrete to act on rather than blindly re-rolling.
+const bodySchema = z.object({
+  comment: z.string().trim().min(10, "A real comment is required (at least 10 characters)."),
+});
+
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id: requestId } = await params;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+  }
+
+  const body = await request.json();
+  const parsed = bodySchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.issues[0]?.message ?? "A comment is required." },
+      { status: 400 }
+    );
+  }
+
+  const admin = createAdminClient();
+
+  // Read the current status/count only to know what to revert to and what count to
+  // write — the actual transition below is still a single atomic conditional write
+  // guarded on both the exact status AND the exact prior count, so a concurrent
+  // double-click can't both succeed (optimistic concurrency, not read-then-write).
+  const { data: current } = await admin
+    .from("requests")
+    .select("status, regeneration_count")
+    .eq("id", requestId)
+    .single();
+
+  if (!current || !["pending_approval", "needs_human_attention"].includes(current.status)) {
+    return NextResponse.json(
+      { error: "This request is not awaiting review (already progressed, or refresh to see the latest)." },
+      { status: 409 }
+    );
+  }
+  if (current.regeneration_count >= REGENERATION_CAP) {
+    return NextResponse.json(
+      {
+        error:
+          "Regeneration limit (5 attempts) reached for this article — reject it or go back to angle selection instead.",
+      },
+      { status: 409 }
+    );
+  }
+
+  const priorStatus = current.status;
+  const nextCount = current.regeneration_count + 1;
+
+  const { data: updatedRequest, error: transitionError } = await admin
+    .from("requests")
+    .update({ status: "generating", regeneration_count: nextCount })
+    .eq("id", requestId)
+    .eq("status", priorStatus)
+    .eq("regeneration_count", current.regeneration_count)
+    .select()
+    .single();
+
+  if (transitionError || !updatedRequest) {
+    return NextResponse.json(
+      { error: "Someone else just acted on this request — refresh to see the latest." },
+      { status: 409 }
+    );
+  }
+
+  await logEvent({
+    requestId,
+    stage: "regeneration_requested",
+    status: "success",
+    detail: `Regenerate requested (attempt ${nextCount}/${REGENERATION_CAP}): ${parsed.data.comment}`,
+  });
+
+  await triggerRegenerate(requestId, parsed.data.comment, nextCount >= REGENERATION_CAP, priorStatus);
+
+  return NextResponse.json({ ok: true, regenerationCount: nextCount });
+}

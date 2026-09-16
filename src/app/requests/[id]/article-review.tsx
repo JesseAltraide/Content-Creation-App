@@ -41,6 +41,7 @@ type Excerpt = { id: string; text: string; reason: string; source_id: string };
 export default function ArticleReview({
   requestId,
   requestStatus,
+  regenerationCount,
   sections,
   evaluations,
   excerpts,
@@ -48,6 +49,7 @@ export default function ArticleReview({
 }: {
   requestId: string;
   requestStatus: string;
+  regenerationCount: number;
   sections: Section[];
   evaluations: EvalResult[];
   excerpts: Excerpt[];
@@ -57,7 +59,11 @@ export default function ArticleReview({
 
   const latest = sections[sections.length - 1];
   const latestEval = evaluations.find((e) => e.content_version === latest.version);
-  const canReview = requestStatus === "pending_approval";
+  // Regenerate/Reject are available on any draft awaiting review, whether it just
+  // passed or is stuck at needs_human_attention (the internal auto-revision loop's
+  // own cap having been reached doesn't remove the human's ability to try again with
+  // guidance — regenerate's own separate 5-attempt cap is what actually stops this).
+  const canReview = requestStatus === "pending_approval" || requestStatus === "needs_human_attention";
 
   return (
     <section className="mt-8">
@@ -113,9 +119,13 @@ export default function ArticleReview({
         </Card>
       )}
 
-      {canReview && latestEval?.status === "pass" && (
+      {canReview && (
         <Card className="mt-4 p-5">
-          <ReviewActions requestId={requestId} />
+          <ReviewActions
+            requestId={requestId}
+            regenerationCount={regenerationCount}
+            canApprove={latestEval?.status === "pass"}
+          />
         </Card>
       )}
 
