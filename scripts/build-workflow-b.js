@@ -131,18 +131,35 @@ function ifNode(id, name, leftValue, rightValue, operator) {
   });
 }
 
+// n8n's {{ }} expression fields do their own brace-matching pass before real JS
+// evaluation, and a large inlined JSON tool schema plus nested template-literal
+// interpolations (lots of braces) can break that matching - confirmed live via
+// n8n's own VM compilation error (ExpressionError: invalid syntax at
+// Expression.renderExpression), independent of the actual runtime data content.
+// Fix: build the ENTIRE request body in a preceding Code node (real JS, no
+// brace-matching fragility) and have the HTTP node's jsonBody be the trivial
+// expression ={{ $json.requestBody }} - just a property access.
 function claudeNode(id, name, model, tool, promptExpr, maxTokens) {
-  const jsonBody =
-    "={{ JSON.stringify({" +
-    NL +
-    "  model: '" + model + "'," + NL +
-    "  max_tokens: " + maxTokens + "," + NL +
-    "  tools: [" + JSON.stringify(tool) + "]," + NL +
-    "  tool_choice: { type: 'tool', name: '" + tool.name + "' }," + NL +
-    "  messages: [{ role: 'user', content: " + promptExpr + " }]" + NL +
-    "}) }}";
+  const builderId = `${id}-build-request`;
+  const builderName = `${name}: Build Request`;
 
-  return addNode({
+  codeNode(
+    builderId,
+    builderName,
+    "const tool = " + JSON.stringify(tool) + ";" + NL +
+      "const content = " + promptExpr + ";" + NL +
+      "const requestBody = JSON.stringify({" + NL +
+      "  model: '" + model + "'," + NL +
+      "  max_tokens: " + maxTokens + "," + NL +
+      "  tools: [tool]," + NL +
+      "  tool_choice: { type: 'tool', name: '" + tool.name + "' }," + NL +
+      "  messages: [{ role: 'user', content }]" + NL +
+      "});" + NL +
+      "return [{ json: { requestBody } }];",
+    { notes: "Builds the full Claude request body in real Code-node JS - see the claudeNode() comment for why this can't live inline in the HTTP node's {{ }} expression." }
+  );
+
+  const httpNode = addNode({
     parameters: {
       method: "POST",
       url: "https://api.anthropic.com/v1/messages",
@@ -155,7 +172,7 @@ function claudeNode(id, name, model, tool, promptExpr, maxTokens) {
       },
       sendBody: true,
       specifyBody: "json",
-      jsonBody,
+      jsonBody: "={{ $json.requestBody }}",
       authentication: "predefinedCredentialType",
       nodeCredentialType: "anthropicApi",
     },
@@ -166,6 +183,9 @@ function claudeNode(id, name, model, tool, promptExpr, maxTokens) {
     credentials: { anthropicApi: ANTHROPIC_CRED },
     onError: "continueErrorOutput",
   });
+
+  connect(builderName, name);
+  return httpNode;
 }
 
 function claudeErrorBranch(claudeNodeName, stage, requestIdExpr) {
@@ -348,7 +368,7 @@ const excerptPrompt =
   "`You are selecting source excerpts for a content angle.\\n\\nChosen angle: ${$('Fetch Angle Row').first().json.working_title}\\nThesis: ${$('Fetch Angle Row').first().json.thesis}\\nSection shape: ${JSON.stringify($('Fetch Angle Row').first().json.section_shape)}\\n\\nSources:\\n${$('Count Scraped Sources').first().json.sourcesText}\\n\\nSelect every passage genuinely relevant to this specific angle - not the whole source, just passages that actually support it. For each, give the exact excerpt text (a real quote, not a paraphrase), which source URL it came from, and a one-line reason. If nothing in a source is relevant, select nothing from it. Return an empty excerpts array if truly nothing across all sources supports this angle.`";
 
 claudeNode("claude-excerpts", "Claude: Select Excerpts", "claude-sonnet-5", EXCERPT_TOOL, excerptPrompt, 4000);
-connect("IF Zero Scraped Sources", "Claude: Select Excerpts", 1);
+connect("IF Zero Scraped Sources", "Claude: Select Excerpts: Build Request", 1);
 claudeErrorBranch("Claude: Select Excerpts", "excerpt_selection", "$('Config').first().json.request_id");
 
 codeNode(
@@ -438,7 +458,7 @@ const generatePrompt =
   "`Write a full SEO article grounded only in the excerpts below - no unsupported claims or invented statistics. If the excerpts can't adequately support the desired length, write a shorter, fully-grounded article and say so isn't needed in the output, just write what's honestly supportable.\\n\\nWorking title: ${$('Fetch Angle Row').first().json.working_title}\\nThesis: ${$('Fetch Angle Row').first().json.thesis}\\nSection shape: ${JSON.stringify($('Fetch Angle Row').first().json.section_shape)}\\nPrimary keyword (must appear naturally, including in a heading): ${$('Fetch Request Row').first().json.primary_keyword}\\nDesired length: ${$('Fetch Request Row').first().json.desired_length || 'no specific target'}\\nContext from the manager: ${$('Fetch Request Row').first().json.context || 'none'}\\n\\nGrounded excerpts (cite the source URL inline as [Source: url] after any claim drawn from it):\\n${$('Build Excerpts Text').first().json.excerptsTextWithReason}\\n\\nWrite in markdown with proper H1/H2 heading hierarchy.`";
 
 claudeNode("claude-generate", "Claude: Generate Article", "claude-sonnet-5", ARTICLE_TOOL, generatePrompt, 4000);
-connect("Build Excerpts Text", "Claude: Generate Article");
+connect("Build Excerpts Text", "Claude: Generate Article: Build Request");
 claudeErrorBranch("Claude: Generate Article", "generation", "$('Config').first().json.request_id");
 
 codeNode(
@@ -532,7 +552,7 @@ function buildEvalRound(roundLabel, sectionSourceName, isFinalRound) {
     evalPrompt(`$('${sectionSourceName}').first().json.body_markdown`),
     3000
   );
-  connect(sectionSourceName, `Claude: Evaluate (${roundLabel})`);
+  connect(sectionSourceName, `Claude: Evaluate (${roundLabel}): Build Request`);
   claudeErrorBranch(`Claude: Evaluate (${roundLabel})`, "evaluation", "$('Config').first().json.request_id");
 
   codeNode(
@@ -630,7 +650,7 @@ function buildRevisionRound(roundNum, prevGateIfName, prevSectionName) {
     ")').first().json.unsupported_or_weak_claims)}\\n\\nGrounded excerpts available:\\n${$('Build Excerpts Text').first().json.excerptsTextPlain}`";
 
   claudeNode(`claude-${idBase}`, `Claude: Revise (${label})`, "claude-sonnet-5", ARTICLE_TOOL, revisePrompt, 4000);
-  connect(prevGateIfName, `Claude: Revise (${label})`, 1);
+  connect(prevGateIfName, `Claude: Revise (${label}): Build Request`, 1);
   claudeErrorBranch(`Claude: Revise (${label})`, "revision", "$('Config').first().json.request_id");
 
   codeNode(
