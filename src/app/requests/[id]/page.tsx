@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import SourceSelection from "./source-selection";
@@ -5,6 +6,7 @@ import RetryButton from "./retry-button";
 import DeleteButton from "./delete-button";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/badge";
+import { ScoreBar } from "@/components/ui/score-bar";
 
 const SOURCE_STATUS_STYLES: Record<string, string> = {
   scraped: "bg-success-soft text-success",
@@ -37,12 +39,25 @@ export default async function RequestDetailPage({
     .eq("request_id", id)
     .order("created_at", { ascending: false });
 
+  const { data: angles } = await supabase
+    .from("angles")
+    .select("*")
+    .eq("request_id", id)
+    .order("created_at");
+
   const latestEvent = events?.[0];
   const canRetry = req.status === "researching" && latestEvent?.status === "failed";
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-12">
-      <div className="flex items-start justify-between gap-4">
+      <Link
+        href="/"
+        className="inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-foreground"
+      >
+        ← Back to requests
+      </Link>
+
+      <div className="mt-4 flex items-start justify-between gap-4">
         <h1 className="text-2xl font-semibold tracking-tight">
           {req.raw_idea || req.primary_keyword}
         </h1>
@@ -75,6 +90,55 @@ export default async function RequestDetailPage({
           requestId={id}
           sources={(sources ?? []).filter((s) => s.status === "pending_selection")}
         />
+      )}
+
+      {angles && angles.length > 0 && (
+        <section className="mt-8">
+          <h2 className="text-sm font-semibold text-muted">
+            {angles.length > 1 ? "Proposed angles" : "Proposed angle"}
+          </h2>
+          <div className="mt-2 flex flex-col gap-3">
+            {angles.map((a) => (
+              <Card key={a.id} className={`p-5 ${a.chosen ? "border-accent" : ""}`}>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-medium">{a.working_title}</p>
+                    <p className="mt-1 text-sm text-muted">{a.thesis}</p>
+                  </div>
+                  {a.chosen && (
+                    <span className="shrink-0 rounded-full bg-accent-soft px-2.5 py-1 text-xs font-semibold text-accent">
+                      Selected
+                    </span>
+                  )}
+                </div>
+
+                <div className="mt-4">
+                  <ScoreBar label="Audience resonance" score={a.resonance_score} max={15} floor={7} />
+                  <p className="mt-1 text-xs text-muted">
+                    Floor at 7/15 — below it, generation is hard-blocked; 7-10 proceeds with a
+                    soft flag; 11-15 proceeds cleanly.
+                  </p>
+                </div>
+
+                {Array.isArray(a.section_shape) && a.section_shape.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                      Section shape
+                    </p>
+                    <ol className="mt-1.5 flex flex-col gap-1 text-sm text-foreground">
+                      {a.section_shape.map((heading: string, i: number) => (
+                        <li key={i} className="flex gap-2">
+                          <span className="text-muted">{i + 1}.</span>
+                          {heading}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+              </Card>
+            ))}
+          </div>
+        </section>
       )}
 
       {sources && sources.length > 0 && (
