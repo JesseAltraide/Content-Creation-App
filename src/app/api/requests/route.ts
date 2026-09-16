@@ -29,6 +29,46 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient();
 
+  // Stage 1 hard block (Decision #34): a selected channel with zero tone samples must not
+  // silently fall back to a generic voice. Server-side, not just the UI hint the form shows -
+  // enforced here regardless of what the client actually sent.
+  const { data: existingSamples } = await admin
+    .from("tone_samples")
+    .select("channel")
+    .in("channel", input.channels);
+  const channelsWithSamples = new Set((existingSamples ?? []).map((s) => s.channel));
+
+  const unresolvedChannels = input.channels.filter((c) => {
+    if (channelsWithSamples.has(c)) return true;
+    if (input.confirmedGenericToneChannels.includes(c)) return true;
+    const described = input.describedToneByChannel[c]?.trim();
+    return !!described && described.length >= 20;
+  });
+  const blockedChannels = input.channels.filter((c) => !unresolvedChannels.includes(c));
+
+  if (blockedChannels.length > 0) {
+    return NextResponse.json(
+      {
+        error: `No tone samples for ${blockedChannels.join(", ")}. Confirm a generic default or describe the target tone before submitting.`,
+      },
+      { status: 400 }
+    );
+  }
+
+  // Any described-target tone becomes a real, reusable workspace tone sample - so this
+  // channel's gap is closed for every future request too, not just this one.
+  for (const channel of input.channels) {
+    if (channelsWithSamples.has(channel)) continue;
+    const described = input.describedToneByChannel[channel]?.trim();
+    if (described && described.length >= 20) {
+      await admin.from("tone_samples").insert({
+        channel,
+        content: described,
+        source: "described_target",
+      });
+    }
+  }
+
   const { data: request_, error: insertError } = await admin
     .from("requests")
     .insert({

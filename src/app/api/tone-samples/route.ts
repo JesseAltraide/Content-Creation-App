@@ -5,13 +5,16 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 const bodySchema = z.object({
   channel: z.enum(["linkedin", "x", "newsletter"]),
-  content: z
-    .string()
-    .trim()
-    .min(20, "That's too short to be a real post — paste the actual content.")
-    .refine((s) => !/^https?:\/\/\S+$/i.test(s), {
+  source: z.enum(["real_post", "described_target"]).default("real_post"),
+  content: z.string().trim().min(20, "That's too short — add more detail."),
+}).superRefine((data, ctx) => {
+  if (data.source === "real_post" && /^https?:\/\/\S+$/i.test(data.content)) {
+    ctx.addIssue({
+      code: "custom",
       message: "That looks like a URL, not post content — paste the actual text.",
-    }),
+      path: ["content"],
+    });
+  }
 });
 
 export async function POST(request: Request) {
@@ -35,7 +38,11 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("tone_samples")
-    .insert({ channel: parsed.data.channel, content: parsed.data.content })
+    .insert({
+      channel: parsed.data.channel,
+      content: parsed.data.content,
+      source: parsed.data.source,
+    })
     .select()
     .single();
 

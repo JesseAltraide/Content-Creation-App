@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
-type Sample = { id: string; content: string; created_at: string };
+type Sample = { id: string; content: string; source: string; created_at: string };
 
 export default function ChannelToneSection({
   channel,
@@ -18,6 +18,7 @@ export default function ChannelToneSection({
 }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [mode, setMode] = useState<"real_post" | "described_target">("real_post");
   const [content, setContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +38,7 @@ export default function ChannelToneSection({
     const res = await fetch("/api/tone-samples", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ channel, content }),
+      body: JSON.stringify({ channel, content, source: mode }),
     });
     const body = await res.json();
     setSubmitting(false);
@@ -66,11 +67,43 @@ export default function ChannelToneSection({
       </div>
 
       <Card className="mt-2 p-5">
+        <div className="mb-3 flex gap-1 rounded-lg bg-background p-1 text-sm">
+          <button
+            type="button"
+            onClick={() => setMode("real_post")}
+            className={`flex-1 rounded-md px-3 py-1.5 font-medium transition-colors ${
+              mode === "real_post" ? "bg-surface text-foreground shadow-sm" : "text-muted"
+            }`}
+          >
+            Paste a real post
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("described_target")}
+            className={`flex-1 rounded-md px-3 py-1.5 font-medium transition-colors ${
+              mode === "described_target" ? "bg-surface text-foreground shadow-sm" : "text-muted"
+            }`}
+          >
+            Describe target tone
+          </button>
+        </div>
+
+        {mode === "described_target" && (
+          <p className="mb-2 text-xs text-muted">
+            For a brand-new channel with no posts yet. Weaker than a real sample, but better than
+            nothing — replace it with real posts once they exist.
+          </p>
+        )}
+
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
           rows={4}
-          placeholder={`Paste a real ${label} post here…`}
+          placeholder={
+            mode === "real_post"
+              ? `Paste a real ${label} post here…`
+              : `Describe the ${label} voice you're going for — e.g. "confident but not salesy, short sentences, no corporate jargon, occasional dry humor"`
+          }
           className="w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
         />
         {error && <p className="mt-2 text-sm text-danger">{error}</p>}
@@ -78,16 +111,20 @@ export default function ChannelToneSection({
           <Button onClick={handleAdd} disabled={submitting || !content.trim()}>
             {submitting ? "Saving…" : "Add sample"}
           </Button>
-          <Button variant="secondary" onClick={() => fileInputRef.current?.click()}>
-            Upload file
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".txt,.md,text/plain"
-            onChange={handleFileChosen}
-            className="hidden"
-          />
+          {mode === "real_post" && (
+            <>
+              <Button variant="secondary" onClick={() => fileInputRef.current?.click()}>
+                Upload file
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".txt,.md,text/plain"
+                onChange={handleFileChosen}
+                className="hidden"
+              />
+            </>
+          )}
         </div>
       </Card>
 
@@ -95,9 +132,16 @@ export default function ChannelToneSection({
         <div className="mt-3 flex flex-col gap-2">
           {samples.map((s) => (
             <Card key={s.id} className="flex items-start justify-between gap-4 p-4">
-              <p className="whitespace-pre-wrap text-sm text-foreground">
-                {s.content.length > 240 ? s.content.slice(0, 240) + "…" : s.content}
-              </p>
+              <div>
+                {s.source === "described_target" && (
+                  <span className="mb-1.5 inline-block rounded-full bg-warning-soft px-2 py-0.5 text-xs font-medium text-warning">
+                    Described target, not a real post
+                  </span>
+                )}
+                <p className="whitespace-pre-wrap text-sm text-foreground">
+                  {s.content.length > 240 ? s.content.slice(0, 240) + "…" : s.content}
+                </p>
+              </div>
               <Button
                 variant="ghost"
                 onClick={() => handleDelete(s.id)}

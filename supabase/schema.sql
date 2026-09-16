@@ -47,6 +47,7 @@ create table tone_samples (
   id uuid primary key default gen_random_uuid(),
   channel channel not null,
   content text not null check (char_length(content) >= 20),
+  source text not null default 'real_post' check (source in ('real_post', 'described_target')),
   created_at timestamptz not null default now()
 );
 

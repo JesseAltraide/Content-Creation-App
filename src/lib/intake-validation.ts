@@ -22,6 +22,8 @@ export const intakeSchema = z
     channels: z.array(z.enum(CHANNELS)).min(1, "Select at least one channel."),
     audienceProfileId: z.string().uuid().optional().nullable(),
     xThreadLength: z.enum(["single", "mini", "expansive"]).default("single"),
+    confirmedGenericToneChannels: z.array(z.enum(CHANNELS)).optional().default([]),
+    describedToneByChannel: z.record(z.string(), z.string()).optional().default({}),
   })
   .superRefine((data, ctx) => {
     const idea = data.rawIdea?.trim() ?? "";

@@ -8,13 +8,19 @@ export default async function NewRequestPage() {
     .select("id, name")
     .order("name");
 
+  const { data: toneSamples } = await supabase.from("tone_samples").select("channel");
+  const toneSampleCounts: Record<string, number> = { linkedin: 0, x: 0, newsletter: 0 };
+  for (const s of toneSamples ?? []) {
+    toneSampleCounts[s.channel] = (toneSampleCounts[s.channel] ?? 0) + 1;
+  }
+
   return (
     <main className="mx-auto max-w-2xl px-6 py-12">
       <h1 className="text-2xl font-semibold tracking-tight">New content request</h1>
       <p className="mt-1 text-sm text-muted">
         Start from a raw idea, or from source material you already have.
       </p>
-      <IntakeForm audienceProfiles={audienceProfiles ?? []} />
+      <IntakeForm audienceProfiles={audienceProfiles ?? []} toneSampleCounts={toneSampleCounts} />
     </main>
   );
 }

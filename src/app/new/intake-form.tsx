@@ -40,8 +40,10 @@ function SegmentedButton({
 
 export default function IntakeForm({
   audienceProfiles,
+  toneSampleCounts,
 }: {
   audienceProfiles: { id: string; name: string }[];
+  toneSampleCounts: Record<string, number>;
 }) {
   const router = useRouter();
   const [inputPath, setInputPath] = useState<"raw_idea" | "url">("raw_idea");
@@ -53,6 +55,9 @@ export default function IntakeForm({
   const [channels, setChannels] = useState<string[]>(["linkedin", "x", "newsletter"]);
   const [audienceProfileId, setAudienceProfileId] = useState("");
   const [xThreadLength, setXThreadLength] = useState("single");
+  const [confirmedGenericTone, setConfirmedGenericTone] = useState<string[]>([]);
+  const [describedTone, setDescribedTone] = useState<Record<string, string>>({});
+  const [describingChannel, setDescribingChannel] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
@@ -61,6 +66,11 @@ export default function IntakeForm({
       prev.includes(value) ? prev.filter((c) => c !== value) : [...prev, value]
     );
   }
+
+  const channelsMissingTone = channels.filter((c) => (toneSampleCounts[c] ?? 0) === 0);
+  const canSubmit = channelsMissingTone.every(
+    (c) => confirmedGenericTone.includes(c) || (describedTone[c]?.trim().length ?? 0) >= 20
+  );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -85,6 +95,8 @@ export default function IntakeForm({
         channels,
         audienceProfileId: audienceProfileId || null,
         xThreadLength,
+        confirmedGenericToneChannels: confirmedGenericTone,
+        describedToneByChannel: describedTone,
       }),
     });
 
@@ -190,6 +202,65 @@ export default function IntakeForm({
           </div>
         </div>
 
+        {channelsMissingTone.length > 0 && (
+          <div className="flex flex-col gap-3 rounded-lg bg-warning-soft px-3.5 py-3">
+            <p className="text-sm font-medium text-warning">
+              No tone samples yet for {channelsMissingTone.join(", ")} — Tone will be graded
+              against nothing unless you choose one of the options below.
+            </p>
+            {channelsMissingTone.map((c) => {
+              const usingGeneric = confirmedGenericTone.includes(c);
+              const isDescribing = describingChannel === c;
+              const hasDescription = (describedTone[c]?.trim().length ?? 0) >= 20;
+
+              return (
+                <div key={c} className="flex flex-col gap-1.5">
+                  <div className="flex flex-wrap items-center gap-3 text-sm text-warning">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name={`tone-choice-${c}`}
+                        checked={usingGeneric}
+                        onChange={() => {
+                          setConfirmedGenericTone((prev) => [...new Set([...prev, c])]);
+                          setDescribingChannel((prev) => (prev === c ? null : prev));
+                          setDescribedTone((prev) => ({ ...prev, [c]: "" }));
+                        }}
+                        className="h-4 w-4 accent-warning"
+                      />
+                      Use a neutral professional default for {c}
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name={`tone-choice-${c}`}
+                        checked={isDescribing || hasDescription}
+                        onChange={() => {
+                          setConfirmedGenericTone((prev) => prev.filter((x) => x !== c));
+                          setDescribingChannel(c);
+                        }}
+                        className="h-4 w-4 accent-warning"
+                      />
+                      Describe the target tone instead
+                    </label>
+                  </div>
+                  {(isDescribing || hasDescription) && (
+                    <textarea
+                      value={describedTone[c] ?? ""}
+                      onChange={(e) =>
+                        setDescribedTone((prev) => ({ ...prev, [c]: e.target.value }))
+                      }
+                      rows={2}
+                      placeholder={`e.g. "confident but not salesy, short sentences, no corporate jargon" — this becomes ${c}'s workspace tone sample going forward.`}
+                      className="rounded-lg border border-warning/30 bg-surface px-3 py-2 text-sm outline-none focus:border-warning focus:ring-2 focus:ring-warning/20"
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {channels.includes("x") && (
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-medium">X post length</span>
@@ -229,7 +300,7 @@ export default function IntakeForm({
           </ul>
         )}
 
-        <Button type="submit" disabled={submitting}>
+        <Button type="submit" disabled={submitting || !canSubmit}>
           {submitting ? "Submitting…" : "Submit request"}
         </Button>
       </form>
