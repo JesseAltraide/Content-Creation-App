@@ -40,7 +40,8 @@
           "id": "supabase-account",
           "name": "Supabase account"
         }
-      }
+      },
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -313,7 +314,8 @@
           "id": "supabase-account",
           "name": "Supabase account"
         }
-      }
+      },
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -371,7 +373,8 @@
         }
       },
       "executeOnce": true,
-      "notes": "executeOnce=true: an HTTP Request node runs once per INPUT item by default — with >1 item arriving (e.g. from a loop's 'done' output), it would re-run the identical query that many times, duplicating every row in its array response. Caught live: 2 scraped sources became 4 identical (paired-duplicate) items downstream."
+      "notes": "executeOnce=true: an HTTP Request node runs once per INPUT item by default — with >1 item arriving (e.g. from a loop's 'done' output), it would re-run the identical query that many times, duplicating every row in its array response. Caught live: 2 scraped sources became 4 identical (paired-duplicate) items downstream.",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -521,7 +524,8 @@
         }
       },
       "executeOnce": true,
-      "notes": "executeOnce=true: an HTTP Request node runs once per INPUT item by default — with >1 item arriving (e.g. from a loop's 'done' output), it would re-run the identical query that many times, duplicating every row in its array response. Caught live: 2 scraped sources became 4 identical (paired-duplicate) items downstream."
+      "notes": "executeOnce=true: an HTTP Request node runs once per INPUT item by default — with >1 item arriving (e.g. from a loop's 'done' output), it would re-run the identical query that many times, duplicating every row in its array response. Caught live: 2 scraped sources became 4 identical (paired-duplicate) items downstream.",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -656,7 +660,8 @@
           "id": "supabase-account",
           "name": "Supabase account"
         }
-      }
+      },
+      "alwaysOutputData": true
     },
     {
       "parameters": {
