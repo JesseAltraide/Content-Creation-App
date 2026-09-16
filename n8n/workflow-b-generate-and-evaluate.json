@@ -16,8 +16,8 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        0,
-        -260
+        -240,
+        0
       ]
     },
     {
@@ -30,8 +30,8 @@
       "typeVersion": 2,
       "notes": "Non-secret config only. Supabase/Anthropic secrets live in n8n Credentials.",
       "position": [
-        0,
-        -120
+        20,
+        0
       ]
     },
     {
@@ -53,8 +53,8 @@
       },
       "alwaysOutputData": true,
       "position": [
-        0,
-        20
+        280,
+        0
       ]
     },
     {
@@ -76,8 +76,8 @@
       },
       "alwaysOutputData": true,
       "position": [
-        0,
-        160
+        540,
+        0
       ]
     },
     {
@@ -100,8 +100,8 @@
       "alwaysOutputData": true,
       "executeOnce": true,
       "position": [
-        0,
-        300
+        800,
+        0
       ]
     },
     {
@@ -114,8 +114,8 @@
       "typeVersion": 2,
       "notes": "Filters alwaysOutputData's placeholder before counting - see Error #7.",
       "position": [
-        0,
-        440
+        1060,
+        0
       ]
     },
     {
@@ -145,8 +145,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        0,
-        580
+        1320,
+        0
       ]
     },
     {
@@ -179,8 +179,8 @@
         }
       },
       "position": [
-        0,
-        720
+        1580,
+        320
       ]
     },
     {
@@ -213,8 +213,8 @@
         }
       },
       "position": [
-        0,
-        860
+        1840,
+        320
       ]
     },
     {
@@ -227,8 +227,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        0,
-        1000
+        2100,
+        320
       ]
     },
     {
@@ -266,8 +266,8 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        0,
-        1140
+        2360,
+        0
       ]
     },
     {
@@ -279,8 +279,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        0,
-        1280
+        2620,
+        -320
       ]
     },
     {
@@ -313,8 +313,8 @@
         }
       },
       "position": [
-        0,
-        1420
+        2880,
+        -320
       ]
     },
     {
@@ -327,8 +327,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        0,
-        1560
+        3140,
+        -320
       ]
     },
     {
@@ -340,8 +340,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        0,
-        1700
+        3400,
+        0
       ]
     },
     {
@@ -371,8 +371,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        0,
-        1840
+        3660,
+        0
       ]
     },
     {
@@ -405,8 +405,8 @@
         }
       },
       "position": [
-        0,
-        1980
+        3920,
+        320
       ]
     },
     {
@@ -439,8 +439,8 @@
         }
       },
       "position": [
-        0,
-        2120
+        4180,
+        320
       ]
     },
     {
@@ -453,8 +453,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        0,
-        2260
+        4440,
+        320
       ]
     },
     {
@@ -487,8 +487,8 @@
         }
       },
       "position": [
-        0,
-        2400
+        4700,
+        0
       ]
     },
     {
@@ -510,8 +510,8 @@
       },
       "alwaysOutputData": true,
       "position": [
-        0,
-        2540
+        4960,
+        0
       ]
     },
     {
@@ -549,8 +549,8 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        0,
-        2680
+        5220,
+        0
       ]
     },
     {
@@ -562,8 +562,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        0,
-        2820
+        5480,
+        -320
       ]
     },
     {
@@ -596,8 +596,8 @@
         }
       },
       "position": [
-        0,
-        2960
+        5740,
+        -320
       ]
     },
     {
@@ -610,8 +610,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        0,
-        3100
+        6000,
+        -320
       ]
     },
     {
@@ -623,8 +623,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        0,
-        3240
+        6260,
+        0
       ]
     },
     {
@@ -657,8 +657,8 @@
         }
       },
       "position": [
-        0,
-        3380
+        6520,
+        0
       ]
     },
     {
@@ -696,8 +696,8 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        0,
-        3520
+        6780,
+        0
       ]
     },
     {
@@ -709,8 +709,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        0,
-        3660
+        7040,
+        -320
       ]
     },
     {
@@ -743,8 +743,8 @@
         }
       },
       "position": [
-        0,
-        3800
+        7300,
+        -320
       ]
     },
     {
@@ -757,8 +757,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        0,
-        3940
+        7560,
+        -320
       ]
     },
     {
@@ -770,8 +770,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        0,
-        4080
+        7820,
+        0
       ]
     },
     {
@@ -804,8 +804,8 @@
         }
       },
       "position": [
-        0,
-        4220
+        8080,
+        0
       ]
     },
     {
@@ -817,8 +817,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        0,
-        4360
+        8340,
+        0
       ]
     },
     {
@@ -848,8 +848,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        0,
-        4500
+        8600,
+        0
       ]
     },
     {
@@ -882,8 +882,8 @@
         }
       },
       "position": [
-        0,
-        4640
+        8860,
+        -260
       ]
     },
     {
@@ -916,8 +916,8 @@
         }
       },
       "position": [
-        0,
-        4780
+        9120,
+        -260
       ]
     },
     {
@@ -930,8 +930,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        0,
-        4920
+        9380,
+        -260
       ]
     },
     {
@@ -969,8 +969,8 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        0,
-        5060
+        9640,
+        0
       ]
     },
     {
@@ -982,8 +982,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        0,
-        5200
+        9900,
+        -320
       ]
     },
     {
@@ -1016,8 +1016,8 @@
         }
       },
       "position": [
-        0,
-        5340
+        10160,
+        -320
       ]
     },
     {
@@ -1030,8 +1030,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        0,
-        5480
+        10420,
+        -320
       ]
     },
     {
@@ -1043,8 +1043,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        0,
-        5620
+        10680,
+        0
       ]
     },
     {
@@ -1077,8 +1077,8 @@
         }
       },
       "position": [
-        0,
-        5760
+        10940,
+        0
       ]
     },
     {
@@ -1116,8 +1116,8 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        0,
-        5900
+        11200,
+        0
       ]
     },
     {
@@ -1129,8 +1129,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        0,
-        6040
+        11460,
+        -320
       ]
     },
     {
@@ -1163,8 +1163,8 @@
         }
       },
       "position": [
-        0,
-        6180
+        11720,
+        -320
       ]
     },
     {
@@ -1177,8 +1177,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        0,
-        6320
+        11980,
+        -320
       ]
     },
     {
@@ -1190,8 +1190,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        0,
-        6460
+        12240,
+        0
       ]
     },
     {
@@ -1224,8 +1224,8 @@
         }
       },
       "position": [
-        0,
-        6600
+        12500,
+        0
       ]
     },
     {
@@ -1237,8 +1237,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        0,
-        6740
+        12760,
+        0
       ]
     },
     {
@@ -1268,8 +1268,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        0,
-        6880
+        13020,
+        0
       ]
     },
     {
@@ -1302,8 +1302,8 @@
         }
       },
       "position": [
-        0,
-        7020
+        13280,
+        -260
       ]
     },
     {
@@ -1336,8 +1336,8 @@
         }
       },
       "position": [
-        0,
-        7160
+        13540,
+        -260
       ]
     },
     {
@@ -1350,8 +1350,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        0,
-        7300
+        13800,
+        -260
       ]
     },
     {
@@ -1389,8 +1389,8 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        0,
-        7440
+        14060,
+        0
       ]
     },
     {
@@ -1402,8 +1402,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        0,
-        7580
+        14320,
+        -320
       ]
     },
     {
@@ -1436,8 +1436,8 @@
         }
       },
       "position": [
-        0,
-        7720
+        14580,
+        -320
       ]
     },
     {
@@ -1450,8 +1450,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        0,
-        7860
+        14840,
+        -320
       ]
     },
     {
@@ -1463,8 +1463,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        0,
-        8000
+        15100,
+        0
       ]
     },
     {
@@ -1497,8 +1497,8 @@
         }
       },
       "position": [
-        0,
-        8140
+        15360,
+        0
       ]
     },
     {
@@ -1536,8 +1536,8 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        0,
-        8280
+        15620,
+        0
       ]
     },
     {
@@ -1549,8 +1549,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        0,
-        8420
+        15880,
+        -320
       ]
     },
     {
@@ -1583,8 +1583,8 @@
         }
       },
       "position": [
-        0,
-        8560
+        16140,
+        -320
       ]
     },
     {
@@ -1597,8 +1597,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        0,
-        8700
+        16400,
+        -320
       ]
     },
     {
@@ -1610,8 +1610,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        0,
-        8840
+        16660,
+        0
       ]
     },
     {
@@ -1644,8 +1644,8 @@
         }
       },
       "position": [
-        0,
-        8980
+        16920,
+        0
       ]
     },
     {
@@ -1657,8 +1657,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        0,
-        9120
+        17180,
+        0
       ]
     },
     {
@@ -1688,8 +1688,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        0,
-        9260
+        17440,
+        0
       ]
     },
     {
@@ -1722,8 +1722,8 @@
         }
       },
       "position": [
-        0,
-        9400
+        17700,
+        -260
       ]
     },
     {
@@ -1756,8 +1756,8 @@
         }
       },
       "position": [
-        0,
-        9540
+        17960,
+        -260
       ]
     },
     {
@@ -1770,8 +1770,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        0,
-        9680
+        18220,
+        -260
       ]
     },
     {
@@ -1804,8 +1804,8 @@
         }
       },
       "position": [
-        0,
-        9820
+        18480,
+        260
       ]
     },
     {
@@ -1838,8 +1838,8 @@
         }
       },
       "position": [
-        0,
-        9960
+        18740,
+        260
       ]
     },
     {
@@ -1852,8 +1852,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        0,
-        10100
+        19000,
+        260
       ]
     }
   ],

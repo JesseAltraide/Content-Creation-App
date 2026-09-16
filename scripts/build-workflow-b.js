@@ -26,12 +26,28 @@ const ANTHROPIC_CRED = { id: "anthropic-account", name: "Anthropic account" };
 
 const nodes = [];
 const connections = {};
-let yCursor = -400;
+
+// Horizontal layout: main flow advances left-to-right along X; branches (error paths,
+// hard-block paths, pass/fail splits) get their own Y lane so they fan out vertically
+// at the point they diverge instead of every node stacking in one long column.
+let xCursor = -500;
+let currentLane = 0;
+const X_STEP = 260;
 
 function addNode(n) {
-  n.position = n.position || [0, yCursor += 140];
+  n.position = n.position || [(xCursor += X_STEP), currentLane];
   nodes.push(n);
   return n;
+}
+
+function withLane(offset, fn) {
+  const prev = currentLane;
+  currentLane = offset;
+  const savedX = xCursor;
+  const result = fn();
+  currentLane = prev;
+  xCursor = Math.max(xCursor, savedX); // keep the main line's X moving forward too
+  return result;
 }
 
 function connect(fromName, toName, outputIndex = 0) {
@@ -153,31 +169,33 @@ function claudeNode(id, name, model, tool, promptExpr, maxTokens) {
 }
 
 function claudeErrorBranch(claudeNodeName, stage, requestIdExpr) {
-  const errId = claudeNodeName.replace(/[^a-z0-9]/gi, "-").toLowerCase();
-  codeNode(
-    `${errId}-error-extract`,
-    `${claudeNodeName}: Extract Error`,
-    "const err = $json.error || {};" + NL +
-      "const message = (err.message || JSON.stringify(err) || 'Unknown Claude API error').slice(0, 500);" + NL +
-      `return [{ json: { requestId: ${requestIdExpr}, message } }];`
-  );
-  connect(claudeNodeName, `${claudeNodeName}: Extract Error`, 1);
+  withLane(-320, () => {
+    const errId = claudeNodeName.replace(/[^a-z0-9]/gi, "-").toLowerCase();
+    codeNode(
+      `${errId}-error-extract`,
+      `${claudeNodeName}: Extract Error`,
+      "const err = $json.error || {};" + NL +
+        "const message = (err.message || JSON.stringify(err) || 'Unknown Claude API error').slice(0, 500);" + NL +
+        `return [{ json: { requestId: ${requestIdExpr}, message } }];`
+    );
+    connect(claudeNodeName, `${claudeNodeName}: Extract Error`, 1);
 
-  supabaseWrite(
-    `${errId}-log-failed`,
-    `${claudeNodeName}: Log Failed`,
-    "POST",
-    "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
-    `={{ JSON.stringify({ request_id: $json.requestId, stage: '${stage}', status: 'failed', detail: \`Claude call failed: \${$json.message}\` }) }}`
-  );
-  connect(`${claudeNodeName}: Extract Error`, `${claudeNodeName}: Log Failed`);
+    supabaseWrite(
+      `${errId}-log-failed`,
+      `${claudeNodeName}: Log Failed`,
+      "POST",
+      "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+      `={{ JSON.stringify({ request_id: $json.requestId, stage: '${stage}', status: 'failed', detail: \`Claude call failed: \${$json.message}\` }) }}`
+    );
+    connect(`${claudeNodeName}: Extract Error`, `${claudeNodeName}: Log Failed`);
 
-  respondNode(
-    `${errId}-respond-failed`,
-    `${claudeNodeName}: Respond Failed`,
-    "={{ JSON.stringify({ ok: false, reason: 'claude_failed', detail: $('" + claudeNodeName + ": Extract Error').first().json.message }) }}"
-  );
-  connect(`${claudeNodeName}: Log Failed`, `${claudeNodeName}: Respond Failed`);
+    respondNode(
+      `${errId}-respond-failed`,
+      `${claudeNodeName}: Respond Failed`,
+      "={{ JSON.stringify({ ok: false, reason: 'claude_failed', detail: $('" + claudeNodeName + ": Extract Error').first().json.message }) }}"
+    );
+    connect(`${claudeNodeName}: Log Failed`, `${claudeNodeName}: Respond Failed`);
+  });
 }
 
 function respondNode(id, name, bodyExpr) {
@@ -248,20 +266,22 @@ connect("Fetch Scraped Sources", "Count Scraped Sources");
 ifNode("if-zero-sources", "IF Zero Scraped Sources", "={{$json.count}}", 0, { type: "number", operation: "equals" });
 connect("Count Scraped Sources", "IF Zero Scraped Sources");
 
-supabaseWrite(
-  "mark-no-sources", "Mark Needs Attention (no sources)", "PATCH",
-  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('Config').first().json.request_id}}",
-  "={{ JSON.stringify({ status: 'needs_human_attention' }) }}"
-);
-connect("IF Zero Scraped Sources", "Mark Needs Attention (no sources)", 0);
-supabaseWrite(
-  "log-no-sources", "Log Event (no sources)", "POST",
-  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
-  "={{ JSON.stringify({ request_id: $('Config').first().json.request_id, stage: 'excerpt_selection', status: 'failed', detail: 'No scraped sources available for excerpt extraction.' }) }}"
-);
-connect("Mark Needs Attention (no sources)", "Log Event (no sources)");
-respondNode("respond-no-sources", "Respond (no sources)", "={{ JSON.stringify({ ok: false, reason: 'no_scraped_sources' }) }}");
-connect("Log Event (no sources)", "Respond (no sources)");
+withLane(320, () => {
+  supabaseWrite(
+    "mark-no-sources", "Mark Needs Attention (no sources)", "PATCH",
+    "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('Config').first().json.request_id}}",
+    "={{ JSON.stringify({ status: 'needs_human_attention' }) }}"
+  );
+  connect("IF Zero Scraped Sources", "Mark Needs Attention (no sources)", 0);
+  supabaseWrite(
+    "log-no-sources", "Log Event (no sources)", "POST",
+    "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+    "={{ JSON.stringify({ request_id: $('Config').first().json.request_id, stage: 'excerpt_selection', status: 'failed', detail: 'No scraped sources available for excerpt extraction.' }) }}"
+  );
+  connect("Mark Needs Attention (no sources)", "Log Event (no sources)");
+  respondNode("respond-no-sources", "Respond (no sources)", "={{ JSON.stringify({ ok: false, reason: 'no_scraped_sources' }) }}");
+  connect("Log Event (no sources)", "Respond (no sources)");
+});
 
 // ---------------------------------------------------------------------------
 // Stage 4 — excerpt selection scoped to the chosen angle
@@ -317,20 +337,22 @@ connect("Claude: Select Excerpts", "Parse Excerpts", 0);
 ifNode("if-zero-excerpts", "IF Zero Excerpts", "={{$json.excerpts.length}}", 0, { type: "number", operation: "equals" });
 connect("Parse Excerpts", "IF Zero Excerpts");
 
-supabaseWrite(
-  "mark-no-excerpts", "Mark Needs Attention (no excerpts)", "PATCH",
-  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.requestId}}",
-  "={{ JSON.stringify({ status: 'needs_human_attention' }) }}"
-);
-connect("IF Zero Excerpts", "Mark Needs Attention (no excerpts)", 0);
-supabaseWrite(
-  "log-no-excerpts", "Log Event (no excerpts)", "POST",
-  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
-  "={{ JSON.stringify({ request_id: $('Parse Excerpts').first().json.requestId, stage: 'excerpt_selection', status: 'failed', detail: 'Sources loaded fine but none contained a passage relevant to the chosen angle.' }) }}"
-);
-connect("Mark Needs Attention (no excerpts)", "Log Event (no excerpts)");
-respondNode("respond-no-excerpts", "Respond (no excerpts)", "={{ JSON.stringify({ ok: false, reason: 'zero_relevant_excerpts' }) }}");
-connect("Log Event (no excerpts)", "Respond (no excerpts)");
+withLane(320, () => {
+  supabaseWrite(
+    "mark-no-excerpts", "Mark Needs Attention (no excerpts)", "PATCH",
+    "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.requestId}}",
+    "={{ JSON.stringify({ status: 'needs_human_attention' }) }}"
+  );
+  connect("IF Zero Excerpts", "Mark Needs Attention (no excerpts)", 0);
+  supabaseWrite(
+    "log-no-excerpts", "Log Event (no excerpts)", "POST",
+    "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+    "={{ JSON.stringify({ request_id: $('Parse Excerpts').first().json.requestId, stage: 'excerpt_selection', status: 'failed', detail: 'Sources loaded fine but none contained a passage relevant to the chosen angle.' }) }}"
+  );
+  connect("Mark Needs Attention (no excerpts)", "Log Event (no excerpts)");
+  respondNode("respond-no-excerpts", "Respond (no excerpts)", "={{ JSON.stringify({ ok: false, reason: 'zero_relevant_excerpts' }) }}");
+  connect("Log Event (no excerpts)", "Respond (no excerpts)");
+});
 
 supabaseWrite(
   "insert-excerpts", "Insert Excerpts", "POST",
@@ -492,6 +514,7 @@ function buildEvalRound(roundLabel, sectionSourceName, isFinalRound) {
   ifNode(`if-pass-${idBase}`, `IF Pass (${roundLabel})`, "={{$json.decision}}", "pass", { type: "string", operation: "equals" });
   connect(`Gate (${roundLabel})`, `IF Pass (${roundLabel})`);
 
+  withLane(-260, () => {
   supabaseWrite(
     `mark-approved-${idBase}`, `Mark Pending Approval (${roundLabel})`, "PATCH",
     "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('Config').first().json.request_id}}",
@@ -510,9 +533,11 @@ function buildEvalRound(roundLabel, sectionSourceName, isFinalRound) {
     `={{ JSON.stringify({ ok: true, status: 'pass', score: $('Gate (${roundLabel})').first().json.overall_score }) }}`
   );
   connect(`Log Event (pass, ${roundLabel})`, `Respond (pass, ${roundLabel})`);
+  });
 
   // Not pass: either final-round-fail (needs_human_attention) or continue to next revision round.
   if (isFinalRound) {
+    withLane(260, () => {
     supabaseWrite(
       `mark-cap-${idBase}`, `Mark Needs Attention (cap reached)`, "PATCH",
       "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('Config').first().json.request_id}}",
@@ -531,6 +556,7 @@ function buildEvalRound(roundLabel, sectionSourceName, isFinalRound) {
       `={{ JSON.stringify({ ok: false, reason: 'revision_cap_reached', status: $('Gate (${roundLabel})').first().json.decision, score: $('Gate (${roundLabel})').first().json.overall_score }) }}`
     );
     connect(`Log Event (cap reached)`, `Respond (cap reached)`);
+    });
     return null;
   }
 
