@@ -11,6 +11,7 @@ import { PipelineProgress } from "@/components/ui/pipeline-progress";
 import { friendlyStageMessage, explainNeedsAttention } from "@/lib/friendly-errors";
 import SelectAngleButton from "./select-angle-button";
 import BackToAngleSelectionButton from "./back-to-angle-selection-button";
+import ArticleReview from "./article-review";
 
 const SOURCE_STATUS_STYLES: Record<string, string> = {
   scraped: "bg-success-soft text-success",
@@ -48,6 +49,26 @@ export default async function RequestDetailPage({
     .select("*")
     .eq("request_id", id)
     .order("created_at");
+
+  const { data: sections } = await supabase
+    .from("sections")
+    .select("*")
+    .eq("request_id", id)
+    .order("version");
+
+  const { data: evaluations } = await supabase
+    .from("evaluation_results")
+    .select("*")
+    .eq("request_id", id)
+    .eq("pass", "pass_1_article")
+    .order("content_version");
+
+  const { data: excerpts } = await supabase
+    .from("excerpts")
+    .select("*")
+    .eq("request_id", id);
+
+  const sourceUrlsById = Object.fromEntries((sources ?? []).map((s) => [s.id, s.url]));
 
   const latestEvent = events?.[0];
   const canRetry = req.status === "researching" && latestEvent?.status === "failed";
@@ -181,6 +202,15 @@ export default async function RequestDetailPage({
           </div>
         </section>
       )}
+
+      <ArticleReview
+        requestId={id}
+        requestStatus={req.status}
+        sections={sections ?? []}
+        evaluations={evaluations ?? []}
+        excerpts={excerpts ?? []}
+        sourceUrlsById={sourceUrlsById}
+      />
 
       {sources && sources.length > 0 && (
         <section className="mt-8">

@@ -1,7 +1,16 @@
-function tierStyle(pct: number) {
-  if (pct >= 0.73) return { bar: "bg-success", text: "text-success" }; // 11-15/15
-  if (pct >= 0.47) return { bar: "bg-warning", text: "text-warning" }; // 7-10/15
-  return { bar: "bg-danger", text: "text-danger" }; // 0-6/15
+function tierStyle(score: number, max: number, floor?: number) {
+  // Tiers are derived from the actual floor, not a fixed percentage — a criterion
+  // scoring exactly at its floor is the documented "soft flag, still proceeds" case
+  // (e.g. resonance 7-10/15), not a hard failure, and shouldn't render as red.
+  if (floor === undefined) {
+    const pct = score / max;
+    if (pct >= 0.73) return { bar: "bg-success", text: "text-success" };
+    if (pct >= 0.47) return { bar: "bg-warning", text: "text-warning" };
+    return { bar: "bg-danger", text: "text-danger" };
+  }
+  if (score < floor) return { bar: "bg-danger", text: "text-danger" };
+  if (score < floor + (max - floor) / 2) return { bar: "bg-warning", text: "text-warning" };
+  return { bar: "bg-success", text: "text-success" };
 }
 
 export function ScoreBar({
@@ -16,7 +25,7 @@ export function ScoreBar({
   floor?: number;
 }) {
   const pct = Math.max(0, Math.min(1, score / max));
-  const { bar, text } = tierStyle(pct);
+  const { bar, text } = tierStyle(score, max, floor);
 
   return (
     <div>
