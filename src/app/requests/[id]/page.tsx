@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import SourceSelection from "./source-selection";
+import RetryButton from "./retry-button";
 
 export default async function RequestDetailPage({
   params,
@@ -25,6 +26,9 @@ export default async function RequestDetailPage({
     .eq("request_id", id)
     .order("created_at", { ascending: false });
 
+  const latestEvent = events?.[0];
+  const canRetry = req.status === "researching" && latestEvent?.status === "failed";
+
   return (
     <main className="mx-auto max-w-2xl px-6 py-12">
       <div className="flex items-center justify-between">
@@ -44,6 +48,18 @@ export default async function RequestDetailPage({
         <dt className="text-neutral-500">Channels</dt>
         <dd>{req.channels.join(", ")}</dd>
       </dl>
+
+      {canRetry && (
+        <section className="mt-8 rounded-lg border border-red-200 bg-red-50 p-4">
+          <p className="text-sm text-red-700">
+            {latestEvent!.stage}: {latestEvent!.detail}
+          </p>
+          <p className="mt-1 text-xs text-red-600">
+            Nothing has progressed since — safe to retry from here.
+          </p>
+          <RetryButton requestId={id} />
+        </section>
+      )}
 
       {req.status === "awaiting_source_selection" && (
         <SourceSelection

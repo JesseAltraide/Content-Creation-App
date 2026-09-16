@@ -354,7 +354,7 @@
     },
     {
       "parameters": {
-        "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/sources?request_id=eq.{{$('A2 · Fetch Request Row').first().json.id}}&status=eq.selected&select=*",
+        "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/sources?request_id=eq.{{$('A2 · Fetch Request Row').first().json.id}}&status=in.(selected,scraped,scrape_failed)&select=*",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "supabaseApi"
       },
@@ -699,7 +699,8 @@
           "id": "anthropic-account",
           "name": "Anthropic account"
         }
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -982,7 +983,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nreturn [{ json: { count: items.length, sources: items.map(i => i.json) } }];"
+        "jsCode": "// alwaysOutputData on the upstream fetch forces a fake placeholder item ({}) when the\n// real result is genuinely empty (zero rows) - filter that out before counting, or a\n// zero-row case gets miscounted as count:1 and a fake empty 'source' flows downstream.\nconst items = $input.all().filter(i => i.json && i.json.id);\nreturn [{ json: { count: items.length, sources: items.map(i => i.json) } }];"
       },
       "id": "a2-count-selected",
       "name": "A2 · Count Selected Sources",
@@ -996,7 +997,7 @@
     },
     {
       "parameters": {
-        "jsCode": "return $json.sources.map(s => ({ json: s }));"
+        "jsCode": "const needingScrape = ($json.sources || []).filter(s => s.status !== 'scraped');\nif (needingScrape.length === 0) return [{ json: { skip: true } }];\nreturn needingScrape.map(s => ({ json: s }));"
       },
       "id": "a2-expand-selected",
       "name": "A2 · Expand Selected Sources",
@@ -1005,11 +1006,12 @@
       "position": [
         800,
         460
-      ]
+      ],
+      "notes": "Only sources not already 'scraped' get (re)scraped - a retry after partial success shouldn't hit Firecrawl again for sources that already succeeded. Emits an explicit {skip:true} marker (not alwaysOutputData's opaque placeholder) when nothing needs scraping, so the next IF can route around the loop entirely instead of feeding a fake empty source into it."
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nreturn [{ json: { count: items.length, sources: items.map(i => i.json) } }];"
+        "jsCode": "// alwaysOutputData on the upstream fetch forces a fake placeholder item ({}) when the\n// real result is genuinely empty (zero rows) - filter that out before counting, or a\n// zero-row case gets miscounted as count:1 and a fake empty 'source' flows downstream.\nconst items = $input.all().filter(i => i.json && i.json.id);\nreturn [{ json: { count: items.length, sources: items.map(i => i.json) } }];"
       },
       "id": "a2-count-scraped",
       "name": "A2 · Count Scraped Sources",
@@ -1020,6 +1022,99 @@
         60
       ],
       "notes": "Same zero-item gap as A2 · Count Selected Sources — a GET returning zero scraped rows produces zero items, which would silently skip the 'all sources failed to scrape' hard block without this wrapper."
+    },
+    {
+      "parameters": {
+        "jsCode": "const requestId = $('A2 · Fetch Request Row').first().json.id;\nconst err = $json.error || {};\nconst message = (err.message || JSON.stringify(err) || 'Unknown Claude API error').slice(0, 500);\nreturn [{ json: { requestId, message } }];"
+      },
+      "id": "a2-claude-error",
+      "name": "A2 · Claude Error: Extract Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        260
+      ],
+      "notes": "Claude call failed (rate limit, timeout, bad response, etc). Per the no-partial-progress rule: request status is never advanced this far in the chain, so it's already left exactly where it was before this call — no rollback needed, just a clear log entry and a clean failed response so the human can retry from here."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ request_id: $json.requestId, stage: 'angle_proposal', status: 'failed', detail: `Claude generation failed: ${$json.message}` }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "a2-log-claude-failed",
+      "name": "A2 · Log Event (Claude failed)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        260
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'claude_failed', detail: $('A2 · Claude Error: Extract Message').first().json.message }) }}"
+      },
+      "id": "a2-respond-claude-failed",
+      "name": "A2 · Respond (Claude failed)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        2000,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{$json.skip}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a2-if-skip-scraping",
+      "name": "A2 · IF Nothing Needs Scraping",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        800,
+        620
+      ]
     }
   ],
   "connections": {
@@ -1301,6 +1396,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "A2 · Claude Error: Extract Message",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -1425,7 +1527,7 @@
       "main": [
         [
           {
-            "node": "A2 · Loop Over Selected Sources",
+            "node": "A2 · IF Nothing Needs Scraping",
             "type": "main",
             "index": 0
           }
@@ -1448,6 +1550,46 @@
         [
           {
             "node": "A2 · Evaluate Scrape Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A2 · Claude Error: Extract Message": {
+      "main": [
+        [
+          {
+            "node": "A2 · Log Event (Claude failed)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A2 · Log Event (Claude failed)": {
+      "main": [
+        [
+          {
+            "node": "A2 · Respond (Claude failed)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A2 · IF Nothing Needs Scraping": {
+      "main": [
+        [
+          {
+            "node": "A2 · Fetch Scraped Sources",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "A2 · Loop Over Selected Sources",
             "type": "main",
             "index": 0
           }
