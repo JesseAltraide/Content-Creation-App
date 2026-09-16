@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/card";
 import NewProfileForm from "./new-profile-form";
 import DeleteProfileButton from "./delete-profile-button";
+import SettingsNav from "../settings-nav";
 
 export default async function AudienceProfilesPage() {
   const supabase = await createClient();
@@ -13,9 +13,7 @@ export default async function AudienceProfilesPage() {
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-12">
-      <Link href="/" className="text-sm font-medium text-muted hover:text-foreground">
-        ← Back to requests
-      </Link>
+      <SettingsNav active="/settings/audience-profiles" />
 
       <h1 className="mt-4 text-2xl font-semibold tracking-tight">Audience profiles</h1>
       <p className="mt-1 text-sm text-muted">
