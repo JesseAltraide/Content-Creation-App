@@ -258,8 +258,18 @@ codeNode(
   "count-scraped-sources",
   "Count Scraped Sources",
   "const items = $input.all().filter(i => i.json && i.json.id);" + NL +
-    "return [{ json: { count: items.length, sources: items.map(i => i.json) } }];",
-  { notes: "Filters alwaysOutputData's placeholder before counting - see Error #7." }
+    "const sources = items.map(i => i.json);" + NL +
+    "const sourcesText = sources.map(s => `URL: ${s.url}" + BSN + "TITLE: ${s.title || ''}" + BSN + "${(s.scraped_text || '').slice(0, 6000)}`).join('" + BSN + BSN + "---" + BSN + BSN + "');" + NL +
+    "return [{ json: { count: items.length, sources, sourcesText } }];",
+  {
+    notes:
+      "Filters alwaysOutputData's placeholder before counting (Error #7). sourcesText is built " +
+      "here in real Code-node JS, not as inline .map/.join inside an HTTP node's {{ }} expression - " +
+      "scraped article text routinely contains markdown code fences (backticks), which broke the " +
+      "downstream Claude node's expression when spliced into a nested template literal there. A " +
+      "Code node evaluates real JS with actual data bindings, so arbitrary content is always safe " +
+      "here regardless of what characters it contains.",
+  }
 );
 connect("Fetch Scraped Sources", "Count Scraped Sources");
 
@@ -311,9 +321,7 @@ const EXCERPT_TOOL = {
 };
 
 const excerptPrompt =
-  "`You are selecting source excerpts for a content angle.\\n\\nChosen angle: ${$('Fetch Angle Row').first().json.working_title}\\nThesis: ${$('Fetch Angle Row').first().json.thesis}\\nSection shape: ${JSON.stringify($('Fetch Angle Row').first().json.section_shape)}\\n\\nSources:\\n${$('Count Scraped Sources').first().json.sources.map(s => `URL: ${s.url}" + NL +
-  "TITLE: ${s.title}" + NL +
-  "${s.scraped_text.slice(0, 6000)}`).join('" + BSN + BSN + "---" + BSN + BSN + "')}\\n\\nSelect every passage genuinely relevant to this specific angle - not the whole source, just passages that actually support it. For each, give the exact excerpt text (a real quote, not a paraphrase), which source URL it came from, and a one-line reason. If nothing in a source is relevant, select nothing from it. Return an empty excerpts array if truly nothing across all sources supports this angle.`";
+  "`You are selecting source excerpts for a content angle.\\n\\nChosen angle: ${$('Fetch Angle Row').first().json.working_title}\\nThesis: ${$('Fetch Angle Row').first().json.thesis}\\nSection shape: ${JSON.stringify($('Fetch Angle Row').first().json.section_shape)}\\n\\nSources:\\n${$('Count Scraped Sources').first().json.sourcesText}\\n\\nSelect every passage genuinely relevant to this specific angle - not the whole source, just passages that actually support it. For each, give the exact excerpt text (a real quote, not a paraphrase), which source URL it came from, and a one-line reason. If nothing in a source is relevant, select nothing from it. Return an empty excerpts array if truly nothing across all sources supports this angle.`";
 
 claudeNode("claude-excerpts", "Claude: Select Excerpts", "claude-sonnet-5", EXCERPT_TOOL, excerptPrompt, 4000);
 connect("IF Zero Scraped Sources", "Claude: Select Excerpts", 1);
@@ -368,6 +376,22 @@ supabaseGet(
 );
 connect("Insert Excerpts", "Fetch Excerpts");
 
+codeNode(
+  "build-excerpts-text",
+  "Build Excerpts Text",
+  "const excerpts = $input.all().map(i => i.json);" + NL +
+    "const withReason = excerpts.map((e, i) => `[${i}] ${e.text} (reason selected: ${e.reason})`).join('" + BSN + BSN + "');" + NL +
+    "const plain = excerpts.map((e, i) => `[${i}] Source: ${e.source_id}" + BSN + "${e.text}`).join('" + BSN + BSN + "');" + NL +
+    "return [{ json: { excerpts, excerptsTextWithReason: withReason, excerptsTextPlain: plain } }];",
+  {
+    notes:
+      "Same fix as Build Sources Text: excerpt text can itself contain backticks (Claude may " +
+      "quote code from a source), so this formatting happens in real Code-node JS rather than " +
+      "inline .map/.join inside a downstream HTTP node's {{ }} expression.",
+  }
+);
+connect("Fetch Excerpts", "Build Excerpts Text");
+
 // ---------------------------------------------------------------------------
 // Stage 5 — generate the main block
 // ---------------------------------------------------------------------------
@@ -387,10 +411,10 @@ const ARTICLE_TOOL = {
 };
 
 const generatePrompt =
-  "`Write a full SEO article grounded only in the excerpts below - no unsupported claims or invented statistics. If the excerpts can't adequately support the desired length, write a shorter, fully-grounded article and say so isn't needed in the output, just write what's honestly supportable.\\n\\nWorking title: ${$('Fetch Angle Row').first().json.working_title}\\nThesis: ${$('Fetch Angle Row').first().json.thesis}\\nSection shape: ${JSON.stringify($('Fetch Angle Row').first().json.section_shape)}\\nPrimary keyword (must appear naturally, including in a heading): ${$('Fetch Request Row').first().json.primary_keyword}\\nDesired length: ${$('Fetch Request Row').first().json.desired_length || 'no specific target'}\\nContext from the manager: ${$('Fetch Request Row').first().json.context || 'none'}\\n\\nGrounded excerpts (cite the source URL inline as [Source: url] after any claim drawn from it):\\n${$('Fetch Excerpts').all().map(item => item.json).map((e, i) => `[${i}] ${e.text} (reason selected: ${e.reason})`).join('" + BSN + BSN + "')}\\n\\nWrite in markdown with proper H1/H2 heading hierarchy.`";
+  "`Write a full SEO article grounded only in the excerpts below - no unsupported claims or invented statistics. If the excerpts can't adequately support the desired length, write a shorter, fully-grounded article and say so isn't needed in the output, just write what's honestly supportable.\\n\\nWorking title: ${$('Fetch Angle Row').first().json.working_title}\\nThesis: ${$('Fetch Angle Row').first().json.thesis}\\nSection shape: ${JSON.stringify($('Fetch Angle Row').first().json.section_shape)}\\nPrimary keyword (must appear naturally, including in a heading): ${$('Fetch Request Row').first().json.primary_keyword}\\nDesired length: ${$('Fetch Request Row').first().json.desired_length || 'no specific target'}\\nContext from the manager: ${$('Fetch Request Row').first().json.context || 'none'}\\n\\nGrounded excerpts (cite the source URL inline as [Source: url] after any claim drawn from it):\\n${$('Build Excerpts Text').first().json.excerptsTextWithReason}\\n\\nWrite in markdown with proper H1/H2 heading hierarchy.`";
 
 claudeNode("claude-generate", "Claude: Generate Article", "claude-sonnet-5", ARTICLE_TOOL, generatePrompt, 4000);
-connect("Fetch Excerpts", "Claude: Generate Article");
+connect("Build Excerpts Text", "Claude: Generate Article");
 claudeErrorBranch("Claude: Generate Article", "generation", "$('Config').first().json.request_id");
 
 codeNode(
@@ -454,7 +478,7 @@ function evalPrompt(bodyExpr) {
     RUBRIC_TEXT +
     "\\n\\nArticle:\\n${" +
     bodyExpr +
-    "}\\n\\nGrounded excerpts it should be checked against:\\n${$('Fetch Excerpts').all().map(item => item.json).map((e, i) => `[${i}] Source: ${e.source_id}" + NL + "${e.text}`).join('" + BSN + BSN + "')}`"
+    "}\\n\\nGrounded excerpts it should be checked against:\\n${$('Build Excerpts Text').first().json.excerptsTextPlain}`"
   );
 }
 
@@ -579,10 +603,7 @@ function buildRevisionRound(roundNum, prevGateIfName, prevSectionName) {
     (roundNum === 1 ? "Round 0" : `Round ${roundNum - 1}`) +
     ")').first().json.recommended_changes)}\\nUnsupported/weak claims flagged: ${JSON.stringify($('Gate (" +
     (roundNum === 1 ? "Round 0" : `Round ${roundNum - 1}`) +
-    ")').first().json.unsupported_or_weak_claims)}\\n\\nGrounded excerpts available:\\n${$('Fetch Excerpts').all().map(item => item.json).map((e, i) => `[${i}] ${e.text}`).join('" +
-    BSN +
-    BSN +
-    "')}`";
+    ")').first().json.unsupported_or_weak_claims)}\\n\\nGrounded excerpts available:\\n${$('Build Excerpts Text').first().json.excerptsTextPlain}`";
 
   claudeNode(`claude-${idBase}`, `Claude: Revise (${label})`, "claude-sonnet-5", ARTICLE_TOOL, revisePrompt, 4000);
   connect(prevGateIfName, `Claude: Revise (${label})`, 1);

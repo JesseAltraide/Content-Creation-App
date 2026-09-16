@@ -106,13 +106,13 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all().filter(i => i.json && i.json.id);\nreturn [{ json: { count: items.length, sources: items.map(i => i.json) } }];"
+        "jsCode": "const items = $input.all().filter(i => i.json && i.json.id);\nconst sources = items.map(i => i.json);\nconst sourcesText = sources.map(s => `URL: ${s.url}\\nTITLE: ${s.title || ''}\\n${(s.scraped_text || '').slice(0, 6000)}`).join('\\n\\n---\\n\\n');\nreturn [{ json: { count: items.length, sources, sourcesText } }];"
       },
       "id": "count-scraped-sources",
       "name": "Count Scraped Sources",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "notes": "Filters alwaysOutputData's placeholder before counting - see Error #7.",
+      "notes": "Filters alwaysOutputData's placeholder before counting (Error #7). sourcesText is built here in real Code-node JS, not as inline .map/.join inside an HTTP node's {{ }} expression - scraped article text routinely contains markdown code fences (backticks), which broke the downstream Claude node's expression when spliced into a nested template literal there. A Code node evaluates real JS with actual data bindings, so arbitrary content is always safe here regardless of what characters it contains.",
       "position": [
         1060,
         0
@@ -250,7 +250,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\n  model: 'claude-sonnet-5',\n  max_tokens: 4000,\n  tools: [{\"name\":\"select_excerpts\",\"description\":\"Select the passages from the sources genuinely relevant to the chosen angle.\",\"input_schema\":{\"type\":\"object\",\"required\":[\"excerpts\"],\"properties\":{\"excerpts\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"source_url\",\"text\",\"reason\"],\"properties\":{\"source_url\":{\"type\":\"string\"},\"text\":{\"type\":\"string\"},\"reason\":{\"type\":\"string\"}}}}}}}],\n  tool_choice: { type: 'tool', name: 'select_excerpts' },\n  messages: [{ role: 'user', content: `You are selecting source excerpts for a content angle.\\n\\nChosen angle: ${$('Fetch Angle Row').first().json.working_title}\\nThesis: ${$('Fetch Angle Row').first().json.thesis}\\nSection shape: ${JSON.stringify($('Fetch Angle Row').first().json.section_shape)}\\n\\nSources:\\n${$('Count Scraped Sources').first().json.sources.map(s => `URL: ${s.url}\nTITLE: ${s.title}\n${s.scraped_text.slice(0, 6000)}`).join('\\n\\n---\\n\\n')}\\n\\nSelect every passage genuinely relevant to this specific angle - not the whole source, just passages that actually support it. For each, give the exact excerpt text (a real quote, not a paraphrase), which source URL it came from, and a one-line reason. If nothing in a source is relevant, select nothing from it. Return an empty excerpts array if truly nothing across all sources supports this angle.` }]\n}) }}",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'claude-sonnet-5',\n  max_tokens: 4000,\n  tools: [{\"name\":\"select_excerpts\",\"description\":\"Select the passages from the sources genuinely relevant to the chosen angle.\",\"input_schema\":{\"type\":\"object\",\"required\":[\"excerpts\"],\"properties\":{\"excerpts\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"source_url\",\"text\",\"reason\"],\"properties\":{\"source_url\":{\"type\":\"string\"},\"text\":{\"type\":\"string\"},\"reason\":{\"type\":\"string\"}}}}}}}],\n  tool_choice: { type: 'tool', name: 'select_excerpts' },\n  messages: [{ role: 'user', content: `You are selecting source excerpts for a content angle.\\n\\nChosen angle: ${$('Fetch Angle Row').first().json.working_title}\\nThesis: ${$('Fetch Angle Row').first().json.thesis}\\nSection shape: ${JSON.stringify($('Fetch Angle Row').first().json.section_shape)}\\n\\nSources:\\n${$('Count Scraped Sources').first().json.sourcesText}\\n\\nSelect every passage genuinely relevant to this specific angle - not the whole source, just passages that actually support it. For each, give the exact excerpt text (a real quote, not a paraphrase), which source URL it came from, and a one-line reason. If nothing in a source is relevant, select nothing from it. Return an empty excerpts array if truly nothing across all sources supports this angle.` }]\n}) }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "anthropicApi"
       },
@@ -516,6 +516,20 @@
     },
     {
       "parameters": {
+        "jsCode": "const excerpts = $input.all().map(i => i.json);\nconst withReason = excerpts.map((e, i) => `[${i}] ${e.text} (reason selected: ${e.reason})`).join('\\n\\n');\nconst plain = excerpts.map((e, i) => `[${i}] Source: ${e.source_id}\\n${e.text}`).join('\\n\\n');\nreturn [{ json: { excerpts, excerptsTextWithReason: withReason, excerptsTextPlain: plain } }];"
+      },
+      "id": "build-excerpts-text",
+      "name": "Build Excerpts Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "notes": "Same fix as Build Sources Text: excerpt text can itself contain backticks (Claude may quote code from a source), so this formatting happens in real Code-node JS rather than inline .map/.join inside a downstream HTTP node's {{ }} expression.",
+      "position": [
+        5220,
+        0
+      ]
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "https://api.anthropic.com/v1/messages",
         "sendHeaders": true,
@@ -533,7 +547,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\n  model: 'claude-sonnet-5',\n  max_tokens: 4000,\n  tools: [{\"name\":\"write_article\",\"description\":\"Write the full grounded article for the chosen angle.\",\"input_schema\":{\"type\":\"object\",\"required\":[\"title\",\"body_markdown\",\"secondary_keywords\"],\"properties\":{\"title\":{\"type\":\"string\"},\"body_markdown\":{\"type\":\"string\"},\"secondary_keywords\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}}],\n  tool_choice: { type: 'tool', name: 'write_article' },\n  messages: [{ role: 'user', content: `Write a full SEO article grounded only in the excerpts below - no unsupported claims or invented statistics. If the excerpts can't adequately support the desired length, write a shorter, fully-grounded article and say so isn't needed in the output, just write what's honestly supportable.\\n\\nWorking title: ${$('Fetch Angle Row').first().json.working_title}\\nThesis: ${$('Fetch Angle Row').first().json.thesis}\\nSection shape: ${JSON.stringify($('Fetch Angle Row').first().json.section_shape)}\\nPrimary keyword (must appear naturally, including in a heading): ${$('Fetch Request Row').first().json.primary_keyword}\\nDesired length: ${$('Fetch Request Row').first().json.desired_length || 'no specific target'}\\nContext from the manager: ${$('Fetch Request Row').first().json.context || 'none'}\\n\\nGrounded excerpts (cite the source URL inline as [Source: url] after any claim drawn from it):\\n${$('Fetch Excerpts').all().map(item => item.json).map((e, i) => `[${i}] ${e.text} (reason selected: ${e.reason})`).join('\\n\\n')}\\n\\nWrite in markdown with proper H1/H2 heading hierarchy.` }]\n}) }}",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'claude-sonnet-5',\n  max_tokens: 4000,\n  tools: [{\"name\":\"write_article\",\"description\":\"Write the full grounded article for the chosen angle.\",\"input_schema\":{\"type\":\"object\",\"required\":[\"title\",\"body_markdown\",\"secondary_keywords\"],\"properties\":{\"title\":{\"type\":\"string\"},\"body_markdown\":{\"type\":\"string\"},\"secondary_keywords\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}}],\n  tool_choice: { type: 'tool', name: 'write_article' },\n  messages: [{ role: 'user', content: `Write a full SEO article grounded only in the excerpts below - no unsupported claims or invented statistics. If the excerpts can't adequately support the desired length, write a shorter, fully-grounded article and say so isn't needed in the output, just write what's honestly supportable.\\n\\nWorking title: ${$('Fetch Angle Row').first().json.working_title}\\nThesis: ${$('Fetch Angle Row').first().json.thesis}\\nSection shape: ${JSON.stringify($('Fetch Angle Row').first().json.section_shape)}\\nPrimary keyword (must appear naturally, including in a heading): ${$('Fetch Request Row').first().json.primary_keyword}\\nDesired length: ${$('Fetch Request Row').first().json.desired_length || 'no specific target'}\\nContext from the manager: ${$('Fetch Request Row').first().json.context || 'none'}\\n\\nGrounded excerpts (cite the source URL inline as [Source: url] after any claim drawn from it):\\n${$('Build Excerpts Text').first().json.excerptsTextWithReason}\\n\\nWrite in markdown with proper H1/H2 heading hierarchy.` }]\n}) }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "anthropicApi"
       },
@@ -549,7 +563,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        5220,
+        5480,
         0
       ]
     },
@@ -562,7 +576,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        5480,
+        5740,
         -320
       ]
     },
@@ -596,7 +610,7 @@
         }
       },
       "position": [
-        5740,
+        6000,
         -320
       ]
     },
@@ -610,7 +624,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        6000,
+        6260,
         -320
       ]
     },
@@ -623,7 +637,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        6260,
+        6520,
         0
       ]
     },
@@ -657,7 +671,7 @@
         }
       },
       "position": [
-        6520,
+        6780,
         0
       ]
     },
@@ -680,7 +694,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\n  model: 'claude-opus-5',\n  max_tokens: 3000,\n  tools: [{\"name\":\"evaluate_article\",\"description\":\"Score the article against the Pass 1 rubric.\",\"input_schema\":{\"type\":\"object\",\"required\":[\"overall_score\",\"status\",\"criteria\",\"hard_block_triggered\"],\"properties\":{\"overall_score\":{\"type\":\"integer\"},\"status\":{\"type\":\"string\",\"enum\":[\"pass\",\"revise\",\"reject\"]},\"criteria\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"name\",\"score\",\"max\"],\"properties\":{\"name\":{\"type\":\"string\"},\"score\":{\"type\":\"integer\"},\"max\":{\"type\":\"integer\"},\"notes\":{\"type\":\"string\"}}}},\"unsupported_or_weak_claims\":{\"type\":\"array\",\"items\":{\"type\":\"object\"}},\"sections_needing_revision\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"recommended_changes\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"weakest_criteria_suggestions\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"hard_block_triggered\":{\"type\":\"boolean\"},\"hard_block_reason\":{\"type\":[\"string\",\"null\"]}}}}],\n  tool_choice: { type: 'tool', name: 'evaluate_article' },\n  messages: [{ role: 'user', content: `Evaluate this article against the rubric. You have not seen how it was written or planned - judge only what's here.\\n\\nRubric: Score out of 100 across: Topic Relevance (20, floor 15), Source Grounding (20, floor 15), Factual Consistency (20, floor 15), Audience Fit (15, floor 6), SEO Fit (10, floor 4), Clarity (10, floor 4), Completeness (5, floor 2). Topic Relevance/Source Grounding/Factual Consistency are hard-block tier: if any scores below its floor, hard_block_triggered must be true regardless of the total. Verify every claim against the excerpt it cites and flag any claim citing nothing. Always populate weakest_criteria_suggestions, even on a passing score - a passing draft can still have one mediocre criterion worth naming.\\n\\nArticle:\\n${$('Insert Section v1').first().json.body_markdown}\\n\\nGrounded excerpts it should be checked against:\\n${$('Fetch Excerpts').all().map(item => item.json).map((e, i) => `[${i}] Source: ${e.source_id}\n${e.text}`).join('\\n\\n')}` }]\n}) }}",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'claude-opus-5',\n  max_tokens: 3000,\n  tools: [{\"name\":\"evaluate_article\",\"description\":\"Score the article against the Pass 1 rubric.\",\"input_schema\":{\"type\":\"object\",\"required\":[\"overall_score\",\"status\",\"criteria\",\"hard_block_triggered\"],\"properties\":{\"overall_score\":{\"type\":\"integer\"},\"status\":{\"type\":\"string\",\"enum\":[\"pass\",\"revise\",\"reject\"]},\"criteria\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"name\",\"score\",\"max\"],\"properties\":{\"name\":{\"type\":\"string\"},\"score\":{\"type\":\"integer\"},\"max\":{\"type\":\"integer\"},\"notes\":{\"type\":\"string\"}}}},\"unsupported_or_weak_claims\":{\"type\":\"array\",\"items\":{\"type\":\"object\"}},\"sections_needing_revision\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"recommended_changes\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"weakest_criteria_suggestions\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"hard_block_triggered\":{\"type\":\"boolean\"},\"hard_block_reason\":{\"type\":[\"string\",\"null\"]}}}}],\n  tool_choice: { type: 'tool', name: 'evaluate_article' },\n  messages: [{ role: 'user', content: `Evaluate this article against the rubric. You have not seen how it was written or planned - judge only what's here.\\n\\nRubric: Score out of 100 across: Topic Relevance (20, floor 15), Source Grounding (20, floor 15), Factual Consistency (20, floor 15), Audience Fit (15, floor 6), SEO Fit (10, floor 4), Clarity (10, floor 4), Completeness (5, floor 2). Topic Relevance/Source Grounding/Factual Consistency are hard-block tier: if any scores below its floor, hard_block_triggered must be true regardless of the total. Verify every claim against the excerpt it cites and flag any claim citing nothing. Always populate weakest_criteria_suggestions, even on a passing score - a passing draft can still have one mediocre criterion worth naming.\\n\\nArticle:\\n${$('Insert Section v1').first().json.body_markdown}\\n\\nGrounded excerpts it should be checked against:\\n${$('Build Excerpts Text').first().json.excerptsTextPlain}` }]\n}) }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "anthropicApi"
       },
@@ -696,7 +710,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        6780,
+        7040,
         0
       ]
     },
@@ -709,7 +723,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        7040,
+        7300,
         -320
       ]
     },
@@ -743,7 +757,7 @@
         }
       },
       "position": [
-        7300,
+        7560,
         -320
       ]
     },
@@ -757,7 +771,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        7560,
+        7820,
         -320
       ]
     },
@@ -770,7 +784,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        7820,
+        8080,
         0
       ]
     },
@@ -804,7 +818,7 @@
         }
       },
       "position": [
-        8080,
+        8340,
         0
       ]
     },
@@ -817,7 +831,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        8340,
+        8600,
         0
       ]
     },
@@ -848,7 +862,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        8600,
+        8860,
         0
       ]
     },
@@ -882,7 +896,7 @@
         }
       },
       "position": [
-        8860,
+        9120,
         -260
       ]
     },
@@ -916,7 +930,7 @@
         }
       },
       "position": [
-        9120,
+        9380,
         -260
       ]
     },
@@ -930,7 +944,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        9380,
+        9640,
         -260
       ]
     },
@@ -953,7 +967,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\n  model: 'claude-sonnet-5',\n  max_tokens: 4000,\n  tools: [{\"name\":\"write_article\",\"description\":\"Write the full grounded article for the chosen angle.\",\"input_schema\":{\"type\":\"object\",\"required\":[\"title\",\"body_markdown\",\"secondary_keywords\"],\"properties\":{\"title\":{\"type\":\"string\"},\"body_markdown\":{\"type\":\"string\"},\"secondary_keywords\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}}],\n  tool_choice: { type: 'tool', name: 'write_article' },\n  messages: [{ role: 'user', content: `Revise this article based on the evaluation feedback below. Address the flagged sections and unsupported claims specifically - stay grounded only in the excerpts, don't invent anything new to fill gaps.\\n\\nCurrent article:\\n${$('Insert Section v1').first().json.body_markdown}\\n\\nSections needing revision: ${JSON.stringify($('Gate (Round 0)').first().json.sections_needing_revision)}\\nRecommended changes: ${JSON.stringify($('Gate (Round 0)').first().json.recommended_changes)}\\nUnsupported/weak claims flagged: ${JSON.stringify($('Gate (Round 0)').first().json.unsupported_or_weak_claims)}\\n\\nGrounded excerpts available:\\n${$('Fetch Excerpts').all().map(item => item.json).map((e, i) => `[${i}] ${e.text}`).join('\\n\\n')}` }]\n}) }}",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'claude-sonnet-5',\n  max_tokens: 4000,\n  tools: [{\"name\":\"write_article\",\"description\":\"Write the full grounded article for the chosen angle.\",\"input_schema\":{\"type\":\"object\",\"required\":[\"title\",\"body_markdown\",\"secondary_keywords\"],\"properties\":{\"title\":{\"type\":\"string\"},\"body_markdown\":{\"type\":\"string\"},\"secondary_keywords\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}}],\n  tool_choice: { type: 'tool', name: 'write_article' },\n  messages: [{ role: 'user', content: `Revise this article based on the evaluation feedback below. Address the flagged sections and unsupported claims specifically - stay grounded only in the excerpts, don't invent anything new to fill gaps.\\n\\nCurrent article:\\n${$('Insert Section v1').first().json.body_markdown}\\n\\nSections needing revision: ${JSON.stringify($('Gate (Round 0)').first().json.sections_needing_revision)}\\nRecommended changes: ${JSON.stringify($('Gate (Round 0)').first().json.recommended_changes)}\\nUnsupported/weak claims flagged: ${JSON.stringify($('Gate (Round 0)').first().json.unsupported_or_weak_claims)}\\n\\nGrounded excerpts available:\\n${$('Build Excerpts Text').first().json.excerptsTextPlain}` }]\n}) }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "anthropicApi"
       },
@@ -969,7 +983,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        9640,
+        9900,
         0
       ]
     },
@@ -982,7 +996,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        9900,
+        10160,
         -320
       ]
     },
@@ -1016,7 +1030,7 @@
         }
       },
       "position": [
-        10160,
+        10420,
         -320
       ]
     },
@@ -1030,7 +1044,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        10420,
+        10680,
         -320
       ]
     },
@@ -1043,7 +1057,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        10680,
+        10940,
         0
       ]
     },
@@ -1077,7 +1091,7 @@
         }
       },
       "position": [
-        10940,
+        11200,
         0
       ]
     },
@@ -1100,7 +1114,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\n  model: 'claude-opus-5',\n  max_tokens: 3000,\n  tools: [{\"name\":\"evaluate_article\",\"description\":\"Score the article against the Pass 1 rubric.\",\"input_schema\":{\"type\":\"object\",\"required\":[\"overall_score\",\"status\",\"criteria\",\"hard_block_triggered\"],\"properties\":{\"overall_score\":{\"type\":\"integer\"},\"status\":{\"type\":\"string\",\"enum\":[\"pass\",\"revise\",\"reject\"]},\"criteria\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"name\",\"score\",\"max\"],\"properties\":{\"name\":{\"type\":\"string\"},\"score\":{\"type\":\"integer\"},\"max\":{\"type\":\"integer\"},\"notes\":{\"type\":\"string\"}}}},\"unsupported_or_weak_claims\":{\"type\":\"array\",\"items\":{\"type\":\"object\"}},\"sections_needing_revision\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"recommended_changes\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"weakest_criteria_suggestions\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"hard_block_triggered\":{\"type\":\"boolean\"},\"hard_block_reason\":{\"type\":[\"string\",\"null\"]}}}}],\n  tool_choice: { type: 'tool', name: 'evaluate_article' },\n  messages: [{ role: 'user', content: `Evaluate this article against the rubric. You have not seen how it was written or planned - judge only what's here.\\n\\nRubric: Score out of 100 across: Topic Relevance (20, floor 15), Source Grounding (20, floor 15), Factual Consistency (20, floor 15), Audience Fit (15, floor 6), SEO Fit (10, floor 4), Clarity (10, floor 4), Completeness (5, floor 2). Topic Relevance/Source Grounding/Factual Consistency are hard-block tier: if any scores below its floor, hard_block_triggered must be true regardless of the total. Verify every claim against the excerpt it cites and flag any claim citing nothing. Always populate weakest_criteria_suggestions, even on a passing score - a passing draft can still have one mediocre criterion worth naming.\\n\\nArticle:\\n${$('Insert Section v2').first().json.body_markdown}\\n\\nGrounded excerpts it should be checked against:\\n${$('Fetch Excerpts').all().map(item => item.json).map((e, i) => `[${i}] Source: ${e.source_id}\n${e.text}`).join('\\n\\n')}` }]\n}) }}",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'claude-opus-5',\n  max_tokens: 3000,\n  tools: [{\"name\":\"evaluate_article\",\"description\":\"Score the article against the Pass 1 rubric.\",\"input_schema\":{\"type\":\"object\",\"required\":[\"overall_score\",\"status\",\"criteria\",\"hard_block_triggered\"],\"properties\":{\"overall_score\":{\"type\":\"integer\"},\"status\":{\"type\":\"string\",\"enum\":[\"pass\",\"revise\",\"reject\"]},\"criteria\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"name\",\"score\",\"max\"],\"properties\":{\"name\":{\"type\":\"string\"},\"score\":{\"type\":\"integer\"},\"max\":{\"type\":\"integer\"},\"notes\":{\"type\":\"string\"}}}},\"unsupported_or_weak_claims\":{\"type\":\"array\",\"items\":{\"type\":\"object\"}},\"sections_needing_revision\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"recommended_changes\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"weakest_criteria_suggestions\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"hard_block_triggered\":{\"type\":\"boolean\"},\"hard_block_reason\":{\"type\":[\"string\",\"null\"]}}}}],\n  tool_choice: { type: 'tool', name: 'evaluate_article' },\n  messages: [{ role: 'user', content: `Evaluate this article against the rubric. You have not seen how it was written or planned - judge only what's here.\\n\\nRubric: Score out of 100 across: Topic Relevance (20, floor 15), Source Grounding (20, floor 15), Factual Consistency (20, floor 15), Audience Fit (15, floor 6), SEO Fit (10, floor 4), Clarity (10, floor 4), Completeness (5, floor 2). Topic Relevance/Source Grounding/Factual Consistency are hard-block tier: if any scores below its floor, hard_block_triggered must be true regardless of the total. Verify every claim against the excerpt it cites and flag any claim citing nothing. Always populate weakest_criteria_suggestions, even on a passing score - a passing draft can still have one mediocre criterion worth naming.\\n\\nArticle:\\n${$('Insert Section v2').first().json.body_markdown}\\n\\nGrounded excerpts it should be checked against:\\n${$('Build Excerpts Text').first().json.excerptsTextPlain}` }]\n}) }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "anthropicApi"
       },
@@ -1116,7 +1130,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        11200,
+        11460,
         0
       ]
     },
@@ -1129,7 +1143,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        11460,
+        11720,
         -320
       ]
     },
@@ -1163,7 +1177,7 @@
         }
       },
       "position": [
-        11720,
+        11980,
         -320
       ]
     },
@@ -1177,7 +1191,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        11980,
+        12240,
         -320
       ]
     },
@@ -1190,7 +1204,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        12240,
+        12500,
         0
       ]
     },
@@ -1224,7 +1238,7 @@
         }
       },
       "position": [
-        12500,
+        12760,
         0
       ]
     },
@@ -1237,7 +1251,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        12760,
+        13020,
         0
       ]
     },
@@ -1268,7 +1282,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        13020,
+        13280,
         0
       ]
     },
@@ -1302,7 +1316,7 @@
         }
       },
       "position": [
-        13280,
+        13540,
         -260
       ]
     },
@@ -1336,7 +1350,7 @@
         }
       },
       "position": [
-        13540,
+        13800,
         -260
       ]
     },
@@ -1350,7 +1364,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        13800,
+        14060,
         -260
       ]
     },
@@ -1373,7 +1387,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\n  model: 'claude-sonnet-5',\n  max_tokens: 4000,\n  tools: [{\"name\":\"write_article\",\"description\":\"Write the full grounded article for the chosen angle.\",\"input_schema\":{\"type\":\"object\",\"required\":[\"title\",\"body_markdown\",\"secondary_keywords\"],\"properties\":{\"title\":{\"type\":\"string\"},\"body_markdown\":{\"type\":\"string\"},\"secondary_keywords\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}}],\n  tool_choice: { type: 'tool', name: 'write_article' },\n  messages: [{ role: 'user', content: `Revise this article based on the evaluation feedback below. Address the flagged sections and unsupported claims specifically - stay grounded only in the excerpts, don't invent anything new to fill gaps.\\n\\nCurrent article:\\n${$('Insert Section v2').first().json.body_markdown}\\n\\nSections needing revision: ${JSON.stringify($('Gate (Round 1)').first().json.sections_needing_revision)}\\nRecommended changes: ${JSON.stringify($('Gate (Round 1)').first().json.recommended_changes)}\\nUnsupported/weak claims flagged: ${JSON.stringify($('Gate (Round 1)').first().json.unsupported_or_weak_claims)}\\n\\nGrounded excerpts available:\\n${$('Fetch Excerpts').all().map(item => item.json).map((e, i) => `[${i}] ${e.text}`).join('\\n\\n')}` }]\n}) }}",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'claude-sonnet-5',\n  max_tokens: 4000,\n  tools: [{\"name\":\"write_article\",\"description\":\"Write the full grounded article for the chosen angle.\",\"input_schema\":{\"type\":\"object\",\"required\":[\"title\",\"body_markdown\",\"secondary_keywords\"],\"properties\":{\"title\":{\"type\":\"string\"},\"body_markdown\":{\"type\":\"string\"},\"secondary_keywords\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}}],\n  tool_choice: { type: 'tool', name: 'write_article' },\n  messages: [{ role: 'user', content: `Revise this article based on the evaluation feedback below. Address the flagged sections and unsupported claims specifically - stay grounded only in the excerpts, don't invent anything new to fill gaps.\\n\\nCurrent article:\\n${$('Insert Section v2').first().json.body_markdown}\\n\\nSections needing revision: ${JSON.stringify($('Gate (Round 1)').first().json.sections_needing_revision)}\\nRecommended changes: ${JSON.stringify($('Gate (Round 1)').first().json.recommended_changes)}\\nUnsupported/weak claims flagged: ${JSON.stringify($('Gate (Round 1)').first().json.unsupported_or_weak_claims)}\\n\\nGrounded excerpts available:\\n${$('Build Excerpts Text').first().json.excerptsTextPlain}` }]\n}) }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "anthropicApi"
       },
@@ -1389,7 +1403,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        14060,
+        14320,
         0
       ]
     },
@@ -1402,7 +1416,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        14320,
+        14580,
         -320
       ]
     },
@@ -1436,7 +1450,7 @@
         }
       },
       "position": [
-        14580,
+        14840,
         -320
       ]
     },
@@ -1450,7 +1464,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        14840,
+        15100,
         -320
       ]
     },
@@ -1463,7 +1477,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        15100,
+        15360,
         0
       ]
     },
@@ -1497,7 +1511,7 @@
         }
       },
       "position": [
-        15360,
+        15620,
         0
       ]
     },
@@ -1520,7 +1534,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\n  model: 'claude-opus-5',\n  max_tokens: 3000,\n  tools: [{\"name\":\"evaluate_article\",\"description\":\"Score the article against the Pass 1 rubric.\",\"input_schema\":{\"type\":\"object\",\"required\":[\"overall_score\",\"status\",\"criteria\",\"hard_block_triggered\"],\"properties\":{\"overall_score\":{\"type\":\"integer\"},\"status\":{\"type\":\"string\",\"enum\":[\"pass\",\"revise\",\"reject\"]},\"criteria\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"name\",\"score\",\"max\"],\"properties\":{\"name\":{\"type\":\"string\"},\"score\":{\"type\":\"integer\"},\"max\":{\"type\":\"integer\"},\"notes\":{\"type\":\"string\"}}}},\"unsupported_or_weak_claims\":{\"type\":\"array\",\"items\":{\"type\":\"object\"}},\"sections_needing_revision\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"recommended_changes\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"weakest_criteria_suggestions\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"hard_block_triggered\":{\"type\":\"boolean\"},\"hard_block_reason\":{\"type\":[\"string\",\"null\"]}}}}],\n  tool_choice: { type: 'tool', name: 'evaluate_article' },\n  messages: [{ role: 'user', content: `Evaluate this article against the rubric. You have not seen how it was written or planned - judge only what's here.\\n\\nRubric: Score out of 100 across: Topic Relevance (20, floor 15), Source Grounding (20, floor 15), Factual Consistency (20, floor 15), Audience Fit (15, floor 6), SEO Fit (10, floor 4), Clarity (10, floor 4), Completeness (5, floor 2). Topic Relevance/Source Grounding/Factual Consistency are hard-block tier: if any scores below its floor, hard_block_triggered must be true regardless of the total. Verify every claim against the excerpt it cites and flag any claim citing nothing. Always populate weakest_criteria_suggestions, even on a passing score - a passing draft can still have one mediocre criterion worth naming.\\n\\nArticle:\\n${$('Insert Section v3').first().json.body_markdown}\\n\\nGrounded excerpts it should be checked against:\\n${$('Fetch Excerpts').all().map(item => item.json).map((e, i) => `[${i}] Source: ${e.source_id}\n${e.text}`).join('\\n\\n')}` }]\n}) }}",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'claude-opus-5',\n  max_tokens: 3000,\n  tools: [{\"name\":\"evaluate_article\",\"description\":\"Score the article against the Pass 1 rubric.\",\"input_schema\":{\"type\":\"object\",\"required\":[\"overall_score\",\"status\",\"criteria\",\"hard_block_triggered\"],\"properties\":{\"overall_score\":{\"type\":\"integer\"},\"status\":{\"type\":\"string\",\"enum\":[\"pass\",\"revise\",\"reject\"]},\"criteria\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"name\",\"score\",\"max\"],\"properties\":{\"name\":{\"type\":\"string\"},\"score\":{\"type\":\"integer\"},\"max\":{\"type\":\"integer\"},\"notes\":{\"type\":\"string\"}}}},\"unsupported_or_weak_claims\":{\"type\":\"array\",\"items\":{\"type\":\"object\"}},\"sections_needing_revision\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"recommended_changes\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"weakest_criteria_suggestions\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"hard_block_triggered\":{\"type\":\"boolean\"},\"hard_block_reason\":{\"type\":[\"string\",\"null\"]}}}}],\n  tool_choice: { type: 'tool', name: 'evaluate_article' },\n  messages: [{ role: 'user', content: `Evaluate this article against the rubric. You have not seen how it was written or planned - judge only what's here.\\n\\nRubric: Score out of 100 across: Topic Relevance (20, floor 15), Source Grounding (20, floor 15), Factual Consistency (20, floor 15), Audience Fit (15, floor 6), SEO Fit (10, floor 4), Clarity (10, floor 4), Completeness (5, floor 2). Topic Relevance/Source Grounding/Factual Consistency are hard-block tier: if any scores below its floor, hard_block_triggered must be true regardless of the total. Verify every claim against the excerpt it cites and flag any claim citing nothing. Always populate weakest_criteria_suggestions, even on a passing score - a passing draft can still have one mediocre criterion worth naming.\\n\\nArticle:\\n${$('Insert Section v3').first().json.body_markdown}\\n\\nGrounded excerpts it should be checked against:\\n${$('Build Excerpts Text').first().json.excerptsTextPlain}` }]\n}) }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "anthropicApi"
       },
@@ -1536,7 +1550,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        15620,
+        15880,
         0
       ]
     },
@@ -1549,7 +1563,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        15880,
+        16140,
         -320
       ]
     },
@@ -1583,7 +1597,7 @@
         }
       },
       "position": [
-        16140,
+        16400,
         -320
       ]
     },
@@ -1597,7 +1611,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        16400,
+        16660,
         -320
       ]
     },
@@ -1610,7 +1624,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        16660,
+        16920,
         0
       ]
     },
@@ -1644,7 +1658,7 @@
         }
       },
       "position": [
-        16920,
+        17180,
         0
       ]
     },
@@ -1657,7 +1671,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        17180,
+        17440,
         0
       ]
     },
@@ -1688,7 +1702,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        17440,
+        17700,
         0
       ]
     },
@@ -1722,7 +1736,7 @@
         }
       },
       "position": [
-        17700,
+        17960,
         -260
       ]
     },
@@ -1756,7 +1770,7 @@
         }
       },
       "position": [
-        17960,
+        18220,
         -260
       ]
     },
@@ -1770,7 +1784,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        18220,
+        18480,
         -260
       ]
     },
@@ -1804,7 +1818,7 @@
         }
       },
       "position": [
-        18480,
+        18740,
         260
       ]
     },
@@ -1838,7 +1852,7 @@
         }
       },
       "position": [
-        18740,
+        19000,
         260
       ]
     },
@@ -1852,7 +1866,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        19000,
+        19260,
         260
       ]
     }
@@ -2067,6 +2081,17 @@
       ]
     },
     "Fetch Excerpts": {
+      "main": [
+        [
+          {
+            "node": "Build Excerpts Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Excerpts Text": {
       "main": [
         [
           {
