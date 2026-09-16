@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/badge";
 import { ScoreBar } from "@/components/ui/score-bar";
 import { PipelineProgress } from "@/components/ui/pipeline-progress";
+import { friendlyStageMessage } from "@/lib/friendly-errors";
 
 const SOURCE_STATUS_STYLES: Record<string, string> = {
   scraped: "bg-success-soft text-success",
@@ -81,10 +82,11 @@ export default async function RequestDetailPage({
       {canRetry && (
         <Card className="mt-8 border-danger/20 bg-danger-soft p-5">
           <p className="text-sm font-medium text-danger">
-            {latestEvent!.stage}: {latestEvent!.detail}
+            {friendlyStageMessage(latestEvent!.stage)}
           </p>
           <p className="mt-1 text-xs text-danger/80">
-            Nothing has progressed since — safe to retry from here.
+            Nothing has progressed since — safe to retry from here. See the technical log below
+            for the exact error.
           </p>
           <RetryButton requestId={id} />
         </Card>
