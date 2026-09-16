@@ -20,6 +20,12 @@ export default async function SiteHeader() {
           <span className="text-sm font-semibold tracking-tight">Content Agent</span>
         </Link>
         <div className="flex items-center gap-4">
+          <Link
+            href="/settings/audience-profiles"
+            className="text-sm font-medium text-muted hover:text-foreground"
+          >
+            Settings
+          </Link>
           <span className="hidden text-sm text-muted sm:inline">{user.email}</span>
           <SignOutButton />
         </div>
