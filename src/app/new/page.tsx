@@ -11,7 +11,7 @@ export default async function NewRequestPage() {
   return (
     <main className="mx-auto max-w-2xl px-6 py-12">
       <h1 className="text-2xl font-semibold tracking-tight">New content request</h1>
-      <p className="mt-1 text-sm text-neutral-500">
+      <p className="mt-1 text-sm text-muted">
         Start from a raw idea, or from source material you already have.
       </p>
       <IntakeForm audienceProfiles={audienceProfiles ?? []} />

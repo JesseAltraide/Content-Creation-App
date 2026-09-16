@@ -1,39 +1,54 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { StatusBadge } from "@/components/ui/badge";
 
 export default async function HomePage() {
   const supabase = await createClient();
   const { data: requests } = await supabase
     .from("requests")
-    .select("id, raw_idea, primary_keyword, status, created_at")
+    .select("id, raw_idea, primary_keyword, input_path, channels, status, created_at")
     .order("created_at", { ascending: false });
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Content requests</h1>
-        <Link
-          href="/new"
-          className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800"
-        >
-          New request
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Content requests</h1>
+          <p className="mt-1 text-sm text-muted">Research, generate, review, publish.</p>
+        </div>
+        <Link href="/new">
+          <Button>New request</Button>
         </Link>
       </div>
 
       {(!requests || requests.length === 0) && (
-        <p className="mt-8 text-sm text-neutral-500">
-          No requests yet. Start one from a raw idea or a source URL.
-        </p>
+        <Card className="mt-8 flex flex-col items-center gap-2 px-6 py-16 text-center">
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-soft text-accent">
+            +
+          </span>
+          <p className="text-sm font-medium">No requests yet</p>
+          <p className="text-sm text-muted">Start one from a raw idea or a source URL.</p>
+        </Card>
       )}
 
-      <ul className="mt-8 flex flex-col divide-y divide-neutral-200">
+      <ul className="mt-8 flex flex-col gap-3">
         {(requests ?? []).map((r) => (
           <li key={r.id}>
-            <Link href={`/requests/${r.id}`} className="flex items-center justify-between py-3">
-              <span className="text-sm font-medium">{r.raw_idea || r.primary_keyword}</span>
-              <span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs font-medium uppercase tracking-wide text-neutral-600">
-                {r.status.replace(/_/g, " ")}
-              </span>
+            <Link href={`/requests/${r.id}`}>
+              <Card className="flex items-center justify-between gap-4 px-5 py-4 transition-shadow hover:shadow-md">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">
+                    {r.raw_idea || r.primary_keyword}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    {r.input_path === "raw_idea" ? "Raw idea" : "Source URL"} ·{" "}
+                    {r.channels.join(", ")}
+                  </p>
+                </div>
+                <StatusBadge status={r.status} />
+              </Card>
             </Link>
           </li>
         ))}

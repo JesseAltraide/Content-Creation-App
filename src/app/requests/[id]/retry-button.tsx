@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
 
 export default function RetryButton({ requestId }: { requestId: string }) {
   const router = useRouter();
@@ -23,14 +24,10 @@ export default function RetryButton({ requestId }: { requestId: string }) {
 
   return (
     <div className="mt-3 flex items-center gap-3">
-      <button
-        onClick={handleRetry}
-        disabled={submitting}
-        className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
-      >
+      <Button onClick={handleRetry} disabled={submitting}>
         {submitting ? "Retrying…" : "Retry"}
-      </button>
-      {error && <span className="text-sm text-red-600">{error}</span>}
+      </Button>
+      {error && <span className="text-sm text-danger">{error}</span>}
     </div>
   );
 }

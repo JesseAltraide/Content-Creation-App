@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 
 export default function DeleteButton({
   requestId,
@@ -30,39 +32,28 @@ export default function DeleteButton({
 
   if (!confirming) {
     return (
-      <button
-        onClick={() => setConfirming(true)}
-        className="rounded-md px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
-      >
+      <Button variant="ghost" onClick={() => setConfirming(true)} className="!text-danger">
         Delete request
-      </button>
+      </Button>
     );
   }
 
   return (
-    <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm">
-      <p className="text-red-800">
+    <Card className="border-danger/20 bg-danger-soft p-4 text-sm">
+      <p className="text-danger">
         Permanently delete <span className="font-medium">&ldquo;{title}&rdquo;</span>? This
         removes all its sources, angles, drafts, evaluations, and scheduled content. This
         can&apos;t be undone.
       </p>
-      {error && <p className="mt-1 text-red-600">{error}</p>}
-      <div className="mt-2 flex gap-2">
-        <button
-          onClick={handleDelete}
-          disabled={deleting}
-          className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-        >
+      {error && <p className="mt-1 text-danger">{error}</p>}
+      <div className="mt-3 flex gap-2">
+        <Button variant="danger" onClick={handleDelete} disabled={deleting}>
           {deleting ? "Deleting…" : "Yes, delete permanently"}
-        </button>
-        <button
-          onClick={() => setConfirming(false)}
-          disabled={deleting}
-          className="rounded-md px-3 py-1.5 text-sm font-medium text-neutral-600 hover:bg-neutral-100"
-        >
+        </Button>
+        <Button variant="ghost" onClick={() => setConfirming(false)} disabled={deleting}>
           Cancel
-        </button>
+        </Button>
       </div>
-    </div>
+    </Card>
   );
 }
