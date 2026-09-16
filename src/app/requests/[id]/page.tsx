@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import SourceSelection from "./source-selection";
 import RetryButton from "./retry-button";
+import DeleteButton from "./delete-button";
 
 export default async function RequestDetailPage({
   params,
@@ -96,6 +97,10 @@ export default async function RequestDetailPage({
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="mt-10 border-t border-neutral-200 pt-6">
+        <DeleteButton requestId={id} title={req.raw_idea || req.primary_keyword} />
       </section>
     </main>
   );
