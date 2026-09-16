@@ -39,8 +39,9 @@ function resolveStage(status: string): { current: StageKey; blocked: boolean } {
   }
 }
 
-export function PipelineProgress({ status }: { status: string }) {
-  const { current, blocked } = resolveStage(status);
+export function PipelineProgress({ status, failed = false }: { status: string; failed?: boolean }) {
+  const { current, blocked: statusBlocked } = resolveStage(status);
+  const blocked = statusBlocked || failed;
   const currentIndex = STAGES.findIndex((s) => s.key === current);
 
   function stateFor(index: number): StageState {

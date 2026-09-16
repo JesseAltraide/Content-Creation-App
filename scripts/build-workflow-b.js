@@ -180,14 +180,38 @@ function claudeErrorBranch(claudeNodeName, stage, requestIdExpr) {
     );
     connect(claudeNodeName, `${claudeNodeName}: Extract Error`, 1);
 
+    // Per the no-partial-progress rule (see week4-progress.md): a Claude failure anywhere in
+    // this workflow must leave the request exactly where it was before this attempt, not stuck
+    // at 'generating' with no way back (caught live - the request page had no retry path once
+    // this happened, since the UI only showed a Retry action for status='researching'). Nothing
+    // downstream of the failed call succeeded, so reverting to 'awaiting_angle_selection' and
+    // un-choosing the angle is always correct here, regardless of which Claude call failed.
+    supabaseWrite(
+      `${errId}-revert-status`,
+      `${claudeNodeName}: Revert Request State`,
+      "PATCH",
+      "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.requestId}}",
+      "={{ JSON.stringify({ status: 'awaiting_angle_selection' }) }}"
+    );
+    connect(`${claudeNodeName}: Extract Error`, `${claudeNodeName}: Revert Request State`);
+
+    supabaseWrite(
+      `${errId}-revert-angle`,
+      `${claudeNodeName}: Revert Angle Choice`,
+      "PATCH",
+      "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/angles?id=eq.{{$('Config').first().json.angle_id}}",
+      "={{ JSON.stringify({ chosen: false }) }}"
+    );
+    connect(`${claudeNodeName}: Revert Request State`, `${claudeNodeName}: Revert Angle Choice`);
+
     supabaseWrite(
       `${errId}-log-failed`,
       `${claudeNodeName}: Log Failed`,
       "POST",
       "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
-      `={{ JSON.stringify({ request_id: $json.requestId, stage: '${stage}', status: 'failed', detail: \`Claude call failed: \${$json.message}\` }) }}`
+      `={{ JSON.stringify({ request_id: $('${claudeNodeName}: Extract Error').first().json.requestId, stage: '${stage}', status: 'failed', detail: \`Claude call failed: \${$('${claudeNodeName}: Extract Error').first().json.message}\` }) }}`
     );
-    connect(`${claudeNodeName}: Extract Error`, `${claudeNodeName}: Log Failed`);
+    connect(`${claudeNodeName}: Revert Angle Choice`, `${claudeNodeName}: Log Failed`);
 
     respondNode(
       `${errId}-respond-failed`,

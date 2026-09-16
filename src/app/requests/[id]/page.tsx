@@ -8,8 +8,9 @@ import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/badge";
 import { ScoreBar } from "@/components/ui/score-bar";
 import { PipelineProgress } from "@/components/ui/pipeline-progress";
-import { friendlyStageMessage } from "@/lib/friendly-errors";
+import { friendlyStageMessage, explainNeedsAttention } from "@/lib/friendly-errors";
 import SelectAngleButton from "./select-angle-button";
+import BackToAngleSelectionButton from "./back-to-angle-selection-button";
 
 const SOURCE_STATUS_STYLES: Record<string, string> = {
   scraped: "bg-success-soft text-success",
@@ -50,6 +51,14 @@ export default async function RequestDetailPage({
 
   const latestEvent = events?.[0];
   const canRetry = req.status === "researching" && latestEvent?.status === "failed";
+  const angleAttemptFailed =
+    req.status === "awaiting_angle_selection" && latestEvent?.status === "failed";
+  const needsAttention = req.status === "needs_human_attention" && latestEvent;
+  const attentionExplanation = needsAttention
+    ? explainNeedsAttention(latestEvent!.stage, latestEvent!.detail)
+    : null;
+  const canTryDifferentAngle =
+    needsAttention && ["excerpt_selection", "evaluation", "angle_proposal"].includes(latestEvent!.stage);
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-12">
@@ -68,7 +77,7 @@ export default async function RequestDetailPage({
       </div>
 
       <Card className="mt-6 p-5">
-        <PipelineProgress status={req.status} />
+        <PipelineProgress status={req.status} failed={canRetry || angleAttemptFailed} />
       </Card>
 
       <Card className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 p-5 text-sm">
@@ -90,6 +99,26 @@ export default async function RequestDetailPage({
             for the exact error.
           </p>
           <RetryButton requestId={id} />
+        </Card>
+      )}
+
+      {angleAttemptFailed && (
+        <Card className="mt-8 border-danger/20 bg-danger-soft p-5">
+          <p className="text-sm font-medium text-danger">
+            {friendlyStageMessage(latestEvent!.stage)}
+          </p>
+          <p className="mt-1 text-xs text-danger/80">
+            Nothing has progressed since — pick the angle below again to retry. See the technical
+            log for the exact error.
+          </p>
+        </Card>
+      )}
+
+      {attentionExplanation && (
+        <Card className="mt-8 border-danger/20 bg-danger-soft p-5">
+          <p className="text-sm font-medium text-danger">{attentionExplanation.why}</p>
+          <p className="mt-2 text-sm text-danger/90">{attentionExplanation.action}</p>
+          {canTryDifferentAngle && <BackToAngleSelectionButton requestId={id} />}
         </Card>
       )}
 
