@@ -213,15 +213,29 @@ function ifNode(id, name, leftValue, rightValue, operator) {
 // Fix: build the ENTIRE request body in a preceding Code node (real JS, no
 // brace-matching fragility) and have the HTTP node's jsonBody be the trivial
 // expression ={{ $json.requestBody }} - just a property access.
-function claudeNode(id, name, model, tool, promptExpr, maxTokens) {
+// cachedContextExpr, when given, is a separate JS template-literal expression
+// (same shape as promptExpr) holding the large, byte-identical-across-calls part
+// of the prompt (e.g. the source excerpts) - split out so it can carry its own
+// cache_control breakpoint. Only worth it for prompts actually re-sent multiple
+// times within one workflow run (eval/revise rounds reusing the same excerpts) -
+// a single-use prompt would just pay the 1.25x write premium with no read to
+// offset it, so callers with just one Claude call should leave this unset.
+function claudeNode(id, name, model, tool, promptExpr, maxTokens, cachedContextExpr) {
   const builderId = `${id}-build-request`;
   const builderName = `${name}: Build Request`;
+
+  const contentBuild = cachedContextExpr
+    ? "const content = [" + NL +
+      "  { type: 'text', text: " + cachedContextExpr + ", cache_control: { type: 'ephemeral' } }," + NL +
+      "  { type: 'text', text: " + promptExpr + " }" + NL +
+      "];"
+    : "const content = " + promptExpr + ";";
 
   codeNode(
     builderId,
     builderName,
     "const tool = " + JSON.stringify(tool) + ";" + NL +
-      "const content = " + promptExpr + ";" + NL +
+      contentBuild + NL +
       "const requestBody = JSON.stringify({" + NL +
       "  model: '" + model + "'," + NL +
       "  max_tokens: " + maxTokens + "," + NL +
@@ -592,13 +606,19 @@ const EVAL_TOOL = {
 const RUBRIC_TEXT =
   "Score out of 100 across: Topic Relevance (20, floor 15), Source Grounding (20, floor 15), Factual Consistency (20, floor 15), Audience Fit (15, floor 6), SEO Fit (10, floor 4), Clarity (10, floor 4), Completeness (5, floor 2). Topic Relevance/Source Grounding/Factual Consistency are hard-block tier: if any scores below its floor, hard_block_triggered must be true regardless of the total. Verify every claim against the excerpt it cites and flag any claim citing nothing. Always populate weakest_criteria_suggestions, even on a passing score - a passing draft can still have one mediocre criterion worth naming.";
 
+// Split so the excerpts+rubric block (byte-identical across all 3 eval rounds in
+// a run) can be cached: it's the largest, most repeated part of this prompt,
+// while the article body is exactly what changes every round.
+const EVAL_CACHED_CONTEXT =
+  "`Grounded excerpts to check this article against:\\n${$('Build Excerpts Text').first().json.excerptsTextPlain}\\n\\nRubric: " +
+  RUBRIC_TEXT +
+  "`";
+
 function evalPrompt(bodyExpr) {
   return (
-    "`Evaluate this article against the rubric. You have not seen how it was written or planned - judge only what's here.\\n\\nRubric: " +
-    RUBRIC_TEXT +
-    "\\n\\nArticle:\\n${" +
+    "`Evaluate the article below against the rubric and excerpts above. You have not seen how it was written or planned - judge only what's here.\\n\\nArticle:\\n${" +
     bodyExpr +
-    "}\\n\\nGrounded excerpts it should be checked against:\\n${$('Build Excerpts Text').first().json.excerptsTextPlain}`"
+    "}`"
   );
 }
 
@@ -626,7 +646,8 @@ function buildEvalRound(roundLabel, sectionSourceName, isFinalRound) {
     "claude-opus-5",
     EVAL_TOOL,
     evalPrompt(`$('${sectionSourceName}').first().json.body_markdown`),
-    3000
+    3000,
+    EVAL_CACHED_CONTEXT
   );
   connect(sectionSourceName, `Claude: Evaluate (${roundLabel}): Build Request`);
   claudeErrorBranch(`Claude: Evaluate (${roundLabel})`, "evaluation", "$('Config').first().json.request_id");
@@ -714,8 +735,16 @@ function buildRevisionRound(roundNum, prevGateIfName, prevSectionName) {
   const label = `Round ${roundNum}`;
   const idBase = `revise-${roundNum}`;
 
+  // Same excerpts block as EVAL_CACHED_CONTEXT content-wise but without the rubric
+  // text (revise doesn't need it) - kept as its own constant so the two revise
+  // calls (Round 1, Round 2) share one cache entry with each other; it won't
+  // share with eval's entry since the bytes differ, but that cross-sharing isn't
+  // where the repeated-call cost actually is.
+  const REVISE_CACHED_CONTEXT =
+    "`Grounded excerpts available:\\n${$('Build Excerpts Text').first().json.excerptsTextPlain}`";
+
   const revisePrompt =
-    "`Revise this article based on the evaluation feedback below. Address the flagged sections and unsupported claims specifically - stay grounded only in the excerpts, don't invent anything new to fill gaps.\\n\\nCurrent article:\\n${$('" +
+    "`Revise the article below based on the evaluation feedback, staying grounded only in the excerpts above - don't invent anything new to fill gaps. Address the flagged sections and unsupported claims specifically.\\n\\nCurrent article:\\n${$('" +
     prevSectionName +
     "').first().json.body_markdown}\\n\\nSections needing revision: ${JSON.stringify($('Gate (" +
     (roundNum === 1 ? "Round 0" : `Round ${roundNum - 1}`) +
@@ -723,9 +752,9 @@ function buildRevisionRound(roundNum, prevGateIfName, prevSectionName) {
     (roundNum === 1 ? "Round 0" : `Round ${roundNum - 1}`) +
     ")').first().json.recommended_changes)}\\nUnsupported/weak claims flagged: ${JSON.stringify($('Gate (" +
     (roundNum === 1 ? "Round 0" : `Round ${roundNum - 1}`) +
-    ")').first().json.unsupported_or_weak_claims)}\\n\\nGrounded excerpts available:\\n${$('Build Excerpts Text').first().json.excerptsTextPlain}`";
+    ")').first().json.unsupported_or_weak_claims)}`";
 
-  claudeNode(`claude-${idBase}`, `Claude: Revise (${label})`, "claude-sonnet-5", ARTICLE_TOOL, revisePrompt, 4000);
+  claudeNode(`claude-${idBase}`, `Claude: Revise (${label})`, "claude-sonnet-5", ARTICLE_TOOL, revisePrompt, 4000, REVISE_CACHED_CONTEXT);
   connect(prevGateIfName, `Claude: Revise (${label}): Build Request`, 1);
   claudeErrorBranch(`Claude: Revise (${label})`, "revision", "$('Config').first().json.request_id");
 

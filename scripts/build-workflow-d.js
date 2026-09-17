@@ -146,15 +146,27 @@ function ifNode(id, name, leftValue, rightValue, operator) {
   });
 }
 
-function claudeNode(id, name, model, tool, promptExpr, maxTokens) {
+// cachedContextExpr: see the identical parameter in build-workflow-b.js's
+// claudeNode() - the large byte-identical-across-rounds block (here: the
+// approved article + excerpts, resent unchanged across all 3 adapt/revise
+// rounds) gets its own cache_control breakpoint, split from the varying
+// per-round instructions/feedback.
+function claudeNode(id, name, model, tool, promptExpr, maxTokens, cachedContextExpr) {
   const builderId = `${id}-build-request`;
   const builderName = `${name}: Build Request`;
+
+  const contentBuild = cachedContextExpr
+    ? "const content = [" + NL +
+      "  { type: 'text', text: " + cachedContextExpr + ", cache_control: { type: 'ephemeral' } }," + NL +
+      "  { type: 'text', text: " + promptExpr + " }" + NL +
+      "];"
+    : "const content = " + promptExpr + ";";
 
   codeNode(
     builderId,
     builderName,
     "const tool = " + JSON.stringify(tool) + ";" + NL +
-      "const content = " + promptExpr + ";" + NL +
+      contentBuild + NL +
       "const requestBody = JSON.stringify({" + NL +
       "  model: '" + model + "'," + NL +
       "  max_tokens: " + maxTokens + "," + NL +
@@ -432,7 +444,14 @@ function normalizeChannelsCode(inputExpr) {
   );
 }
 
-function adaptPrompt(feedbackExpr) {
+// Everything here is genuinely byte-identical across the initial adapt call AND
+// every revise round within one D run (up to 3 total: worst case is exactly the
+// "3 rounds x 2 combined multi-channel Claude calls" named limitation in
+// week4-progress.md) - the article, audience, channel voice rules, and excerpts
+// never change round to round, only the feedback (adaptPrompt's tail) does. So
+// unlike Workflow B (where only the excerpts sub-block was shared), almost the
+// whole prompt qualifies as the cached prefix here.
+function adaptCachedContext() {
   return (
     "`Adapt this approved article into platform-native posts for these channels: ${$('Build Adaptation Context').first().json.channels.join(', ')}.\\n\\n" +
     "Article title: ${$('Fetch Approved Section').first().json.title}\\nArticle body:\\n${$('Fetch Approved Section').first().json.body_markdown}\\n\\n" +
@@ -441,13 +460,17 @@ function adaptPrompt(feedbackExpr) {
     "For each requested channel, write in that channel's own real voice and format, grounded only in the article and its underlying excerpts below - no unsupported claims, and every claim must stay traceable to the same source material as the article itself:\\n${$('Build Adaptation Context').first().json.excerptsTextPlain}\\n\\n" +
     "LinkedIn: PAS structure (Problem-Agitate-Solution), short paragraphs, sparing emoji, a clear CTA. Tone reference (real previous posts or a described target, follow this voice):\\n${$('Build Adaptation Context').first().json.toneByChannel.linkedin || 'not requested'}\\n\\n" +
     "X: hook-first, one core idea per post, line breaks over hashtags, at most 1-2 hashtags and only on the final post if threaded. The human requested '${$('Build Adaptation Context').first().json.x_thread_length}' - 'single' means exactly one post, 'mini' means roughly 3 posts, 'expansive' means roughly 5 posts. Never pad to hit a target count - if the idea genuinely doesn't need that many posts, write fewer and say nothing about it. Each individual post must fit in 280 characters - this will be checked programmatically, so respect it exactly, don't rely on being checked. Tone reference:\\n${$('Build Adaptation Context').first().json.toneByChannel.x || 'not requested'}\\n\\n" +
-    "Newsletter: a subject line, a 1-3 sentence intro, a skimmable body, and a closing CTA, 250-600 words total in body_markdown. Tone reference:\\n${$('Build Adaptation Context').first().json.toneByChannel.newsletter || 'not requested'}" +
-    (feedbackExpr ? "\\n\\nThe previous attempt needs these specific changes: ${" + feedbackExpr + "}" : "") +
-    "`"
+    "Newsletter: a subject line, a 1-3 sentence intro, a skimmable body, and a closing CTA, 250-600 words total in body_markdown. Tone reference:\\n${$('Build Adaptation Context').first().json.toneByChannel.newsletter || 'not requested'}`"
   );
 }
 
-claudeNode("claude-adapt", "Claude: Adapt to Channels", "claude-sonnet-5", ADAPT_TOOL, adaptPrompt(null), 4000);
+function adaptPrompt(feedbackExpr) {
+  return feedbackExpr
+    ? "`The previous attempt needs these specific changes: ${" + feedbackExpr + "}`"
+    : "`Write the first version now.`";
+}
+
+claudeNode("claude-adapt", "Claude: Adapt to Channels", "claude-sonnet-5", ADAPT_TOOL, adaptPrompt(null), 4000, adaptCachedContext());
 connect("Build Adaptation Context", "Claude: Adapt to Channels: Build Request");
 claudeErrorBranch("Claude: Adapt to Channels", "channel_adaptation");
 
@@ -616,12 +639,21 @@ function buildPass2EvalTextNode(id, name, sourceNodeName) {
   connect(sourceNodeName, name);
 }
 
-function pass2EvalPrompt(textNodeName) {
+// Rubric + original article + excerpts are byte-identical across every Pass 2
+// eval round in a run (up to 3) - only the adapted posts being scored change
+// round to round, so that's the only part left in the varying tail.
+function pass2EvalCachedContext() {
   return (
-    "`Evaluate each adapted channel post below against the rubric. You have not seen the adaptation reasoning - judge only what's here.\\n\\nRubric: " +
+    "`Rubric: " +
     PASS2_RUBRIC_TEXT +
     "\\n\\nOriginal article (for factual comparison):\\n${$('Fetch Approved Section').first().json.body_markdown}\\n\\n" +
-    "Grounded excerpts:\\n${$('Build Adaptation Context').first().json.excerptsTextPlain}\\n\\n" +
+    "Grounded excerpts:\\n${$('Build Adaptation Context').first().json.excerptsTextPlain}`"
+  );
+}
+
+function pass2EvalPrompt(textNodeName) {
+  return (
+    "`Evaluate each adapted channel post below against the rubric and excerpts above. You have not seen the adaptation reasoning - judge only what's here.\\n\\n" +
     "Adapted posts to evaluate - score every one shown here. Each entry in per_channel MUST include its own \\\"channel\\\" field set to that post's exact channel name (linkedin/x/newsletter), in addition to using that name as its key:\\n${$('" + textNodeName + "').first().json.channelsText}`"
   );
 }
@@ -696,7 +728,8 @@ function buildPass2EvalRound(roundLabel, channelPostsSourceName, isFinalRound) {
     // adjusting for 3x the content) truncated mid-generation - confirmed live via
     // stop_reason: "max_tokens" with an empty tool_use input, not a prompt/schema
     // problem as first suspected.
-    8000
+    8000,
+    pass2EvalCachedContext()
   );
   connect(textNodeName, `Claude: Evaluate Channels (${roundLabel}): Build Request`);
   claudeErrorBranch(`Claude: Evaluate Channels (${roundLabel})`, "pass2_evaluation");
@@ -781,7 +814,7 @@ function buildPass2RevisionRound(roundNum, prevGateIfName, prevChannelPostsSourc
   const feedbackExpr =
     "JSON.stringify($('Gate (" + prevRoundLabel + ")').first().json.perChannel)";
 
-  claudeNode(`claude-${idBase}`, `Claude: Revise Channels (${label})`, "claude-sonnet-5", ADAPT_TOOL, adaptPrompt(feedbackExpr), 4000);
+  claudeNode(`claude-${idBase}`, `Claude: Revise Channels (${label})`, "claude-sonnet-5", ADAPT_TOOL, adaptPrompt(feedbackExpr), 4000, adaptCachedContext());
   connect(prevGateIfName, `Claude: Revise Channels (${label}): Build Request`, 1);
   claudeErrorBranch(`Claude: Revise Channels (${label})`, "channel_adaptation");
 
