@@ -498,46 +498,84 @@ const EVAL_TOOL = {
     properties: {
       per_channel: {
         type: "object",
-        description: "Keyed by channel name (linkedin/x/newsletter), only for channels that were adapted",
-        additionalProperties: {
-          type: "object",
-          required: ["overall_score", "status", "criteria"],
-          properties: {
-            overall_score: { type: "integer" },
-            status: { type: "string", enum: ["pass", "revise", "reject"] },
-            criteria: {
-              type: "array",
-              items: {
-                type: "object",
-                required: ["name", "score", "max"],
-                properties: {
-                  name: { type: "string" },
-                  score: { type: "integer" },
-                  max: { type: "integer" },
-                  notes: { type: "string" },
-                },
-              },
-            },
-            weakest_criteria_suggestions: { type: "array", items: { type: "string" } },
-            hard_block_triggered: { type: "boolean" },
-            hard_block_reason: { type: ["string", "null"] },
-          },
+        description: "Score EVERY channel post listed in the prompt - one entry per channel shown, using that exact channel name (linkedin/x/newsletter) as the key. Never return an empty object - every channel shown in the prompt must get an entry here.",
+        minProperties: 1,
+        properties: {
+          linkedin: channelScoreSchema(),
+          x: channelScoreSchema(),
+          newsletter: channelScoreSchema(),
         },
       },
     },
   },
 };
 
+function channelScoreSchema() {
+  return {
+    type: "object",
+    required: ["overall_score", "status", "criteria"],
+    properties: {
+      overall_score: { type: "integer" },
+      status: { type: "string", enum: ["pass", "revise", "reject"] },
+      criteria: {
+        type: "array",
+        items: {
+          type: "object",
+          required: ["name", "score", "max"],
+          properties: {
+            name: { type: "string" },
+            score: { type: "integer" },
+            max: { type: "integer" },
+            notes: { type: "string" },
+          },
+        },
+      },
+      weakest_criteria_suggestions: { type: "array", items: { type: "string" } },
+      hard_block_triggered: { type: "boolean" },
+      hard_block_reason: { type: ["string", "null"] },
+    },
+  };
+}
+
 const PASS2_RUBRIC_TEXT =
   "Score each channel's post out of 100 across: Factual Consistency re-verified against the excerpts (20, floor 15 - hard block tier, re-checks the claims survived adaptation unchanged), Tone (25, floor 10), Channel Fit (25, floor 10 - does it genuinely read as native to that platform, not just the article reformatted), Audience Fit re-verified (15, floor 6), Clarity (15, floor 6). Topic Relevance, SEO Fit, and Completeness do not apply post-adaptation - do not score them. If Factual Consistency scores below its floor, hard_block_triggered must be true regardless of the total.";
 
-function pass2EvalPrompt(sourceNodeName) {
+// x and newsletter bodies are stored as JSON-stringified structures (Insert Channel
+// Posts's own note explains why - a plain `body` column can't hold a thread array or
+// a subject+body pair cleanly). Feeding that raw stringified JSON straight into the
+// eval prompt via JSON.stringify() means Claude receives doubly-escaped JSON - which
+// is exactly what produced the empty `per_channel: {}` response caught in live
+// testing (Claude likely couldn't make sense of the garbled input and gave up rather
+// than evaluate it). This builds clean, human-readable text per channel instead, in
+// a preceding Code node - same reasoning as every other "never build this inline"
+// fix in this file.
+function buildPass2EvalTextNode(id, name, sourceNodeName) {
+  codeNode(
+    id, name,
+    "const posts = $('" + sourceNodeName + "').all().map(i => i.json);" + NL +
+      "const parts = posts.map(p => {" + NL +
+      "  if (p.channel === 'x') {" + NL +
+      "    let thread; try { thread = JSON.parse(p.body); } catch { thread = [p.body]; }" + NL +
+      "    return `--- X ---" + BSN + BSN + "${thread.map((t, i) => `Post ${i + 1}: ${t}`).join('" + BSN + BSN + "')}`;" + NL +
+      "  }" + NL +
+      "  if (p.channel === 'newsletter') {" + NL +
+      "    let nl; try { nl = JSON.parse(p.body); } catch { nl = { subject_line: '', body_markdown: p.body }; }" + NL +
+      "    return `--- NEWSLETTER ---" + BSN + "Subject: ${nl.subject_line}" + BSN + BSN + "${nl.body_markdown}`;" + NL +
+      "  }" + NL +
+      "  return `--- LINKEDIN ---" + BSN + BSN + "${p.body}`;" + NL +
+      "});" + NL +
+      "return [{ json: { channelsText: parts.join('" + BSN + BSN + "') } }];"
+  );
+  connect(sourceNodeName, name);
+}
+
+function pass2EvalPrompt(textNodeName) {
   return (
     "`Evaluate each adapted channel post below against the rubric. You have not seen the adaptation reasoning - judge only what's here.\\n\\nRubric: " +
     PASS2_RUBRIC_TEXT +
     "\\n\\nOriginal article (for factual comparison):\\n${$('Fetch Approved Section').first().json.body_markdown}\\n\\n" +
     "Grounded excerpts:\\n${$('Build Adaptation Context').first().json.excerptsTextPlain}\\n\\n" +
-    "Adapted posts to evaluate:\\n${JSON.stringify($('" + sourceNodeName + "').all().map(i => ({ channel: i.json.channel, body: i.json.body })))}`"
+    "Adapted posts to evaluate (score every one shown here, using its exact channel name as the per_channel key):\\n${$('" + textNodeName + "').first().json.channelsText}`"
   );
 }
 
@@ -551,7 +589,7 @@ function pass2GateCode(channelPostsSourceName, xLengthSourceName) {
     "const perChannel = $json.per_channel || {};" + NL +
     "const results = {};" + NL +
     "let anyReject = false;" + NL +
-    "let allPass = true;" + NL +
+    "let allPass = Object.keys(perChannel).length > 0;" + NL +
     "for (const [channel, r] of Object.entries(perChannel)) {" + NL +
     "  const c = r.criteria || [];" + NL +
     "  const floor = (name, f) => { const crit = c.find(x => x.name.toLowerCase().includes(name)); return crit ? crit.score < f : false; };" + NL +
@@ -580,15 +618,18 @@ function pass2GateCode(channelPostsSourceName, xLengthSourceName) {
 function buildPass2EvalRound(roundLabel, channelPostsSourceName, isFinalRound) {
   const idBase = roundLabel.replace(/[^a-z0-9]/gi, "-").toLowerCase();
 
+  const textNodeName = `Build Pass 2 Eval Text (${roundLabel})`;
+  buildPass2EvalTextNode(`build-eval-text-${idBase}`, textNodeName, channelPostsSourceName);
+
   claudeNode(
     `claude-eval-${idBase}`,
     `Claude: Evaluate Channels (${roundLabel})`,
     "claude-opus-5",
     EVAL_TOOL,
-    pass2EvalPrompt(channelPostsSourceName),
+    pass2EvalPrompt(textNodeName),
     3000
   );
-  connect(channelPostsSourceName, `Claude: Evaluate Channels (${roundLabel}): Build Request`);
+  connect(textNodeName, `Claude: Evaluate Channels (${roundLabel}): Build Request`);
   claudeErrorBranch(`Claude: Evaluate Channels (${roundLabel})`, "pass2_evaluation");
 
   codeNode(
