@@ -142,6 +142,40 @@
     },
     {
       "parameters": {
+        "method": "PATCH",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('Config').first().json.request_id}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ regeneration_count: $('Fetch Request Row').first().json.regeneration_count + 1 }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "increment-regeneration-count",
+      "name": "Increment Regeneration Count",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "position": [
+        1580,
+        0
+      ]
+    },
+    {
+      "parameters": {
         "jsCode": "const tool = {\"name\":\"write_article\",\"description\":\"Write the full grounded article for the chosen angle.\",\"input_schema\":{\"type\":\"object\",\"required\":[\"title\",\"body_markdown\",\"secondary_keywords\"],\"properties\":{\"title\":{\"type\":\"string\"},\"body_markdown\":{\"type\":\"string\"},\"secondary_keywords\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}};\nconst content = `Regenerate this article. The human reviewer read the previous version and asked for a specific change - address it directly, don't just lightly reword the same draft.\\n\\nWorking title: ${$('Fetch Chosen Angle').first().json.working_title}\\nThesis: ${$('Fetch Chosen Angle').first().json.thesis}\\nSection shape: ${JSON.stringify($('Fetch Chosen Angle').first().json.section_shape)}\\nPrimary keyword (must appear naturally, including in a heading): ${$('Fetch Request Row').first().json.primary_keyword}\\nDesired length: ${$('Fetch Request Row').first().json.desired_length || 'no specific target'}\\n\\nPrevious version:\\n${$('Fetch Latest Section').first().json.body_markdown}\\n\\nReviewer's comment on what to change:\\n${$('Config').first().json.comment}\\n\\nStay grounded only in the excerpts below - no unsupported claims or invented statistics, even to satisfy the comment:\\n${$('Build Excerpts Text').first().json.excerptsTextPlain}\\n\\nWrite in markdown with proper H1/H2 heading hierarchy.`;\nconst requestBody = JSON.stringify({\n  model: 'claude-sonnet-5',\n  max_tokens: 4000,\n  tools: [tool],\n  tool_choice: { type: 'tool', name: 'write_article' },\n  messages: [{ role: 'user', content }]\n});\nreturn [{ json: { requestBody } }];"
       },
       "id": "claude-regenerate-build-request",
@@ -150,7 +184,7 @@
       "typeVersion": 2,
       "notes": "Full Claude request body built in real Code-node JS - n8n's {{ }} expression engine chokes on large inlined JSON tool schemas (see Workflow B Error #9).",
       "position": [
-        1580,
+        1840,
         0
       ]
     },
@@ -189,7 +223,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        1840,
+        2100,
         0
       ]
     },
@@ -202,7 +236,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2100,
+        2360,
         -320
       ]
     },
@@ -236,7 +270,7 @@
         }
       },
       "position": [
-        2360,
+        2620,
         -320
       ]
     },
@@ -270,7 +304,7 @@
         }
       },
       "position": [
-        2620,
+        2880,
         -320
       ]
     },
@@ -284,7 +318,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        2880,
+        3140,
         -320
       ]
     },
@@ -297,7 +331,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3140,
+        3400,
         0
       ]
     },
@@ -331,7 +365,7 @@
         }
       },
       "position": [
-        3400,
+        3660,
         0
       ]
     },
@@ -345,7 +379,7 @@
       "typeVersion": 2,
       "notes": "Full Claude request body built in real Code-node JS - n8n's {{ }} expression engine chokes on large inlined JSON tool schemas (see Workflow B Error #9).",
       "position": [
-        3660,
+        3920,
         0
       ]
     },
@@ -384,7 +418,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        3920,
+        4180,
         0
       ]
     },
@@ -397,7 +431,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4180,
+        4440,
         -320
       ]
     },
@@ -431,7 +465,7 @@
         }
       },
       "position": [
-        4440,
+        4700,
         -320
       ]
     },
@@ -465,7 +499,7 @@
         }
       },
       "position": [
-        4700,
+        4960,
         -320
       ]
     },
@@ -479,7 +513,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        4960,
+        5220,
         -320
       ]
     },
@@ -492,7 +526,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        5220,
+        5480,
         0
       ]
     },
@@ -526,7 +560,7 @@
         }
       },
       "position": [
-        5480,
+        5740,
         0
       ]
     },
@@ -539,7 +573,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        5740,
+        6000,
         0
       ]
     },
@@ -570,7 +604,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        6000,
+        6260,
         0
       ]
     },
@@ -604,7 +638,7 @@
         }
       },
       "position": [
-        6260,
+        6520,
         -260
       ]
     },
@@ -638,7 +672,7 @@
         }
       },
       "position": [
-        6520,
+        6780,
         -260
       ]
     },
@@ -652,7 +686,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        6780,
+        7040,
         -260
       ]
     },
@@ -683,7 +717,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        7040,
+        7300,
         260
       ]
     },
@@ -717,7 +751,7 @@
         }
       },
       "position": [
-        7300,
+        7560,
         520
       ]
     },
@@ -751,7 +785,7 @@
         }
       },
       "position": [
-        7560,
+        7820,
         520
       ]
     },
@@ -765,7 +799,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        7820,
+        8080,
         520
       ]
     },
@@ -799,7 +833,7 @@
         }
       },
       "position": [
-        8080,
+        8340,
         0
       ]
     },
@@ -833,7 +867,7 @@
         }
       },
       "position": [
-        8340,
+        8600,
         0
       ]
     },
@@ -847,7 +881,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        8600,
+        8860,
         0
       ]
     }
@@ -919,6 +953,17 @@
         ]
       ]
     },
+    "Build Excerpts Text": {
+      "main": [
+        [
+          {
+            "node": "Increment Regeneration Count",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Claude: Regenerate Article: Build Request": {
       "main": [
         [
@@ -930,7 +975,7 @@
         ]
       ]
     },
-    "Build Excerpts Text": {
+    "Increment Regeneration Count": {
       "main": [
         [
           {

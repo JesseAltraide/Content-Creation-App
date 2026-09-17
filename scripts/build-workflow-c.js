@@ -304,11 +304,27 @@ const ARTICLE_TOOL = {
   },
 };
 
+// Only advance regeneration_count once Claude is actually about to be called - not
+// in Next.js before this workflow even ran. Everything upstream (fetching the
+// request/angle/section/excerpts) is plain Supabase reads that can fail for reasons
+// that have nothing to do with the human's attempt (a bad credential, a transient
+// outage - exactly what happened live during testing, see week4-progress.md Errors
+// #10) and shouldn't cost them one of their 5 tries. This write reads the count
+// already fetched in Fetch Request Row rather than re-fetching, since nothing else
+// can be concurrently regenerating this same request (Next.js's atomic status write
+// guarantees only one attempt is in flight at a time).
+supabaseWrite(
+  "increment-regeneration-count", "Increment Regeneration Count", "PATCH",
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('Config').first().json.request_id}}",
+  "={{ JSON.stringify({ regeneration_count: $('Fetch Request Row').first().json.regeneration_count + 1 }) }}"
+);
+connect("Build Excerpts Text", "Increment Regeneration Count");
+
 const regeneratePrompt =
   "`Regenerate this article. The human reviewer read the previous version and asked for a specific change - address it directly, don't just lightly reword the same draft.\\n\\nWorking title: ${$('Fetch Chosen Angle').first().json.working_title}\\nThesis: ${$('Fetch Chosen Angle').first().json.thesis}\\nSection shape: ${JSON.stringify($('Fetch Chosen Angle').first().json.section_shape)}\\nPrimary keyword (must appear naturally, including in a heading): ${$('Fetch Request Row').first().json.primary_keyword}\\nDesired length: ${$('Fetch Request Row').first().json.desired_length || 'no specific target'}\\n\\nPrevious version:\\n${$('Fetch Latest Section').first().json.body_markdown}\\n\\nReviewer's comment on what to change:\\n${$('Config').first().json.comment}\\n\\nStay grounded only in the excerpts below - no unsupported claims or invented statistics, even to satisfy the comment:\\n${$('Build Excerpts Text').first().json.excerptsTextPlain}\\n\\nWrite in markdown with proper H1/H2 heading hierarchy.`";
 
 claudeNode("claude-regenerate", "Claude: Regenerate Article", "claude-sonnet-5", ARTICLE_TOOL, regeneratePrompt, 4000);
-connect("Build Excerpts Text", "Claude: Regenerate Article: Build Request");
+connect("Increment Regeneration Count", "Claude: Regenerate Article: Build Request");
 claudeErrorBranch("Claude: Regenerate Article", "generation", "$('Config').first().json.request_id");
 
 codeNode(

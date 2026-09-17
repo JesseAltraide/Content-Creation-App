@@ -63,14 +63,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   const priorStatus = current.status;
-  const nextCount = current.regeneration_count + 1;
+  // The count that THIS attempt would become if Claude actually gets called — used
+  // to tell the workflow whether a failure here should be the final one, and for the
+  // log message below. NOT written yet: regeneration_count only actually advances
+  // inside the n8n workflow itself, right before the Claude call. If nothing gets
+  // that far (e.g. a bad credential on an earlier Supabase fetch, exactly what broke
+  // during testing), no attempt should be consumed at all — the status-only revert
+  // below already gives a free retry for that case.
+  const wouldBeCount = current.regeneration_count + 1;
 
+  // Atomic conditional write on status only — regeneration_count isn't touched here,
+  // so this can't double-consume an attempt; it's purely the concurrency guard that
+  // stops two double-clicks from both proceeding.
   const { data: updatedRequest, error: transitionError } = await admin
     .from("requests")
-    .update({ status: "generating", regeneration_count: nextCount })
+    .update({ status: "generating" })
     .eq("id", requestId)
     .eq("status", priorStatus)
-    .eq("regeneration_count", current.regeneration_count)
     .select()
     .single();
 
@@ -85,10 +94,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     requestId,
     stage: "regeneration_requested",
     status: "success",
-    detail: `Regenerate requested (attempt ${nextCount}/${REGENERATION_CAP}): ${parsed.data.comment}`,
+    detail: `Regenerate requested (would be attempt ${wouldBeCount}/${REGENERATION_CAP} if Claude is reached): ${parsed.data.comment}`,
   });
 
-  await triggerRegenerate(requestId, parsed.data.comment, nextCount >= REGENERATION_CAP, priorStatus);
+  await triggerRegenerate(requestId, parsed.data.comment, wouldBeCount >= REGENERATION_CAP, priorStatus);
 
-  return NextResponse.json({ ok: true, regenerationCount: nextCount });
+  return NextResponse.json({ ok: true });
 }
