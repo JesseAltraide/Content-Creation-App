@@ -1,0 +1,154 @@
+import { NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { logEvent } from "@/lib/events";
+import { sendMail } from "@/lib/mailer";
+import { parseXPosts } from "@/lib/channel-post-format";
+
+// How far past scheduled_for a still-'scheduled' item can sit before it's treated
+// as stale rather than fired late - the docs require a visible "overdue" state for
+// "cron misconfigured, worker down" (week4-full-flow.md line 314) but don't specify
+// a threshold. 2 hours: long enough that a few minutes of cron jitter or a single
+// missed run (this fires every 15 minutes, see vercel.json) never trips it, short
+// enough that a "Tuesday 9am" reminder that would otherwise land Tuesday evening
+// gets flagged instead of silently sent hours late.
+const OVERDUE_THRESHOLD_MS = 2 * 60 * 60 * 1000;
+
+function formatChannelBody(channel: string, body: string): string {
+  if (channel === "x") {
+    const posts = parseXPosts(body);
+    return posts.map((p, i) => (posts.length > 1 ? `Post ${i + 1}/${posts.length}:\n${p}` : p)).join("\n\n");
+  }
+  return body;
+}
+
+// Vercel Cron invokes this on the schedule in vercel.json and sends CRON_SECRET as
+// a Bearer token automatically once that env var is set - verified here so the
+// endpoint can't be triggered by anyone who finds the URL. Left unenforced only if
+// CRON_SECRET was never configured (local dev convenience), same conditional
+// pattern used elsewhere in this build (e.g. mailer.ts's missing-credentials check).
+export async function GET(request: Request) {
+  const secret = process.env.CRON_SECRET;
+  if (secret) {
+    const auth = request.headers.get("authorization");
+    if (auth !== `Bearer ${secret}`) {
+      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    }
+  }
+
+  const admin = createAdminClient();
+  const now = new Date();
+
+  const { data: due } = await admin
+    .from("scheduled_content")
+    .select("id, channel_post_id, channel, scheduled_for")
+    .eq("status", "scheduled")
+    .lte("scheduled_for", now.toISOString());
+
+  const results = { published: 0, overdue: 0, staleSkipped: 0, notificationFailed: 0, errors: [] as string[] };
+
+  for (const item of due ?? []) {
+    try {
+      const { data: post } = await admin
+        .from("channel_posts")
+        .select("id, request_id, channel, body, chosen")
+        .eq("id", item.channel_post_id)
+        .single();
+
+      // The content was superseded (edited or regenerated) after this was
+      // scheduled - Decision: "any edit to approved content immediately reverts it
+      // out of the publish queue" (week4-full-flow.md line 356). Rather than fire a
+      // stale reminder for content that no longer exists as the current draft,
+      // fail this item explicitly and let the human re-schedule the new version.
+      if (!post || !post.chosen) {
+        const { data: updated } = await admin
+          .from("scheduled_content")
+          .update({ status: "publish_failed" })
+          .eq("id", item.id)
+          .eq("status", "scheduled")
+          .select()
+          .single();
+        if (updated) {
+          results.staleSkipped++;
+          await logEvent({
+            requestId: post?.request_id ?? null,
+            stage: "publish_job",
+            status: "failed",
+            detail: `Scheduled ${item.channel} post was superseded by a newer version before its publish time - re-schedule the current draft.`,
+          });
+        }
+        continue;
+      }
+
+      const overdueMs = now.getTime() - new Date(item.scheduled_for).getTime();
+      if (overdueMs > OVERDUE_THRESHOLD_MS) {
+        const { data: updated } = await admin
+          .from("scheduled_content")
+          .update({ status: "overdue" })
+          .eq("id", item.id)
+          .eq("status", "scheduled")
+          .select()
+          .single();
+        if (updated) {
+          results.overdue++;
+          await logEvent({
+            requestId: post.request_id,
+            stage: "publish_job",
+            status: "failed",
+            detail: `${item.channel} publish reminder is over 2 hours late (cron may have missed a run) - marked overdue instead of sending a stale notification.`,
+          });
+        }
+        continue;
+      }
+
+      // The atomic conditional write itself IS the duplicate-fire guard (week4-
+      // full-flow.md line 315 / week4-claude-code-instructions.md's own example):
+      // if two cron invocations somehow race on the same item, only one UPDATE can
+      // match status='scheduled' and return a row - the loser sees zero rows
+      // updated and does nothing further, no duplicate notification possible.
+      const { data: updated } = await admin
+        .from("scheduled_content")
+        .update({ status: "published", published_at: now.toISOString() })
+        .eq("id", item.id)
+        .eq("status", "scheduled")
+        .select()
+        .single();
+
+      if (!updated) continue; // lost the race to another concurrent run - fine, do nothing
+
+      results.published++;
+
+      // Notification failure is tracked separately from the state transition
+      // (week4-full-flow.md line 316: "Log the send separately from the state
+      // transition, and surface the failure") - the item is genuinely published
+      // (its time arrived, the queue did its job) regardless of whether the email
+      // happened to fail; notification_sent staying false is what surfaces that.
+      const mailResult = await sendMail({
+        to: process.env.NOTIFICATION_EMAIL || "",
+        subject: `Ready to publish: ${item.channel} post`,
+        text: `Your scheduled ${item.channel} post is ready to paste and publish:\n\n${formatChannelBody(item.channel, post.body)}`,
+      });
+
+      if (mailResult.ok) {
+        await admin.from("scheduled_content").update({ notification_sent: true }).eq("id", item.id);
+        await logEvent({
+          requestId: post.request_id,
+          stage: "publish_job",
+          status: "success",
+          detail: `${item.channel} post published and notification sent.`,
+        });
+      } else {
+        results.notificationFailed++;
+        await logEvent({
+          requestId: post.request_id,
+          stage: "publish_job",
+          status: "failed",
+          detail: `${item.channel} post marked published, but the notification email failed: ${mailResult.error}`,
+        });
+      }
+    } catch (err) {
+      results.errors.push(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return NextResponse.json({ ok: true, checked: due?.length ?? 0, ...results });
+}

@@ -13,6 +13,7 @@ import SelectAngleButton from "./select-angle-button";
 import BackToAngleSelectionButton from "./back-to-angle-selection-button";
 import ArticleReview from "./article-review";
 import ChannelPostsReview from "./channel-posts-review";
+import PublishingQueue from "./publishing-queue";
 
 const SOURCE_STATUS_STYLES: Record<string, string> = {
   scraped: "bg-success-soft text-success",
@@ -81,6 +82,11 @@ export default async function RequestDetailPage({
     .eq("request_id", id)
     .eq("pass", "pass_2_channel")
     .order("content_version");
+
+  const channelPostIds = (channelPosts ?? []).map((p) => p.id);
+  const { data: scheduledContent } = channelPostIds.length
+    ? await supabase.from("scheduled_content").select("*").in("channel_post_id", channelPostIds)
+    : { data: [] };
 
   const sourceUrlsById = Object.fromEntries((sources ?? []).map((s) => [s.id, s.url]));
 
@@ -237,6 +243,13 @@ export default async function RequestDetailPage({
         latestEvent={latestEvent}
         channelPosts={channelPosts ?? []}
         evaluations={pass2Evaluations ?? []}
+      />
+
+      <PublishingQueue
+        requestId={id}
+        channelPosts={channelPosts ?? []}
+        evaluations={pass2Evaluations ?? []}
+        scheduledContent={scheduledContent ?? []}
       />
 
       {sources && sources.length > 0 && (

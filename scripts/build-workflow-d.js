@@ -477,9 +477,15 @@ connect("Parse Adapted Content", "Validate X Length");
 // Workflow B (Error #9): n8n's expression engine does its own brace-matching before
 // real JS evaluation and chokes on complex inline expressions regardless of whether
 // the JS itself is valid.
-function insertChannelPostsNode(id, name, sourceNodeName, version) {
+// sourceNodeName is where the channels data actually lives; triggerNodeName (if
+// different) is what should execute immediately before this - lets a node with no
+// useful output of its own (e.g. an "unchoose previous versions" write) sit in the
+// execution chain without breaking the data reference, which stays pointed at the
+// real data node regardless of what's chained in between.
+function insertChannelPostsNode(id, name, sourceNodeName, version, triggerNodeName) {
   const builderId = `${id}-build-rows`;
   const builderName = `${name}: Build Rows`;
+  const trigger = triggerNodeName || sourceNodeName;
 
   codeNode(
     builderId,
@@ -494,7 +500,7 @@ function insertChannelPostsNode(id, name, sourceNodeName, version) {
       "return [{ json: { rows: JSON.stringify(rows) } }];",
     { notes: "X posts and the newsletter's subject/body pair don't fit a single plain-text `body` column cleanly, so both are stored as JSON-stringified structures in that column; the UI parses them back out by channel." }
   );
-  connect(sourceNodeName, builderName);
+  connect(trigger, builderName);
 
   supabaseWrite(
     id, name, "POST",
@@ -796,7 +802,27 @@ function buildPass2RevisionRound(roundNum, prevGateIfName, prevChannelPostsSourc
   );
   connect(`Parse Revised Channels (${label})`, `Validate X Length (${label})`);
 
-  insertChannelPostsNode(`insert-channel-posts-${idBase}`, `Insert Channel Posts v${roundNum + 1}`, `Validate X Length (${label})`, roundNum + 1);
+  // Un-chooses every prior version before inserting this round's - without this,
+  // both the old and new versions stay chosen:true simultaneously, breaking the
+  // "exactly one chosen row per channel" invariant every downstream reader (the
+  // review UI, the publishing queue, Workflow E's edit triage) relies on. Caught
+  // live: a stuck run left two chosen rows per channel behind, not itself harmful
+  // to any reader (they all reduce to max-version-among-chosen defensively) but a
+  // real data-integrity gap worth closing at the source.
+  supabaseWrite(
+    `unchoose-prev-${idBase}`, `Unchoose Previous Channel Posts (${label})`, "PATCH",
+    "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/channel_posts?request_id=eq.{{$('Config').first().json.request_id}}",
+    "={{ JSON.stringify({ chosen: false }) }}"
+  );
+  connect(`Validate X Length (${label})`, `Unchoose Previous Channel Posts (${label})`);
+
+  insertChannelPostsNode(
+    `insert-channel-posts-${idBase}`,
+    `Insert Channel Posts v${roundNum + 1}`,
+    `Validate X Length (${label})`,
+    roundNum + 1,
+    `Unchoose Previous Channel Posts (${label})`
+  );
 
   supabaseGet(
     `fetch-channel-posts-${idBase}`, `Fetch Channel Posts v${roundNum + 1}`,
