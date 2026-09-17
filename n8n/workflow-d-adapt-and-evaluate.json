@@ -1,0 +1,3120 @@
+{
+  "name": "Content Agent — Workflow D (Adapt to Channels)",
+  "meta": {
+    "notes": "Triggered automatically when a human approves the article. Stage 9: one combined Claude call (Sonnet) adapts the approved article into LinkedIn/X/newsletter posts (Decision #65), X length enforced programmatically (Decision #11) never truncated/padded (Decision #35). Combined Pass 2 evaluation (Opus) scores all channels together, revision-capped at 2 rounds like Pass 1. Tone variants: one per channel by default (Decision #66) - the 'alternate tone' second variant is a separate human-triggered action, not built here. SECRETS: Supabase API and Anthropic credentials - map both on import, and check every node's credential individually (see Errors #10 in week4-progress.md - import doesn't always propagate to every node)."
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "path": "wf-d-adapt-evaluate",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Webhook: Adapt & Evaluate",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: {\n  request_id: $json.body.request_id,\n  SUPABASE_URL: 'https://klblroceyiirhaxaqflq.supabase.co'\n} }];"
+      },
+      "id": "config",
+      "name": "Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "notes": "Non-secret config only. Supabase/Anthropic secrets live in n8n Credentials.",
+      "position": [
+        20,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const err = $json.error || {};\nconst message = (err.message || JSON.stringify(err) || 'Unknown error').slice(0, 500);\nreturn [{ json: { requestId: $('Config').first().json.request_id, message } }];"
+      },
+      "id": "setup-error-extract",
+      "name": "Pipeline Setup Failure: Extract Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        280,
+        -580
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.requestId}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'approved' }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "setup-revert-status",
+      "name": "Pipeline Setup Failure: Revert Request State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "position": [
+        540,
+        -580
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('Pipeline Setup Failure: Extract Error').first().json.requestId, stage: 'channel_adaptation', status: 'failed', detail: `Couldn't start adaptation: ${$('Pipeline Setup Failure: Extract Error').first().json.message}` }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "setup-log-failed",
+      "name": "Pipeline Setup Failure: Log Failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "position": [
+        800,
+        -580
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'setup_failed', detail: $('Pipeline Setup Failure: Extract Error').first().json.message }) }}"
+      },
+      "id": "setup-respond-failed",
+      "name": "Pipeline Setup Failure: Respond Failed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1060,
+        -580
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('Config').first().json.request_id}}&select=*",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "fetch-request",
+      "name": "Fetch Request Row",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput",
+      "position": [
+        1320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/sections?request_id=eq.{{$('Config').first().json.request_id}}&order=version.desc&limit=1&select=*",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "fetch-section",
+      "name": "Fetch Approved Section",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput",
+      "position": [
+        1580,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/audience_profiles?id=eq.{{$('Fetch Request Row').first().json.resolved_audience_profile_id}}&select=*",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "fetch-audience",
+      "name": "Fetch Audience Profile",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput",
+      "position": [
+        1840,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/tone_samples?select=*",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "fetch-tone-samples",
+      "name": "Fetch Tone Samples",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "onError": "continueErrorOutput",
+      "position": [
+        2100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/excerpts?request_id=eq.{{$('Config').first().json.request_id}}&select=id,text,reason,source_id",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "fetch-excerpts",
+      "name": "Fetch Excerpts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput",
+      "position": [
+        2360,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const req = $('Fetch Request Row').first().json;\nconst audience = ($('Fetch Audience Profile').all().map(i => i.json).find(a => a && a.id)) || null;\nconst toneSamples = $('Fetch Tone Samples').all().map(i => i.json).filter(t => t && t.id && req.channels.includes(t.channel));\nconst toneByChannel = {};\nfor (const ch of req.channels) {\n  const samples = toneSamples.filter(t => t.channel === ch);\n  toneByChannel[ch] = samples.length\n    ? samples.map(s => `[${s.source}] ${s.content}`).join('\\n\\n---\\n\\n')\n    : 'No tone samples on file for this channel - use a neutral, professional default tone.';\n}\nconst excerpts = $('Fetch Excerpts').all().map(i => i.json).filter(e => e && e.id);\nconst excerptsTextPlain = excerpts.map((e, i) => `[${i}] Source: ${e.source_id}\\n${e.text}`).join('\\n\\n');\nreturn [{ json: {\n  channels: req.channels,\n  x_thread_length: req.x_thread_length || 'single',\n  audienceText: audience ? audience.description : 'No audience profile on file - write for a general professional audience.',\n  toneByChannel,\n  excerptsTextPlain\n} }];"
+      },
+      "id": "build-context",
+      "name": "Build Adaptation Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "notes": "Aggregates per-channel tone samples, the resolved audience profile, and grounding excerpts into one object the adaptation prompt reads from. Real JS here, not inline HTTP-node expressions, since tone sample content and excerpt text can contain arbitrary characters (backticks, quotes) that break n8n's {{ }} brace-matching (Workflow B Error #9).",
+      "position": [
+        2620,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const tool = {\"name\":\"adapt_to_channels\",\"description\":\"Adapt the approved article into platform-native posts for each requested channel.\",\"input_schema\":{\"type\":\"object\",\"required\":[\"channels\"],\"properties\":{\"channels\":{\"type\":\"object\",\"properties\":{\"linkedin\":{\"type\":\"object\",\"properties\":{\"body_markdown\":{\"type\":\"string\"}}},\"x\":{\"type\":\"object\",\"properties\":{\"posts\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"1 post for a single post, 3+ for a thread\"}}},\"newsletter\":{\"type\":\"object\",\"properties\":{\"subject_line\":{\"type\":\"string\"},\"body_markdown\":{\"type\":\"string\"}}}}}}}};\nconst content = `Adapt this approved article into platform-native posts for these channels: ${$('Build Adaptation Context').first().json.channels.join(', ')}.\\n\\nArticle title: ${$('Fetch Approved Section').first().json.title}\\nArticle body:\\n${$('Fetch Approved Section').first().json.body_markdown}\\n\\nAudience: ${$('Build Adaptation Context').first().json.audienceText}\\n\\nOnly produce a 'linkedin' key if linkedin is in the requested channels, only 'x' if x is requested, only 'newsletter' if newsletter is requested. For each requested channel, write in that channel's own real voice and format, grounded only in the article and its underlying excerpts below - no unsupported claims, and every claim must stay traceable to the same source material as the article itself:\\n${$('Build Adaptation Context').first().json.excerptsTextPlain}\\n\\nLinkedIn: PAS structure (Problem-Agitate-Solution), short paragraphs, sparing emoji, a clear CTA. Tone reference (real previous posts or a described target, follow this voice):\\n${$('Build Adaptation Context').first().json.toneByChannel.linkedin || 'not requested'}\\n\\nX: hook-first, one core idea per post, line breaks over hashtags, at most 1-2 hashtags and only on the final post if threaded. The human requested '${$('Build Adaptation Context').first().json.x_thread_length}' - 'single' means exactly one post, 'mini' means roughly 3 posts, 'expansive' means roughly 5 posts. Never pad to hit a target count - if the idea genuinely doesn't need that many posts, write fewer and say nothing about it. Each individual post must fit in 280 characters - this will be checked programmatically, so respect it exactly, don't rely on being checked. Tone reference:\\n${$('Build Adaptation Context').first().json.toneByChannel.x || 'not requested'}\\n\\nNewsletter: a subject line, a 1-3 sentence intro, a skimmable body, and a closing CTA, 250-600 words total in body_markdown. Tone reference:\\n${$('Build Adaptation Context').first().json.toneByChannel.newsletter || 'not requested'}`;\nconst requestBody = JSON.stringify({\n  model: 'claude-sonnet-5',\n  max_tokens: 4000,\n  tools: [tool],\n  tool_choice: { type: 'tool', name: 'adapt_to_channels' },\n  messages: [{ role: 'user', content }]\n});\nreturn [{ json: { requestBody } }];"
+      },
+      "id": "claude-adapt-build-request",
+      "name": "Claude: Adapt to Channels: Build Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "notes": "Full Claude request body built in real Code-node JS - n8n's {{ }} expression engine chokes on large inlined JSON tool schemas (Workflow B Error #9).",
+      "position": [
+        2880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.requestBody }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi"
+      },
+      "id": "claude-adapt",
+      "name": "Claude: Adapt to Channels",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "anthropicApi": {
+          "id": "anthropic-account",
+          "name": "Anthropic account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        3140,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const err = $json.error || {};\nconst message = (err.message || JSON.stringify(err) || 'Unknown Claude API error').slice(0, 500);\nreturn [{ json: { requestId: $('Config').first().json.request_id, message } }];"
+      },
+      "id": "claude--adapt-to-channels-error-extract",
+      "name": "Claude: Adapt to Channels: Extract Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3400,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.requestId}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'approved' }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "claude--adapt-to-channels-revert-status",
+      "name": "Claude: Adapt to Channels: Revert Request State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "position": [
+        3660,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('Claude: Adapt to Channels: Extract Error').first().json.requestId, stage: 'channel_adaptation', status: 'failed', detail: `Claude call failed: ${$('Claude: Adapt to Channels: Extract Error').first().json.message}` }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "claude--adapt-to-channels-log-failed",
+      "name": "Claude: Adapt to Channels: Log Failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "position": [
+        3920,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'claude_failed', detail: $('Claude: Adapt to Channels: Extract Error').first().json.message }) }}"
+      },
+      "id": "claude--adapt-to-channels-respond-failed",
+      "name": "Claude: Adapt to Channels: Respond Failed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        4180,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const toolUse = $json.content.find(c => c.type === 'tool_use');\nreturn [{ json: toolUse.input.channels || {} }];"
+      },
+      "id": "parse-adapted",
+      "name": "Parse Adapted Content",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const channels = $json;\nconst x = channels.x;\nconst posts = x && Array.isArray(x.posts) ? x.posts : [];\nconst overLimit = posts.filter(p => p.length > 280);\nreturn [{ json: { ...channels, x_length_violation: overLimit.length > 0, x_over_limit_count: overLimit.length } }];"
+      },
+      "id": "validate-x-length",
+      "name": "Validate X Length",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4700,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ch = $('Validate X Length').first().json;\nconst requestId = $('Config').first().json.request_id;\nconst version = 1;\nconst rows = [];\nif (ch.linkedin) rows.push({ request_id: requestId, channel: 'linkedin', version, body: ch.linkedin.body_markdown, tone_variant: 'default', chosen: true });\nif (ch.x) rows.push({ request_id: requestId, channel: 'x', version, body: JSON.stringify(ch.x.posts || []), tone_variant: 'default', chosen: true });\nif (ch.newsletter) rows.push({ request_id: requestId, channel: 'newsletter', version, body: JSON.stringify({ subject_line: ch.newsletter.subject_line, body_markdown: ch.newsletter.body_markdown }), tone_variant: 'default', chosen: true });\nreturn [{ json: { rows: JSON.stringify(rows) } }];"
+      },
+      "id": "insert-channel-posts-v1-build-rows",
+      "name": "Insert Channel Posts v1: Build Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "notes": "X posts and the newsletter's subject/body pair don't fit a single plain-text `body` column cleanly, so both are stored as JSON-stringified structures in that column; the UI parses them back out by channel.",
+      "position": [
+        4960,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/channel_posts",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.rows }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "insert-channel-posts-v1",
+      "name": "Insert Channel Posts v1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        5220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/channel_posts?request_id=eq.{{$('Config').first().json.request_id}}&version=eq.1&select=*",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "fetch-channel-posts-v1",
+      "name": "Fetch Channel Posts v1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput",
+      "position": [
+        5480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const tool = {\"name\":\"evaluate_channel_posts\",\"description\":\"Score each channel's adapted post against the Pass 2 rubric.\",\"input_schema\":{\"type\":\"object\",\"required\":[\"per_channel\"],\"properties\":{\"per_channel\":{\"type\":\"object\",\"description\":\"Keyed by channel name (linkedin/x/newsletter), only for channels that were adapted\",\"additionalProperties\":{\"type\":\"object\",\"required\":[\"overall_score\",\"status\",\"criteria\"],\"properties\":{\"overall_score\":{\"type\":\"integer\"},\"status\":{\"type\":\"string\",\"enum\":[\"pass\",\"revise\",\"reject\"]},\"criteria\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"name\",\"score\",\"max\"],\"properties\":{\"name\":{\"type\":\"string\"},\"score\":{\"type\":\"integer\"},\"max\":{\"type\":\"integer\"},\"notes\":{\"type\":\"string\"}}}},\"weakest_criteria_suggestions\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"hard_block_triggered\":{\"type\":\"boolean\"},\"hard_block_reason\":{\"type\":[\"string\",\"null\"]}}}}}}};\nconst content = `Evaluate each adapted channel post below against the rubric. You have not seen the adaptation reasoning - judge only what's here.\\n\\nRubric: Score each channel's post out of 100 across: Factual Consistency re-verified against the excerpts (20, floor 15 - hard block tier, re-checks the claims survived adaptation unchanged), Tone (25, floor 10), Channel Fit (25, floor 10 - does it genuinely read as native to that platform, not just the article reformatted), Audience Fit re-verified (15, floor 6), Clarity (15, floor 6). Topic Relevance, SEO Fit, and Completeness do not apply post-adaptation - do not score them. If Factual Consistency scores below its floor, hard_block_triggered must be true regardless of the total.\\n\\nOriginal article (for factual comparison):\\n${$('Fetch Approved Section').first().json.body_markdown}\\n\\nGrounded excerpts:\\n${$('Build Adaptation Context').first().json.excerptsTextPlain}\\n\\nAdapted posts to evaluate:\\n${JSON.stringify($('Fetch Channel Posts v1').all().map(i => ({ channel: i.json.channel, body: i.json.body })))}`;\nconst requestBody = JSON.stringify({\n  model: 'claude-opus-5',\n  max_tokens: 3000,\n  tools: [tool],\n  tool_choice: { type: 'tool', name: 'evaluate_channel_posts' },\n  messages: [{ role: 'user', content }]\n});\nreturn [{ json: { requestBody } }];"
+      },
+      "id": "claude-eval-round-0-build-request",
+      "name": "Claude: Evaluate Channels (Round 0): Build Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "notes": "Full Claude request body built in real Code-node JS - n8n's {{ }} expression engine chokes on large inlined JSON tool schemas (Workflow B Error #9).",
+      "position": [
+        5740,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.requestBody }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi"
+      },
+      "id": "claude-eval-round-0",
+      "name": "Claude: Evaluate Channels (Round 0)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "anthropicApi": {
+          "id": "anthropic-account",
+          "name": "Anthropic account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        6000,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const err = $json.error || {};\nconst message = (err.message || JSON.stringify(err) || 'Unknown Claude API error').slice(0, 500);\nreturn [{ json: { requestId: $('Config').first().json.request_id, message } }];"
+      },
+      "id": "claude--evaluate-channels--round-0--error-extract",
+      "name": "Claude: Evaluate Channels (Round 0): Extract Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6260,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.requestId}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'approved' }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "claude--evaluate-channels--round-0--revert-status",
+      "name": "Claude: Evaluate Channels (Round 0): Revert Request State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "position": [
+        6520,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('Claude: Evaluate Channels (Round 0): Extract Error').first().json.requestId, stage: 'pass2_evaluation', status: 'failed', detail: `Claude call failed: ${$('Claude: Evaluate Channels (Round 0): Extract Error').first().json.message}` }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "claude--evaluate-channels--round-0--log-failed",
+      "name": "Claude: Evaluate Channels (Round 0): Log Failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "position": [
+        6780,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'claude_failed', detail: $('Claude: Evaluate Channels (Round 0): Extract Error').first().json.message }) }}"
+      },
+      "id": "claude--evaluate-channels--round-0--respond-failed",
+      "name": "Claude: Evaluate Channels (Round 0): Respond Failed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        7040,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const toolUse = $json.content.find(c => c.type === 'tool_use');\nreturn [{ json: toolUse.input }];"
+      },
+      "id": "parse-eval-round-0",
+      "name": "Parse Pass 2 Evaluation (Round 0)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7300,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const perChannel = $json.per_channel || {};\nconst results = {};\nlet anyReject = false;\nlet allPass = true;\nfor (const [channel, r] of Object.entries(perChannel)) {\n  const c = r.criteria || [];\n  const floor = (name, f) => { const crit = c.find(x => x.name.toLowerCase().includes(name)); return crit ? crit.score < f : false; };\n  const hardBlock = r.hard_block_triggered || floor('factual', 15);\n  let decision;\n  if (channel === 'x' && $('Validate X Length').first().json.x_length_violation) { decision = 'revise'; }\n  else if (hardBlock) { decision = r.overall_score < 60 ? 'reject' : 'revise'; }\n  else if (r.overall_score >= 85) { decision = 'pass'; }\n  else if (r.overall_score >= 60) { decision = 'revise'; }\n  else { decision = 'reject'; }\n  if (decision === 'reject') anyReject = true;\n  if (decision !== 'pass') allPass = false;\n  results[channel] = { ...r, hardBlock, decision };\n}\nconst posts = $('Fetch Channel Posts v1').all().map(i => i.json);\nconst requestId = $('Config').first().json.request_id;\nconst sectionId = $('Fetch Approved Section').first().json.id;\nconst evalRows = Object.entries(results).map(([channel, r]) => {\n  const post = posts.find(p => p.channel === channel);\n  return { request_id: requestId, section_id: sectionId, channel, pass: 'pass_2_channel', content_version: post ? post.version : 1, overall_score: r.overall_score, status: r.decision, criteria: r.criteria, weakest_criteria_suggestions: r.weakest_criteria_suggestions, hard_block_triggered: r.hardBlock, hard_block_reason: r.hard_block_reason };\n});\nreturn [{ json: { perChannel: results, allPass, anyReject, evalRows: JSON.stringify(evalRows) } }];"
+      },
+      "id": "gate-round-0",
+      "name": "Gate (Round 0)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7560,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/evaluation_results",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.evalRows }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "insert-eval-round-0",
+      "name": "Insert Evaluations (Round 0)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        7820,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{$('Gate (Round 0)').first().json.allPass}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-pass-round-0",
+      "name": "IF All Pass (Round 0)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        8080,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('Config').first().json.request_id}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'ready_to_schedule' }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "mark-ready-round-0",
+      "name": "Mark Ready to Schedule (Round 0)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        8340,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('Config').first().json.request_id, stage: 'pass2_evaluation', status: 'success', detail: 'All channels passed Pass 2 at Round 0.' }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "log-ready-round-0",
+      "name": "Log Event (all pass, Round 0)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        8600,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, status: 'pass' }) }}"
+      },
+      "id": "respond-ready-round-0",
+      "name": "Respond (all pass, Round 0)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        8860,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const tool = {\"name\":\"adapt_to_channels\",\"description\":\"Adapt the approved article into platform-native posts for each requested channel.\",\"input_schema\":{\"type\":\"object\",\"required\":[\"channels\"],\"properties\":{\"channels\":{\"type\":\"object\",\"properties\":{\"linkedin\":{\"type\":\"object\",\"properties\":{\"body_markdown\":{\"type\":\"string\"}}},\"x\":{\"type\":\"object\",\"properties\":{\"posts\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"1 post for a single post, 3+ for a thread\"}}},\"newsletter\":{\"type\":\"object\",\"properties\":{\"subject_line\":{\"type\":\"string\"},\"body_markdown\":{\"type\":\"string\"}}}}}}}};\nconst content = `Adapt this approved article into platform-native posts for these channels: ${$('Build Adaptation Context').first().json.channels.join(', ')}.\\n\\nArticle title: ${$('Fetch Approved Section').first().json.title}\\nArticle body:\\n${$('Fetch Approved Section').first().json.body_markdown}\\n\\nAudience: ${$('Build Adaptation Context').first().json.audienceText}\\n\\nOnly produce a 'linkedin' key if linkedin is in the requested channels, only 'x' if x is requested, only 'newsletter' if newsletter is requested. For each requested channel, write in that channel's own real voice and format, grounded only in the article and its underlying excerpts below - no unsupported claims, and every claim must stay traceable to the same source material as the article itself:\\n${$('Build Adaptation Context').first().json.excerptsTextPlain}\\n\\nLinkedIn: PAS structure (Problem-Agitate-Solution), short paragraphs, sparing emoji, a clear CTA. Tone reference (real previous posts or a described target, follow this voice):\\n${$('Build Adaptation Context').first().json.toneByChannel.linkedin || 'not requested'}\\n\\nX: hook-first, one core idea per post, line breaks over hashtags, at most 1-2 hashtags and only on the final post if threaded. The human requested '${$('Build Adaptation Context').first().json.x_thread_length}' - 'single' means exactly one post, 'mini' means roughly 3 posts, 'expansive' means roughly 5 posts. Never pad to hit a target count - if the idea genuinely doesn't need that many posts, write fewer and say nothing about it. Each individual post must fit in 280 characters - this will be checked programmatically, so respect it exactly, don't rely on being checked. Tone reference:\\n${$('Build Adaptation Context').first().json.toneByChannel.x || 'not requested'}\\n\\nNewsletter: a subject line, a 1-3 sentence intro, a skimmable body, and a closing CTA, 250-600 words total in body_markdown. Tone reference:\\n${$('Build Adaptation Context').first().json.toneByChannel.newsletter || 'not requested'}\\n\\nThe previous attempt needs these specific changes: ${JSON.stringify($('Gate (Round 0)').first().json.perChannel)}`;\nconst requestBody = JSON.stringify({\n  model: 'claude-sonnet-5',\n  max_tokens: 4000,\n  tools: [tool],\n  tool_choice: { type: 'tool', name: 'adapt_to_channels' },\n  messages: [{ role: 'user', content }]\n});\nreturn [{ json: { requestBody } }];"
+      },
+      "id": "claude-revise-1-build-request",
+      "name": "Claude: Revise Channels (Round 1): Build Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "notes": "Full Claude request body built in real Code-node JS - n8n's {{ }} expression engine chokes on large inlined JSON tool schemas (Workflow B Error #9).",
+      "position": [
+        9120,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.requestBody }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi"
+      },
+      "id": "claude-revise-1",
+      "name": "Claude: Revise Channels (Round 1)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "anthropicApi": {
+          "id": "anthropic-account",
+          "name": "Anthropic account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        9380,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const err = $json.error || {};\nconst message = (err.message || JSON.stringify(err) || 'Unknown Claude API error').slice(0, 500);\nreturn [{ json: { requestId: $('Config').first().json.request_id, message } }];"
+      },
+      "id": "claude--revise-channels--round-1--error-extract",
+      "name": "Claude: Revise Channels (Round 1): Extract Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        9640,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.requestId}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'approved' }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "claude--revise-channels--round-1--revert-status",
+      "name": "Claude: Revise Channels (Round 1): Revert Request State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "position": [
+        9900,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('Claude: Revise Channels (Round 1): Extract Error').first().json.requestId, stage: 'channel_adaptation', status: 'failed', detail: `Claude call failed: ${$('Claude: Revise Channels (Round 1): Extract Error').first().json.message}` }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "claude--revise-channels--round-1--log-failed",
+      "name": "Claude: Revise Channels (Round 1): Log Failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "position": [
+        10160,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'claude_failed', detail: $('Claude: Revise Channels (Round 1): Extract Error').first().json.message }) }}"
+      },
+      "id": "claude--revise-channels--round-1--respond-failed",
+      "name": "Claude: Revise Channels (Round 1): Respond Failed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        10420,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const toolUse = $json.content.find(c => c.type === 'tool_use');\nreturn [{ json: toolUse.input.channels || {} }];"
+      },
+      "id": "parse-revise-1",
+      "name": "Parse Revised Channels (Round 1)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        10680,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const channels = $json;\nconst x = channels.x;\nconst posts = x && Array.isArray(x.posts) ? x.posts : [];\nconst overLimit = posts.filter(p => p.length > 280);\nreturn [{ json: { ...channels, x_length_violation: overLimit.length > 0, x_over_limit_count: overLimit.length } }];"
+      },
+      "id": "validate-x-revise-1",
+      "name": "Validate X Length (Round 1)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        10940,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ch = $('Validate X Length (Round 1)').first().json;\nconst requestId = $('Config').first().json.request_id;\nconst version = 2;\nconst rows = [];\nif (ch.linkedin) rows.push({ request_id: requestId, channel: 'linkedin', version, body: ch.linkedin.body_markdown, tone_variant: 'default', chosen: true });\nif (ch.x) rows.push({ request_id: requestId, channel: 'x', version, body: JSON.stringify(ch.x.posts || []), tone_variant: 'default', chosen: true });\nif (ch.newsletter) rows.push({ request_id: requestId, channel: 'newsletter', version, body: JSON.stringify({ subject_line: ch.newsletter.subject_line, body_markdown: ch.newsletter.body_markdown }), tone_variant: 'default', chosen: true });\nreturn [{ json: { rows: JSON.stringify(rows) } }];"
+      },
+      "id": "insert-channel-posts-revise-1-build-rows",
+      "name": "Insert Channel Posts v2: Build Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "notes": "X posts and the newsletter's subject/body pair don't fit a single plain-text `body` column cleanly, so both are stored as JSON-stringified structures in that column; the UI parses them back out by channel.",
+      "position": [
+        11200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/channel_posts",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.rows }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "insert-channel-posts-revise-1",
+      "name": "Insert Channel Posts v2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        11460,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/channel_posts?request_id=eq.{{$('Config').first().json.request_id}}&version=eq.2&select=*",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "fetch-channel-posts-revise-1",
+      "name": "Fetch Channel Posts v2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput",
+      "position": [
+        11720,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const tool = {\"name\":\"evaluate_channel_posts\",\"description\":\"Score each channel's adapted post against the Pass 2 rubric.\",\"input_schema\":{\"type\":\"object\",\"required\":[\"per_channel\"],\"properties\":{\"per_channel\":{\"type\":\"object\",\"description\":\"Keyed by channel name (linkedin/x/newsletter), only for channels that were adapted\",\"additionalProperties\":{\"type\":\"object\",\"required\":[\"overall_score\",\"status\",\"criteria\"],\"properties\":{\"overall_score\":{\"type\":\"integer\"},\"status\":{\"type\":\"string\",\"enum\":[\"pass\",\"revise\",\"reject\"]},\"criteria\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"name\",\"score\",\"max\"],\"properties\":{\"name\":{\"type\":\"string\"},\"score\":{\"type\":\"integer\"},\"max\":{\"type\":\"integer\"},\"notes\":{\"type\":\"string\"}}}},\"weakest_criteria_suggestions\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"hard_block_triggered\":{\"type\":\"boolean\"},\"hard_block_reason\":{\"type\":[\"string\",\"null\"]}}}}}}};\nconst content = `Evaluate each adapted channel post below against the rubric. You have not seen the adaptation reasoning - judge only what's here.\\n\\nRubric: Score each channel's post out of 100 across: Factual Consistency re-verified against the excerpts (20, floor 15 - hard block tier, re-checks the claims survived adaptation unchanged), Tone (25, floor 10), Channel Fit (25, floor 10 - does it genuinely read as native to that platform, not just the article reformatted), Audience Fit re-verified (15, floor 6), Clarity (15, floor 6). Topic Relevance, SEO Fit, and Completeness do not apply post-adaptation - do not score them. If Factual Consistency scores below its floor, hard_block_triggered must be true regardless of the total.\\n\\nOriginal article (for factual comparison):\\n${$('Fetch Approved Section').first().json.body_markdown}\\n\\nGrounded excerpts:\\n${$('Build Adaptation Context').first().json.excerptsTextPlain}\\n\\nAdapted posts to evaluate:\\n${JSON.stringify($('Fetch Channel Posts v2').all().map(i => ({ channel: i.json.channel, body: i.json.body })))}`;\nconst requestBody = JSON.stringify({\n  model: 'claude-opus-5',\n  max_tokens: 3000,\n  tools: [tool],\n  tool_choice: { type: 'tool', name: 'evaluate_channel_posts' },\n  messages: [{ role: 'user', content }]\n});\nreturn [{ json: { requestBody } }];"
+      },
+      "id": "claude-eval-round-1-build-request",
+      "name": "Claude: Evaluate Channels (Round 1): Build Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "notes": "Full Claude request body built in real Code-node JS - n8n's {{ }} expression engine chokes on large inlined JSON tool schemas (Workflow B Error #9).",
+      "position": [
+        11980,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.requestBody }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi"
+      },
+      "id": "claude-eval-round-1",
+      "name": "Claude: Evaluate Channels (Round 1)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "anthropicApi": {
+          "id": "anthropic-account",
+          "name": "Anthropic account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        12240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const err = $json.error || {};\nconst message = (err.message || JSON.stringify(err) || 'Unknown Claude API error').slice(0, 500);\nreturn [{ json: { requestId: $('Config').first().json.request_id, message } }];"
+      },
+      "id": "claude--evaluate-channels--round-1--error-extract",
+      "name": "Claude: Evaluate Channels (Round 1): Extract Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        12500,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.requestId}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'approved' }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "claude--evaluate-channels--round-1--revert-status",
+      "name": "Claude: Evaluate Channels (Round 1): Revert Request State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "position": [
+        12760,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('Claude: Evaluate Channels (Round 1): Extract Error').first().json.requestId, stage: 'pass2_evaluation', status: 'failed', detail: `Claude call failed: ${$('Claude: Evaluate Channels (Round 1): Extract Error').first().json.message}` }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "claude--evaluate-channels--round-1--log-failed",
+      "name": "Claude: Evaluate Channels (Round 1): Log Failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "position": [
+        13020,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'claude_failed', detail: $('Claude: Evaluate Channels (Round 1): Extract Error').first().json.message }) }}"
+      },
+      "id": "claude--evaluate-channels--round-1--respond-failed",
+      "name": "Claude: Evaluate Channels (Round 1): Respond Failed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        13280,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const toolUse = $json.content.find(c => c.type === 'tool_use');\nreturn [{ json: toolUse.input }];"
+      },
+      "id": "parse-eval-round-1",
+      "name": "Parse Pass 2 Evaluation (Round 1)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        13540,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const perChannel = $json.per_channel || {};\nconst results = {};\nlet anyReject = false;\nlet allPass = true;\nfor (const [channel, r] of Object.entries(perChannel)) {\n  const c = r.criteria || [];\n  const floor = (name, f) => { const crit = c.find(x => x.name.toLowerCase().includes(name)); return crit ? crit.score < f : false; };\n  const hardBlock = r.hard_block_triggered || floor('factual', 15);\n  let decision;\n  if (channel === 'x' && $('Validate X Length (Round 1)').first().json.x_length_violation) { decision = 'revise'; }\n  else if (hardBlock) { decision = r.overall_score < 60 ? 'reject' : 'revise'; }\n  else if (r.overall_score >= 85) { decision = 'pass'; }\n  else if (r.overall_score >= 60) { decision = 'revise'; }\n  else { decision = 'reject'; }\n  if (decision === 'reject') anyReject = true;\n  if (decision !== 'pass') allPass = false;\n  results[channel] = { ...r, hardBlock, decision };\n}\nconst posts = $('Fetch Channel Posts v2').all().map(i => i.json);\nconst requestId = $('Config').first().json.request_id;\nconst sectionId = $('Fetch Approved Section').first().json.id;\nconst evalRows = Object.entries(results).map(([channel, r]) => {\n  const post = posts.find(p => p.channel === channel);\n  return { request_id: requestId, section_id: sectionId, channel, pass: 'pass_2_channel', content_version: post ? post.version : 1, overall_score: r.overall_score, status: r.decision, criteria: r.criteria, weakest_criteria_suggestions: r.weakest_criteria_suggestions, hard_block_triggered: r.hardBlock, hard_block_reason: r.hard_block_reason };\n});\nreturn [{ json: { perChannel: results, allPass, anyReject, evalRows: JSON.stringify(evalRows) } }];"
+      },
+      "id": "gate-round-1",
+      "name": "Gate (Round 1)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        13800,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/evaluation_results",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.evalRows }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "insert-eval-round-1",
+      "name": "Insert Evaluations (Round 1)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        14060,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{$('Gate (Round 1)').first().json.allPass}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-pass-round-1",
+      "name": "IF All Pass (Round 1)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        14320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('Config').first().json.request_id}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'ready_to_schedule' }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "mark-ready-round-1",
+      "name": "Mark Ready to Schedule (Round 1)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        14580,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('Config').first().json.request_id, stage: 'pass2_evaluation', status: 'success', detail: 'All channels passed Pass 2 at Round 1.' }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "log-ready-round-1",
+      "name": "Log Event (all pass, Round 1)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        14840,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, status: 'pass' }) }}"
+      },
+      "id": "respond-ready-round-1",
+      "name": "Respond (all pass, Round 1)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        15100,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const tool = {\"name\":\"adapt_to_channels\",\"description\":\"Adapt the approved article into platform-native posts for each requested channel.\",\"input_schema\":{\"type\":\"object\",\"required\":[\"channels\"],\"properties\":{\"channels\":{\"type\":\"object\",\"properties\":{\"linkedin\":{\"type\":\"object\",\"properties\":{\"body_markdown\":{\"type\":\"string\"}}},\"x\":{\"type\":\"object\",\"properties\":{\"posts\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"1 post for a single post, 3+ for a thread\"}}},\"newsletter\":{\"type\":\"object\",\"properties\":{\"subject_line\":{\"type\":\"string\"},\"body_markdown\":{\"type\":\"string\"}}}}}}}};\nconst content = `Adapt this approved article into platform-native posts for these channels: ${$('Build Adaptation Context').first().json.channels.join(', ')}.\\n\\nArticle title: ${$('Fetch Approved Section').first().json.title}\\nArticle body:\\n${$('Fetch Approved Section').first().json.body_markdown}\\n\\nAudience: ${$('Build Adaptation Context').first().json.audienceText}\\n\\nOnly produce a 'linkedin' key if linkedin is in the requested channels, only 'x' if x is requested, only 'newsletter' if newsletter is requested. For each requested channel, write in that channel's own real voice and format, grounded only in the article and its underlying excerpts below - no unsupported claims, and every claim must stay traceable to the same source material as the article itself:\\n${$('Build Adaptation Context').first().json.excerptsTextPlain}\\n\\nLinkedIn: PAS structure (Problem-Agitate-Solution), short paragraphs, sparing emoji, a clear CTA. Tone reference (real previous posts or a described target, follow this voice):\\n${$('Build Adaptation Context').first().json.toneByChannel.linkedin || 'not requested'}\\n\\nX: hook-first, one core idea per post, line breaks over hashtags, at most 1-2 hashtags and only on the final post if threaded. The human requested '${$('Build Adaptation Context').first().json.x_thread_length}' - 'single' means exactly one post, 'mini' means roughly 3 posts, 'expansive' means roughly 5 posts. Never pad to hit a target count - if the idea genuinely doesn't need that many posts, write fewer and say nothing about it. Each individual post must fit in 280 characters - this will be checked programmatically, so respect it exactly, don't rely on being checked. Tone reference:\\n${$('Build Adaptation Context').first().json.toneByChannel.x || 'not requested'}\\n\\nNewsletter: a subject line, a 1-3 sentence intro, a skimmable body, and a closing CTA, 250-600 words total in body_markdown. Tone reference:\\n${$('Build Adaptation Context').first().json.toneByChannel.newsletter || 'not requested'}\\n\\nThe previous attempt needs these specific changes: ${JSON.stringify($('Gate (Round 1)').first().json.perChannel)}`;\nconst requestBody = JSON.stringify({\n  model: 'claude-sonnet-5',\n  max_tokens: 4000,\n  tools: [tool],\n  tool_choice: { type: 'tool', name: 'adapt_to_channels' },\n  messages: [{ role: 'user', content }]\n});\nreturn [{ json: { requestBody } }];"
+      },
+      "id": "claude-revise-2-build-request",
+      "name": "Claude: Revise Channels (Round 2): Build Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "notes": "Full Claude request body built in real Code-node JS - n8n's {{ }} expression engine chokes on large inlined JSON tool schemas (Workflow B Error #9).",
+      "position": [
+        15360,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.requestBody }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi"
+      },
+      "id": "claude-revise-2",
+      "name": "Claude: Revise Channels (Round 2)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "anthropicApi": {
+          "id": "anthropic-account",
+          "name": "Anthropic account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        15620,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const err = $json.error || {};\nconst message = (err.message || JSON.stringify(err) || 'Unknown Claude API error').slice(0, 500);\nreturn [{ json: { requestId: $('Config').first().json.request_id, message } }];"
+      },
+      "id": "claude--revise-channels--round-2--error-extract",
+      "name": "Claude: Revise Channels (Round 2): Extract Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        15880,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.requestId}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'approved' }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "claude--revise-channels--round-2--revert-status",
+      "name": "Claude: Revise Channels (Round 2): Revert Request State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "position": [
+        16140,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('Claude: Revise Channels (Round 2): Extract Error').first().json.requestId, stage: 'channel_adaptation', status: 'failed', detail: `Claude call failed: ${$('Claude: Revise Channels (Round 2): Extract Error').first().json.message}` }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "claude--revise-channels--round-2--log-failed",
+      "name": "Claude: Revise Channels (Round 2): Log Failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "position": [
+        16400,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'claude_failed', detail: $('Claude: Revise Channels (Round 2): Extract Error').first().json.message }) }}"
+      },
+      "id": "claude--revise-channels--round-2--respond-failed",
+      "name": "Claude: Revise Channels (Round 2): Respond Failed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        16660,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const toolUse = $json.content.find(c => c.type === 'tool_use');\nreturn [{ json: toolUse.input.channels || {} }];"
+      },
+      "id": "parse-revise-2",
+      "name": "Parse Revised Channels (Round 2)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        16920,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const channels = $json;\nconst x = channels.x;\nconst posts = x && Array.isArray(x.posts) ? x.posts : [];\nconst overLimit = posts.filter(p => p.length > 280);\nreturn [{ json: { ...channels, x_length_violation: overLimit.length > 0, x_over_limit_count: overLimit.length } }];"
+      },
+      "id": "validate-x-revise-2",
+      "name": "Validate X Length (Round 2)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        17180,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ch = $('Validate X Length (Round 2)').first().json;\nconst requestId = $('Config').first().json.request_id;\nconst version = 3;\nconst rows = [];\nif (ch.linkedin) rows.push({ request_id: requestId, channel: 'linkedin', version, body: ch.linkedin.body_markdown, tone_variant: 'default', chosen: true });\nif (ch.x) rows.push({ request_id: requestId, channel: 'x', version, body: JSON.stringify(ch.x.posts || []), tone_variant: 'default', chosen: true });\nif (ch.newsletter) rows.push({ request_id: requestId, channel: 'newsletter', version, body: JSON.stringify({ subject_line: ch.newsletter.subject_line, body_markdown: ch.newsletter.body_markdown }), tone_variant: 'default', chosen: true });\nreturn [{ json: { rows: JSON.stringify(rows) } }];"
+      },
+      "id": "insert-channel-posts-revise-2-build-rows",
+      "name": "Insert Channel Posts v3: Build Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "notes": "X posts and the newsletter's subject/body pair don't fit a single plain-text `body` column cleanly, so both are stored as JSON-stringified structures in that column; the UI parses them back out by channel.",
+      "position": [
+        17440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/channel_posts",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.rows }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "insert-channel-posts-revise-2",
+      "name": "Insert Channel Posts v3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        17700,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/channel_posts?request_id=eq.{{$('Config').first().json.request_id}}&version=eq.3&select=*",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "fetch-channel-posts-revise-2",
+      "name": "Fetch Channel Posts v3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput",
+      "position": [
+        17960,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const tool = {\"name\":\"evaluate_channel_posts\",\"description\":\"Score each channel's adapted post against the Pass 2 rubric.\",\"input_schema\":{\"type\":\"object\",\"required\":[\"per_channel\"],\"properties\":{\"per_channel\":{\"type\":\"object\",\"description\":\"Keyed by channel name (linkedin/x/newsletter), only for channels that were adapted\",\"additionalProperties\":{\"type\":\"object\",\"required\":[\"overall_score\",\"status\",\"criteria\"],\"properties\":{\"overall_score\":{\"type\":\"integer\"},\"status\":{\"type\":\"string\",\"enum\":[\"pass\",\"revise\",\"reject\"]},\"criteria\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"name\",\"score\",\"max\"],\"properties\":{\"name\":{\"type\":\"string\"},\"score\":{\"type\":\"integer\"},\"max\":{\"type\":\"integer\"},\"notes\":{\"type\":\"string\"}}}},\"weakest_criteria_suggestions\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"hard_block_triggered\":{\"type\":\"boolean\"},\"hard_block_reason\":{\"type\":[\"string\",\"null\"]}}}}}}};\nconst content = `Evaluate each adapted channel post below against the rubric. You have not seen the adaptation reasoning - judge only what's here.\\n\\nRubric: Score each channel's post out of 100 across: Factual Consistency re-verified against the excerpts (20, floor 15 - hard block tier, re-checks the claims survived adaptation unchanged), Tone (25, floor 10), Channel Fit (25, floor 10 - does it genuinely read as native to that platform, not just the article reformatted), Audience Fit re-verified (15, floor 6), Clarity (15, floor 6). Topic Relevance, SEO Fit, and Completeness do not apply post-adaptation - do not score them. If Factual Consistency scores below its floor, hard_block_triggered must be true regardless of the total.\\n\\nOriginal article (for factual comparison):\\n${$('Fetch Approved Section').first().json.body_markdown}\\n\\nGrounded excerpts:\\n${$('Build Adaptation Context').first().json.excerptsTextPlain}\\n\\nAdapted posts to evaluate:\\n${JSON.stringify($('Fetch Channel Posts v3').all().map(i => ({ channel: i.json.channel, body: i.json.body })))}`;\nconst requestBody = JSON.stringify({\n  model: 'claude-opus-5',\n  max_tokens: 3000,\n  tools: [tool],\n  tool_choice: { type: 'tool', name: 'evaluate_channel_posts' },\n  messages: [{ role: 'user', content }]\n});\nreturn [{ json: { requestBody } }];"
+      },
+      "id": "claude-eval-round-2-build-request",
+      "name": "Claude: Evaluate Channels (Round 2): Build Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "notes": "Full Claude request body built in real Code-node JS - n8n's {{ }} expression engine chokes on large inlined JSON tool schemas (Workflow B Error #9).",
+      "position": [
+        18220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.requestBody }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi"
+      },
+      "id": "claude-eval-round-2",
+      "name": "Claude: Evaluate Channels (Round 2)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "anthropicApi": {
+          "id": "anthropic-account",
+          "name": "Anthropic account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        18480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const err = $json.error || {};\nconst message = (err.message || JSON.stringify(err) || 'Unknown Claude API error').slice(0, 500);\nreturn [{ json: { requestId: $('Config').first().json.request_id, message } }];"
+      },
+      "id": "claude--evaluate-channels--round-2--error-extract",
+      "name": "Claude: Evaluate Channels (Round 2): Extract Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        18740,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.requestId}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'approved' }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "claude--evaluate-channels--round-2--revert-status",
+      "name": "Claude: Evaluate Channels (Round 2): Revert Request State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "position": [
+        19000,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('Claude: Evaluate Channels (Round 2): Extract Error').first().json.requestId, stage: 'pass2_evaluation', status: 'failed', detail: `Claude call failed: ${$('Claude: Evaluate Channels (Round 2): Extract Error').first().json.message}` }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "claude--evaluate-channels--round-2--log-failed",
+      "name": "Claude: Evaluate Channels (Round 2): Log Failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "position": [
+        19260,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'claude_failed', detail: $('Claude: Evaluate Channels (Round 2): Extract Error').first().json.message }) }}"
+      },
+      "id": "claude--evaluate-channels--round-2--respond-failed",
+      "name": "Claude: Evaluate Channels (Round 2): Respond Failed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        19520,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const toolUse = $json.content.find(c => c.type === 'tool_use');\nreturn [{ json: toolUse.input }];"
+      },
+      "id": "parse-eval-round-2",
+      "name": "Parse Pass 2 Evaluation (Round 2)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        19780,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const perChannel = $json.per_channel || {};\nconst results = {};\nlet anyReject = false;\nlet allPass = true;\nfor (const [channel, r] of Object.entries(perChannel)) {\n  const c = r.criteria || [];\n  const floor = (name, f) => { const crit = c.find(x => x.name.toLowerCase().includes(name)); return crit ? crit.score < f : false; };\n  const hardBlock = r.hard_block_triggered || floor('factual', 15);\n  let decision;\n  if (channel === 'x' && $('Validate X Length (Round 2)').first().json.x_length_violation) { decision = 'revise'; }\n  else if (hardBlock) { decision = r.overall_score < 60 ? 'reject' : 'revise'; }\n  else if (r.overall_score >= 85) { decision = 'pass'; }\n  else if (r.overall_score >= 60) { decision = 'revise'; }\n  else { decision = 'reject'; }\n  if (decision === 'reject') anyReject = true;\n  if (decision !== 'pass') allPass = false;\n  results[channel] = { ...r, hardBlock, decision };\n}\nconst posts = $('Fetch Channel Posts v3').all().map(i => i.json);\nconst requestId = $('Config').first().json.request_id;\nconst sectionId = $('Fetch Approved Section').first().json.id;\nconst evalRows = Object.entries(results).map(([channel, r]) => {\n  const post = posts.find(p => p.channel === channel);\n  return { request_id: requestId, section_id: sectionId, channel, pass: 'pass_2_channel', content_version: post ? post.version : 1, overall_score: r.overall_score, status: r.decision, criteria: r.criteria, weakest_criteria_suggestions: r.weakest_criteria_suggestions, hard_block_triggered: r.hardBlock, hard_block_reason: r.hard_block_reason };\n});\nreturn [{ json: { perChannel: results, allPass, anyReject, evalRows: JSON.stringify(evalRows) } }];"
+      },
+      "id": "gate-round-2",
+      "name": "Gate (Round 2)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        20040,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/evaluation_results",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.evalRows }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "insert-eval-round-2",
+      "name": "Insert Evaluations (Round 2)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        20300,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{$('Gate (Round 2)').first().json.allPass}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-pass-round-2",
+      "name": "IF All Pass (Round 2)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        20560,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('Config').first().json.request_id}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'ready_to_schedule' }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "mark-ready-round-2",
+      "name": "Mark Ready to Schedule (Round 2)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        20820,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('Config').first().json.request_id, stage: 'pass2_evaluation', status: 'success', detail: 'All channels passed Pass 2 at Round 2.' }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "log-ready-round-2",
+      "name": "Log Event (all pass, Round 2)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        21080,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, status: 'pass' }) }}"
+      },
+      "id": "respond-ready-round-2",
+      "name": "Respond (all pass, Round 2)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        21340,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('Config').first().json.request_id}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'needs_human_attention' }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "mark-cap-round-2",
+      "name": "Mark Needs Attention (cap reached, Round 2)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        21600,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('Config').first().json.request_id, stage: 'pass2_evaluation', status: 'failed', detail: 'Revision cap (2 rounds) reached - at least one channel still not passing Pass 2.' }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "log-cap-round-2",
+      "name": "Log Event (cap reached, Round 2)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        21860,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'revision_cap_reached' }) }}"
+      },
+      "id": "respond-cap-round-2",
+      "name": "Respond (cap reached, Round 2)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        22120,
+        260
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook: Adapt & Evaluate": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pipeline Setup Failure: Extract Error": {
+      "main": [
+        [
+          {
+            "node": "Pipeline Setup Failure: Revert Request State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pipeline Setup Failure: Revert Request State": {
+      "main": [
+        [
+          {
+            "node": "Pipeline Setup Failure: Log Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pipeline Setup Failure: Log Failed": {
+      "main": [
+        [
+          {
+            "node": "Pipeline Setup Failure: Respond Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Request Row": {
+      "main": [
+        [
+          {
+            "node": "Fetch Approved Section",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Fetch Request Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Approved Section": {
+      "main": [
+        [
+          {
+            "node": "Fetch Audience Profile",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Audience Profile": {
+      "main": [
+        [
+          {
+            "node": "Fetch Tone Samples",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Tone Samples": {
+      "main": [
+        [
+          {
+            "node": "Fetch Excerpts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Excerpts": {
+      "main": [
+        [
+          {
+            "node": "Build Adaptation Context",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Adapt to Channels: Build Request": {
+      "main": [
+        [
+          {
+            "node": "Claude: Adapt to Channels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Adaptation Context": {
+      "main": [
+        [
+          {
+            "node": "Claude: Adapt to Channels: Build Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Adapt to Channels": {
+      "main": [
+        [
+          {
+            "node": "Parse Adapted Content",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Claude: Adapt to Channels: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Adapt to Channels: Extract Error": {
+      "main": [
+        [
+          {
+            "node": "Claude: Adapt to Channels: Revert Request State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Adapt to Channels: Revert Request State": {
+      "main": [
+        [
+          {
+            "node": "Claude: Adapt to Channels: Log Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Adapt to Channels: Log Failed": {
+      "main": [
+        [
+          {
+            "node": "Claude: Adapt to Channels: Respond Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Adapted Content": {
+      "main": [
+        [
+          {
+            "node": "Validate X Length",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate X Length": {
+      "main": [
+        [
+          {
+            "node": "Insert Channel Posts v1: Build Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Channel Posts v1": {
+      "main": [
+        [
+          {
+            "node": "Fetch Channel Posts v1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Channel Posts v1: Build Rows": {
+      "main": [
+        [
+          {
+            "node": "Insert Channel Posts v1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Channel Posts v1": {
+      "main": [
+        [
+          {
+            "node": "Claude: Evaluate Channels (Round 0): Build Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Evaluate Channels (Round 0): Build Request": {
+      "main": [
+        [
+          {
+            "node": "Claude: Evaluate Channels (Round 0)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Evaluate Channels (Round 0)": {
+      "main": [
+        [
+          {
+            "node": "Parse Pass 2 Evaluation (Round 0)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Claude: Evaluate Channels (Round 0): Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Evaluate Channels (Round 0): Extract Error": {
+      "main": [
+        [
+          {
+            "node": "Claude: Evaluate Channels (Round 0): Revert Request State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Evaluate Channels (Round 0): Revert Request State": {
+      "main": [
+        [
+          {
+            "node": "Claude: Evaluate Channels (Round 0): Log Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Evaluate Channels (Round 0): Log Failed": {
+      "main": [
+        [
+          {
+            "node": "Claude: Evaluate Channels (Round 0): Respond Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Pass 2 Evaluation (Round 0)": {
+      "main": [
+        [
+          {
+            "node": "Gate (Round 0)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Evaluations (Round 0)": {
+      "main": [
+        [
+          {
+            "node": "IF All Pass (Round 0)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gate (Round 0)": {
+      "main": [
+        [
+          {
+            "node": "Insert Evaluations (Round 0)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Ready to Schedule (Round 0)": {
+      "main": [
+        [
+          {
+            "node": "Log Event (all pass, Round 0)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF All Pass (Round 0)": {
+      "main": [
+        [
+          {
+            "node": "Mark Ready to Schedule (Round 0)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Claude: Revise Channels (Round 1): Build Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Event (all pass, Round 0)": {
+      "main": [
+        [
+          {
+            "node": "Respond (all pass, Round 0)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Revise Channels (Round 1): Build Request": {
+      "main": [
+        [
+          {
+            "node": "Claude: Revise Channels (Round 1)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Revise Channels (Round 1)": {
+      "main": [
+        [
+          {
+            "node": "Parse Revised Channels (Round 1)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Claude: Revise Channels (Round 1): Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Revise Channels (Round 1): Extract Error": {
+      "main": [
+        [
+          {
+            "node": "Claude: Revise Channels (Round 1): Revert Request State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Revise Channels (Round 1): Revert Request State": {
+      "main": [
+        [
+          {
+            "node": "Claude: Revise Channels (Round 1): Log Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Revise Channels (Round 1): Log Failed": {
+      "main": [
+        [
+          {
+            "node": "Claude: Revise Channels (Round 1): Respond Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Revised Channels (Round 1)": {
+      "main": [
+        [
+          {
+            "node": "Validate X Length (Round 1)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate X Length (Round 1)": {
+      "main": [
+        [
+          {
+            "node": "Insert Channel Posts v2: Build Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Channel Posts v2": {
+      "main": [
+        [
+          {
+            "node": "Fetch Channel Posts v2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Channel Posts v2: Build Rows": {
+      "main": [
+        [
+          {
+            "node": "Insert Channel Posts v2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Channel Posts v2": {
+      "main": [
+        [
+          {
+            "node": "Claude: Evaluate Channels (Round 1): Build Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Evaluate Channels (Round 1): Build Request": {
+      "main": [
+        [
+          {
+            "node": "Claude: Evaluate Channels (Round 1)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Evaluate Channels (Round 1)": {
+      "main": [
+        [
+          {
+            "node": "Parse Pass 2 Evaluation (Round 1)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Claude: Evaluate Channels (Round 1): Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Evaluate Channels (Round 1): Extract Error": {
+      "main": [
+        [
+          {
+            "node": "Claude: Evaluate Channels (Round 1): Revert Request State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Evaluate Channels (Round 1): Revert Request State": {
+      "main": [
+        [
+          {
+            "node": "Claude: Evaluate Channels (Round 1): Log Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Evaluate Channels (Round 1): Log Failed": {
+      "main": [
+        [
+          {
+            "node": "Claude: Evaluate Channels (Round 1): Respond Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Pass 2 Evaluation (Round 1)": {
+      "main": [
+        [
+          {
+            "node": "Gate (Round 1)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Evaluations (Round 1)": {
+      "main": [
+        [
+          {
+            "node": "IF All Pass (Round 1)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gate (Round 1)": {
+      "main": [
+        [
+          {
+            "node": "Insert Evaluations (Round 1)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Ready to Schedule (Round 1)": {
+      "main": [
+        [
+          {
+            "node": "Log Event (all pass, Round 1)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF All Pass (Round 1)": {
+      "main": [
+        [
+          {
+            "node": "Mark Ready to Schedule (Round 1)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Claude: Revise Channels (Round 2): Build Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Event (all pass, Round 1)": {
+      "main": [
+        [
+          {
+            "node": "Respond (all pass, Round 1)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Revise Channels (Round 2): Build Request": {
+      "main": [
+        [
+          {
+            "node": "Claude: Revise Channels (Round 2)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Revise Channels (Round 2)": {
+      "main": [
+        [
+          {
+            "node": "Parse Revised Channels (Round 2)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Claude: Revise Channels (Round 2): Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Revise Channels (Round 2): Extract Error": {
+      "main": [
+        [
+          {
+            "node": "Claude: Revise Channels (Round 2): Revert Request State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Revise Channels (Round 2): Revert Request State": {
+      "main": [
+        [
+          {
+            "node": "Claude: Revise Channels (Round 2): Log Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Revise Channels (Round 2): Log Failed": {
+      "main": [
+        [
+          {
+            "node": "Claude: Revise Channels (Round 2): Respond Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Revised Channels (Round 2)": {
+      "main": [
+        [
+          {
+            "node": "Validate X Length (Round 2)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate X Length (Round 2)": {
+      "main": [
+        [
+          {
+            "node": "Insert Channel Posts v3: Build Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Channel Posts v3": {
+      "main": [
+        [
+          {
+            "node": "Fetch Channel Posts v3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Channel Posts v3: Build Rows": {
+      "main": [
+        [
+          {
+            "node": "Insert Channel Posts v3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Channel Posts v3": {
+      "main": [
+        [
+          {
+            "node": "Claude: Evaluate Channels (Round 2): Build Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Evaluate Channels (Round 2): Build Request": {
+      "main": [
+        [
+          {
+            "node": "Claude: Evaluate Channels (Round 2)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Evaluate Channels (Round 2)": {
+      "main": [
+        [
+          {
+            "node": "Parse Pass 2 Evaluation (Round 2)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Claude: Evaluate Channels (Round 2): Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Evaluate Channels (Round 2): Extract Error": {
+      "main": [
+        [
+          {
+            "node": "Claude: Evaluate Channels (Round 2): Revert Request State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Evaluate Channels (Round 2): Revert Request State": {
+      "main": [
+        [
+          {
+            "node": "Claude: Evaluate Channels (Round 2): Log Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Evaluate Channels (Round 2): Log Failed": {
+      "main": [
+        [
+          {
+            "node": "Claude: Evaluate Channels (Round 2): Respond Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Pass 2 Evaluation (Round 2)": {
+      "main": [
+        [
+          {
+            "node": "Gate (Round 2)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Evaluations (Round 2)": {
+      "main": [
+        [
+          {
+            "node": "IF All Pass (Round 2)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gate (Round 2)": {
+      "main": [
+        [
+          {
+            "node": "Insert Evaluations (Round 2)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Ready to Schedule (Round 2)": {
+      "main": [
+        [
+          {
+            "node": "Log Event (all pass, Round 2)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF All Pass (Round 2)": {
+      "main": [
+        [
+          {
+            "node": "Mark Ready to Schedule (Round 2)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Needs Attention (cap reached, Round 2)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Event (all pass, Round 2)": {
+      "main": [
+        [
+          {
+            "node": "Respond (all pass, Round 2)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Needs Attention (cap reached, Round 2)": {
+      "main": [
+        [
+          {
+            "node": "Log Event (cap reached, Round 2)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Event (cap reached, Round 2)": {
+      "main": [
+        [
+          {
+            "node": "Respond (cap reached, Round 2)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

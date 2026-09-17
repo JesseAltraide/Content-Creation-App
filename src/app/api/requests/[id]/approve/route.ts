@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logEvent } from "@/lib/events";
+import { triggerAdaptAndEvaluate } from "@/lib/n8n";
 
 // Hard rule (Decision #36, PRD test #5): approving content for which no passing
 // evaluation record exists is blocked at the state-transition level, not just hidden
@@ -48,9 +49,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     );
   }
 
+  // Goes straight to 'adapting', not a separate 'approved' resting state - approving
+  // is what triggers Workflow D immediately (week4-full-flow.md: "Human approves the
+  // article" is Workflow D's trigger, not a distinct manual step after approval).
   const { data: updatedRequest, error: transitionError } = await admin
     .from("requests")
-    .update({ status: "approved" })
+    .update({ status: "adapting" })
     .eq("id", requestId)
     .eq("status", "pending_approval")
     .select()
@@ -63,12 +67,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     );
   }
 
+  // Approval is the point of no return for this article (week4-full-flow.md: "once
+  // adaptation is triggered, the article locks permanently"). Locking here, not just
+  // relying on requests.status having moved past pending_approval/needs_human_attention,
+  // gives a second, schema-level guarantee against ever regenerating an approved
+  // article's body - defense in depth, not just a UI-level gate.
+  await admin
+    .from("sections")
+    .update({ locked: true })
+    .eq("id", latestSection.id);
+
   await logEvent({
     requestId,
     stage: "approval",
     status: "success",
     detail: "Article approved.",
   });
+
+  await triggerAdaptAndEvaluate(requestId);
 
   return NextResponse.json({ ok: true });
 }

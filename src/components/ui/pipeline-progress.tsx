@@ -10,7 +10,27 @@ const STAGES = [
 
 type StageKey = (typeof STAGES)[number]["key"];
 
-function resolveStage(status: string): { current: StageKey; blocked: boolean } {
+// A stage the most recent event happened in, used only to place needs_human_attention
+// on the right step - the request_status enum has no equivalent for "attention
+// needed while adapting" the way it does for "researching" vs "generating", so the
+// blocked stage has to come from event_log's stage field instead.
+const EVENT_STAGE_TO_PIPELINE_STAGE: Record<string, StageKey> = {
+  research_search_trigger: "research",
+  scrape_and_propose_trigger: "research",
+  angle_proposal: "angle",
+  excerpt_selection: "draft",
+  generation: "draft",
+  evaluation: "draft",
+  revision: "draft",
+  regeneration_setup: "draft",
+  channel_adaptation: "adapt",
+  pass2_evaluation: "adapt",
+};
+
+function resolveStage(
+  status: string,
+  blockedEventStage?: string
+): { current: StageKey; blocked: boolean } {
   switch (status) {
     case "draft":
     case "researching":
@@ -29,9 +49,10 @@ function resolveStage(status: string): { current: StageKey; blocked: boolean } {
     case "ready_to_schedule":
       return { current: "schedule", blocked: false };
     case "needs_human_attention":
-      // Blocked mid-research/angle is the only case built so far; refine once
-      // later stages exist and can themselves report needs_human_attention.
-      return { current: "research", blocked: true };
+      return {
+        current: (blockedEventStage && EVENT_STAGE_TO_PIPELINE_STAGE[blockedEventStage]) || "research",
+        blocked: true,
+      };
     case "rejected":
       return { current: "draft", blocked: true };
     default:
@@ -39,8 +60,16 @@ function resolveStage(status: string): { current: StageKey; blocked: boolean } {
   }
 }
 
-export function PipelineProgress({ status, failed = false }: { status: string; failed?: boolean }) {
-  const { current, blocked: statusBlocked } = resolveStage(status);
+export function PipelineProgress({
+  status,
+  failed = false,
+  blockedEventStage,
+}: {
+  status: string;
+  failed?: boolean;
+  blockedEventStage?: string;
+}) {
+  const { current, blocked: statusBlocked } = resolveStage(status, blockedEventStage);
   const blocked = statusBlocked || failed;
   const currentIndex = STAGES.findIndex((s) => s.key === current);
 

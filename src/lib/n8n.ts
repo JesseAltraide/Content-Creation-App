@@ -68,6 +68,13 @@ export function triggerGenerateAndEvaluate(requestId: string, angleId: string) {
 // re-runs generation + Pass 1 evaluation only (Workflow C, not the internal
 // capped auto-revision loop). priorStatus lets the workflow revert to wherever
 // the request actually started from on a Claude failure, not a hardcoded value.
+// Human approved the article — adapt it into per-channel posts (LinkedIn/X/
+// newsletter) and run the Pass 2 evaluation. Workflow D fetches everything else
+// itself from the request_id, same as every other workflow trigger here.
+export function triggerAdaptAndEvaluate(requestId: string) {
+  return pingWebhook("wf-d-adapt-evaluate", { request_id: requestId }, requestId, "adapt_and_evaluate_trigger");
+}
+
 export function triggerRegenerate(
   requestId: string,
   comment: string,

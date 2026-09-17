@@ -98,7 +98,11 @@ export default async function RequestDetailPage({
       </div>
 
       <Card className="mt-6 p-5">
-        <PipelineProgress status={req.status} failed={canRetry || angleAttemptFailed} />
+        <PipelineProgress
+          status={req.status}
+          failed={canRetry || angleAttemptFailed}
+          blockedEventStage={needsAttention ? latestEvent!.stage : undefined}
+        />
       </Card>
 
       <Card className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 p-5 text-sm">
