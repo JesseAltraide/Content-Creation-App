@@ -1,0 +1,1264 @@
+{
+  "name": "Content Agent — Workflow E (Channel Edit Triage)",
+  "meta": {
+    "notes": "Triggered when a human saves a manual edit to a channel post (never the article - it's locked permanently once adaptation runs). Diffs the edit against the last fully-evaluated version, applies mechanical pre-filters (numeral change, removed excerpt-cited sentence, whole sentence added/removed, >15% edit distance) that force full re-evaluation regardless, and only sends the ambiguous remainder to a cheap Haiku classification biased toward 'substantive'. Grammatical edits save in place; substantive edits run the same Pass 2 rubric Workflow D uses (never a lighter check) and hard-block on a floor failure without saving anything. SECRETS: Supabase API and Anthropic credentials - map both on import, and check every node's credential individually (Errors #10/#83-88 in week4-progress.md - import doesn't always propagate to every node)."
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "path": "wf-e-edit-triage",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Webhook: Edit Triage",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: {\n  request_id: $json.body.request_id,\n  channel: $json.body.channel,\n  edited_body: $json.body.edited_body,\n  SUPABASE_URL: 'https://klblroceyiirhaxaqflq.supabase.co'\n} }];"
+      },
+      "id": "config",
+      "name": "Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "onError": "continueErrorOutput",
+      "notes": "Non-secret config only. Supabase/Anthropic secrets live in n8n Credentials.",
+      "position": [
+        20,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const err = $json.error || {};\nconst message = (err.message || JSON.stringify(err) || 'Unknown error').slice(0, 500);\nreturn [{ json: { requestId: $('Config').first().json.request_id, message } }];"
+      },
+      "id": "failure-error-extract",
+      "name": "Triage Failure: Extract Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        280,
+        -580
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('Triage Failure: Extract Error').first().json.requestId, stage: 'edit_triage', status: 'failed', detail: `Edit triage failed: ${$('Triage Failure: Extract Error').first().json.message}` }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "failure-log",
+      "name": "Triage Failure: Log Failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "position": [
+        540,
+        -580
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'triage_failed', detail: $('Triage Failure: Extract Error').first().json.message }) }}"
+      },
+      "id": "failure-respond",
+      "name": "Triage Failure: Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        800,
+        -580
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('Config').first().json.request_id}}&select=*",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "fetch-request",
+      "name": "Fetch Request Row",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput",
+      "position": [
+        1060,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/channel_posts?request_id=eq.{{$('Config').first().json.request_id}}&channel=eq.{{$('Config').first().json.channel}}&chosen=eq.true&order=version.desc&limit=1&select=*",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "fetch-current-post",
+      "name": "Fetch Current Channel Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput",
+      "position": [
+        1320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/evaluation_results?request_id=eq.{{$('Config').first().json.request_id}}&channel=eq.{{$('Config').first().json.channel}}&pass=eq.pass_2_channel&order=content_version.desc&limit=1&select=*",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "fetch-last-eval",
+      "name": "Fetch Last Evaluation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput",
+      "position": [
+        1580,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/channel_posts?request_id=eq.{{$('Config').first().json.request_id}}&channel=eq.{{$('Config').first().json.channel}}&version=eq.{{$('Fetch Last Evaluation').first().json.content_version}}&select=*",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "fetch-anchor-post",
+      "name": "Fetch Anchor Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput",
+      "position": [
+        1840,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/excerpts?request_id=eq.{{$('Config').first().json.request_id}}&select=id,text,reason,source_id",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "fetch-excerpts",
+      "name": "Fetch Excerpts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput",
+      "position": [
+        2100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function words(s) { return (s || '').trim().split(/\\s+/).filter(Boolean); }\nfunction sentences(s) { return (s || '').split(/(?<=[.!?])\\s+/).map(x => x.trim()).filter(Boolean); }\nfunction lcsLength(a, b) {\n  const dp = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));\n  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) {\n    dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1]);\n  }\n  return dp[a.length][b.length];\n}\nconst anchorRows = $('Fetch Anchor Post').all().filter(i => i.json && i.json.id);\nconst currentRow = $('Fetch Current Channel Post').first().json;\nconst anchorText = anchorRows.length ? anchorRows[0].json.body : (currentRow.body || '');\nconst editedText = $('Config').first().json.edited_body;\nconst oldWords = words(anchorText);\nconst newWords = words(editedText);\nconst lcs = lcsLength(oldWords, newWords);\nconst editRatio = oldWords.length + newWords.length === 0 ? 0 : 1 - (2 * lcs) / (oldWords.length + newWords.length);\nconst oldNumerals = new Set((anchorText.match(/\\d+(\\.\\d+)?%?/g) || []));\nconst newNumerals = new Set((editedText.match(/\\d+(\\.\\d+)?%?/g) || []));\nconst numeralsChanged = oldNumerals.size !== newNumerals.size || [...oldNumerals].some(n => !newNumerals.has(n));\nconst oldSentences = sentences(anchorText);\nconst newSentenceSet = new Set(sentences(editedText));\nconst removedSentences = oldSentences.filter(s => !newSentenceSet.has(s));\nconst citationSentenceChanged = removedSentences.some(s => s.includes('[Source: excerpt'));\nconst wholeSentenceChanged = removedSentences.length > 0 || newSentenceSet.size !== oldSentences.length;\nconst mechanicalEscalate = numeralsChanged || citationSentenceChanged || wholeSentenceChanged || editRatio > 0.15;\nreturn [{ json: { anchorText, editedText, editRatio, numeralsChanged, citationSentenceChanged, wholeSentenceChanged, mechanicalEscalate, hasAnyEvaluation: anchorRows.length > 0 } }];"
+      },
+      "id": "compute-diff",
+      "name": "Compute Diff",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "onError": "continueErrorOutput",
+      "notes": "Word-diff ratio uses the same 1 - 2*LCS/(lenA+lenB) metric as Python's difflib.SequenceMatcher.ratio. Mechanical pre-filters (numeral change, a removed excerpt-cited sentence, any whole sentence added/removed, or >15% edit distance) force full re-evaluation regardless of what Haiku would say - these are the project's own judgment calls on what 'numerals changed' / 'excerpt-cited sentence changed' / 'whole sentence added or removed' concretely mean, since the source docs describe the categories but not exact detection logic.",
+      "position": [
+        2360,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{$json.mechanicalEscalate}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-mechanical-escalate",
+      "name": "IF Mechanical Escalate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2620,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const tool = {\"name\":\"classify_edit\",\"description\":\"Classify whether an edit to a piece of content is purely grammatical/stylistic or substantive (changes meaning, claims, or tone).\",\"input_schema\":{\"type\":\"object\",\"required\":[\"classification\"],\"properties\":{\"classification\":{\"type\":\"string\",\"enum\":[\"grammatical\",\"substantive\"]},\"reason\":{\"type\":\"string\"}}}};\nconst content = `An editor changed a piece of published content. Classify the edit as 'grammatical' (spelling, punctuation, word choice, sentence structure with no change in meaning, claims, or tone) or 'substantive' (changes what's being claimed, adds/removes information, shifts tone or emphasis). If genuinely unsure, classify as 'substantive' - treating an ambiguous edit as needing review is the safe default, silently skipping review on a real content change is not.\\n\\nOriginal:\\n${$('Compute Diff').first().json.anchorText}\\n\\nEdited:\\n${$('Compute Diff').first().json.editedText}`;\nconst requestBody = JSON.stringify({\n  model: 'claude-haiku-4-5-20251001',\n  max_tokens: 500,\n  tools: [tool],\n  tool_choice: { type: 'tool', name: 'classify_edit' },\n  messages: [{ role: 'user', content }]\n});\nreturn [{ json: { requestBody } }];"
+      },
+      "id": "claude-triage-build-request",
+      "name": "Claude: Classify Edit: Build Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "onError": "continueErrorOutput",
+      "notes": "Full Claude request body built in real Code-node JS - n8n's {{ }} expression engine chokes on large inlined JSON tool schemas (Workflow B Error #9).",
+      "position": [
+        2880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.requestBody }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi"
+      },
+      "id": "claude-triage",
+      "name": "Claude: Classify Edit",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "anthropicApi": {
+          "id": "anthropic-account",
+          "name": "Anthropic account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        3140,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const toolUse = $json.content.find(c => c.type === 'tool_use');\nconst classification = toolUse && toolUse.input && toolUse.input.classification === 'grammatical' ? 'grammatical' : 'substantive';\nreturn [{ json: { classification } }];"
+      },
+      "id": "parse-triage",
+      "name": "Parse Triage Classification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "onError": "continueErrorOutput",
+      "position": [
+        3400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{$json.classification}}",
+              "rightValue": "grammatical",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-grammatical",
+      "name": "IF Grammatical",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/channel_posts?id=eq.{{$('Fetch Current Channel Post').first().json.id}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ body: $('Config').first().json.edited_body }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "save-in-place",
+      "name": "Update Post In Place",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        3920,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('Config').first().json.request_id, stage: 'edit_triage', status: 'success', detail: `Edit to ${$('Config').first().json.channel} classified as grammatical - saved without re-evaluation.` }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "log-grammatical",
+      "name": "Log Event (grammatical)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        4180,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, escalated: false }) }}"
+      },
+      "id": "respond-grammatical",
+      "name": "Respond (grammatical)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        4440,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const tool = {\"name\":\"evaluate_channel_post\",\"description\":\"Score this single channel post against the Pass 2 rubric.\",\"input_schema\":{\"type\":\"object\",\"required\":[\"overall_score\",\"status\",\"criteria\"],\"properties\":{\"overall_score\":{\"type\":\"integer\"},\"status\":{\"type\":\"string\",\"enum\":[\"pass\",\"revise\",\"reject\"]},\"criteria\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"name\",\"score\",\"max\"],\"properties\":{\"name\":{\"type\":\"string\"},\"score\":{\"type\":\"integer\"},\"max\":{\"type\":\"integer\"},\"notes\":{\"type\":\"string\"}}}},\"weakest_criteria_suggestions\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"hard_block_triggered\":{\"type\":\"boolean\"},\"hard_block_reason\":{\"type\":[\"string\",\"null\"]}}}};\nconst content = `Evaluate this edited channel post against the rubric. You have not seen the edit reasoning - judge only what's here.\\n\\nRubric: Score out of 100 across: Factual Consistency re-verified against the excerpts (20, floor 15 - hard block tier), Tone (25, floor 10), Channel Fit (25, floor 10 - does it genuinely read as native to that platform), Audience Fit re-verified (15, floor 6), Clarity (15, floor 6). Topic Relevance, SEO Fit, and Completeness do not apply post-adaptation. If Factual Consistency scores below its floor, hard_block_triggered must be true regardless of the total.\\n\\nChannel: ${$('Config').first().json.channel}\\n\\nEdited post:\\n${$('Compute Diff').first().json.editedText}\\n\\nGrounded excerpts it should stay consistent with:\\n${$('Fetch Excerpts').all().filter(i => i.json && i.json.id).map((i, idx) => `[${idx}] Source: ${i.json.source_id}\\n${i.json.text}`).join('\\n\\n')}`;\nconst requestBody = JSON.stringify({\n  model: 'claude-opus-5',\n  max_tokens: 3000,\n  tools: [tool],\n  tool_choice: { type: 'tool', name: 'evaluate_channel_post' },\n  messages: [{ role: 'user', content }]\n});\nreturn [{ json: { requestBody } }];"
+      },
+      "id": "claude-eval-edit-build-request",
+      "name": "Claude: Evaluate Edited Post: Build Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "onError": "continueErrorOutput",
+      "notes": "Full Claude request body built in real Code-node JS - n8n's {{ }} expression engine chokes on large inlined JSON tool schemas (Workflow B Error #9).",
+      "position": [
+        4700,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.requestBody }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi"
+      },
+      "id": "claude-eval-edit",
+      "name": "Claude: Evaluate Edited Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "anthropicApi": {
+          "id": "anthropic-account",
+          "name": "Anthropic account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        4960,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const toolUse = $json.content.find(c => c.type === 'tool_use');\nreturn [{ json: toolUse.input }];"
+      },
+      "id": "parse-eval-edit",
+      "name": "Parse Edited Evaluation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "onError": "continueErrorOutput",
+      "position": [
+        5220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $json;\nconst c = r.criteria || [];\nconst floor = (name, f) => { const crit = c.find(x => x.name.toLowerCase().includes(name)); return crit ? crit.score < f : false; };\nconst hardBlock = r.hard_block_triggered || floor('factual', 15);\nreturn [{ json: { ...r, hardBlock } }];"
+      },
+      "id": "gate-edit",
+      "name": "Gate Edited Evaluation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "onError": "continueErrorOutput",
+      "position": [
+        5480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{$json.hardBlock}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-hard-block",
+      "name": "IF Hard Block",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        5740,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('Config').first().json.request_id, stage: 'edit_triage', status: 'failed', detail: `Edit to ${$('Config').first().json.channel} blocked: ${$('Gate Edited Evaluation').first().json.hard_block_reason || 'a critical criterion fell below its floor'}.` }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "log-hard-block",
+      "name": "Log Event (hard block)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        6000,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'hard_block', detail: $('Gate Edited Evaluation').first().json.hard_block_reason, criteria: $('Gate Edited Evaluation').first().json.criteria }) }}"
+      },
+      "id": "respond-hard-block",
+      "name": "Respond (hard block)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        6260,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/channel_posts?request_id=eq.{{$('Config').first().json.request_id}}&channel=eq.{{$('Config').first().json.channel}}&chosen=eq.true",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chosen: false }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "unchoose-old",
+      "name": "Unchoose Previous Version",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        6520,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const current = $('Fetch Current Channel Post').first().json;\nreturn [{ json: { row: JSON.stringify({ request_id: $('Config').first().json.request_id, channel: $('Config').first().json.channel, version: current.version + 1, body: $('Config').first().json.edited_body, tone_variant: current.tone_variant, chosen: true }) } }];"
+      },
+      "id": "build-new-version-row",
+      "name": "Build New Version Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "onError": "continueErrorOutput",
+      "position": [
+        6780,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/channel_posts",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.row }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "insert-new-version",
+      "name": "Insert New Version",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        7040,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/evaluation_results",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('Config').first().json.request_id, section_id: null, channel: $('Config').first().json.channel, pass: 'pass_2_channel', content_version: $('Insert New Version').first().json.version, overall_score: $('Gate Edited Evaluation').first().json.overall_score, status: $('Gate Edited Evaluation').first().json.status, criteria: $('Gate Edited Evaluation').first().json.criteria, weakest_criteria_suggestions: $('Gate Edited Evaluation').first().json.weakest_criteria_suggestions, hard_block_triggered: $('Gate Edited Evaluation').first().json.hardBlock, hard_block_reason: $('Gate Edited Evaluation').first().json.hard_block_reason }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "insert-edit-eval",
+      "name": "Insert Evaluation (edit)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        7300,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('Config').first().json.request_id, stage: 'edit_triage', status: 'success', detail: `Edit to ${$('Config').first().json.channel} re-evaluated: ${$('Gate Edited Evaluation').first().json.overall_score}/100 (${$('Gate Edited Evaluation').first().json.status}).` }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "log-substantive",
+      "name": "Log Event (substantive)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        7560,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, escalated: true, score: $('Gate Edited Evaluation').first().json.overall_score, status: $('Gate Edited Evaluation').first().json.status }) }}"
+      },
+      "id": "respond-substantive",
+      "name": "Respond (substantive)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        7820,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Fetch Request Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Triage Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook: Edit Triage": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Triage Failure: Extract Error": {
+      "main": [
+        [
+          {
+            "node": "Triage Failure: Log Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Triage Failure: Log Failed": {
+      "main": [
+        [
+          {
+            "node": "Triage Failure: Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Request Row": {
+      "main": [
+        [
+          {
+            "node": "Fetch Current Channel Post",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Triage Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Current Channel Post": {
+      "main": [
+        [
+          {
+            "node": "Fetch Last Evaluation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Triage Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Last Evaluation": {
+      "main": [
+        [
+          {
+            "node": "Fetch Anchor Post",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Triage Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Anchor Post": {
+      "main": [
+        [
+          {
+            "node": "Fetch Excerpts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Triage Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Excerpts": {
+      "main": [
+        [
+          {
+            "node": "Compute Diff",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Triage Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Diff": {
+      "main": [
+        [
+          {
+            "node": "IF Mechanical Escalate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Triage Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Classify Edit: Build Request": {
+      "main": [
+        [
+          {
+            "node": "Claude: Classify Edit",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Triage Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Classify Edit": {
+      "main": [
+        [
+          {
+            "node": "Parse Triage Classification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Triage Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Mechanical Escalate": {
+      "main": [
+        [
+          {
+            "node": "Claude: Evaluate Edited Post: Build Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Claude: Classify Edit: Build Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Triage Classification": {
+      "main": [
+        [
+          {
+            "node": "IF Grammatical",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Triage Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Post In Place": {
+      "main": [
+        [
+          {
+            "node": "Log Event (grammatical)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Triage Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Grammatical": {
+      "main": [
+        [
+          {
+            "node": "Update Post In Place",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Claude: Evaluate Edited Post: Build Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Event (grammatical)": {
+      "main": [
+        [
+          {
+            "node": "Respond (grammatical)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Triage Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Evaluate Edited Post: Build Request": {
+      "main": [
+        [
+          {
+            "node": "Claude: Evaluate Edited Post",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Triage Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Evaluate Edited Post": {
+      "main": [
+        [
+          {
+            "node": "Parse Edited Evaluation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Triage Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Edited Evaluation": {
+      "main": [
+        [
+          {
+            "node": "Gate Edited Evaluation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Triage Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gate Edited Evaluation": {
+      "main": [
+        [
+          {
+            "node": "IF Hard Block",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Triage Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Event (hard block)": {
+      "main": [
+        [
+          {
+            "node": "Respond (hard block)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Triage Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Hard Block": {
+      "main": [
+        [
+          {
+            "node": "Log Event (hard block)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unchoose Previous Version",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unchoose Previous Version": {
+      "main": [
+        [
+          {
+            "node": "Build New Version Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Triage Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build New Version Row": {
+      "main": [
+        [
+          {
+            "node": "Insert New Version",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Triage Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert New Version": {
+      "main": [
+        [
+          {
+            "node": "Insert Evaluation (edit)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Triage Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Evaluation (edit)": {
+      "main": [
+        [
+          {
+            "node": "Log Event (substantive)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Triage Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Event (substantive)": {
+      "main": [
+        [
+          {
+            "node": "Respond (substantive)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Triage Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
