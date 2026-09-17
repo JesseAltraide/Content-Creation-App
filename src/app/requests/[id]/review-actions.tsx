@@ -24,51 +24,53 @@ export default function ReviewActions({
   const [comment, setComment] = useState("");
   const attemptsLeft = REGENERATION_CAP - regenerationCount;
 
-  async function handleApprove() {
+  // A failure response isn't guaranteed to be JSON (e.g. a transient 404/502 from
+  // the platform itself, not our route) - res.json() throwing on that would leave
+  // `submitting` stuck true forever with no error shown, the button spinning
+  // indefinitely with no way to tell the user went wrong or retry. Parse
+  // defensively and always clear `submitting` in a finally.
+  async function submit(path: string, options: RequestInit) {
     setSubmitting(true);
     setError(null);
-    const res = await fetch(`/api/requests/${requestId}/approve`, { method: "POST" });
-    const body = await res.json();
-    setSubmitting(false);
-    if (!res.ok) {
-      setError(body.error ?? "Something went wrong.");
-      return;
+    try {
+      const res = await fetch(`/api/requests/${requestId}/${path}`, options);
+      if (!res.ok) {
+        let message = `Request failed (${res.status}).`;
+        try {
+          const body = await res.json();
+          message = body.error ?? message;
+        } catch {
+          // non-JSON error body - keep the generic status-based message
+        }
+        setError(message);
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error - please try again.");
+    } finally {
+      setSubmitting(false);
     }
-    router.refresh();
   }
 
-  async function handleRegenerate() {
-    setSubmitting(true);
-    setError(null);
-    const res = await fetch(`/api/requests/${requestId}/regenerate`, {
+  function handleApprove() {
+    return submit("approve", { method: "POST" });
+  }
+
+  function handleRegenerate() {
+    return submit("regenerate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ comment }),
     });
-    const body = await res.json();
-    setSubmitting(false);
-    if (!res.ok) {
-      setError(body.error ?? "Something went wrong.");
-      return;
-    }
-    router.refresh();
   }
 
-  async function handleReject() {
-    setSubmitting(true);
-    setError(null);
-    const res = await fetch(`/api/requests/${requestId}/reject`, {
+  function handleReject() {
+    return submit("reject", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reason }),
     });
-    const body = await res.json();
-    setSubmitting(false);
-    if (!res.ok) {
-      setError(body.error ?? "Something went wrong.");
-      return;
-    }
-    router.refresh();
   }
 
   if (regenerating) {
