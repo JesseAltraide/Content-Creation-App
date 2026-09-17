@@ -14,6 +14,7 @@ import BackToAngleSelectionButton from "./back-to-angle-selection-button";
 import ArticleReview from "./article-review";
 import ChannelPostsReview from "./channel-posts-review";
 import PublishingQueue from "./publishing-queue";
+import WorkingBanner from "./working-banner";
 
 const SOURCE_STATUS_STYLES: Record<string, string> = {
   scraped: "bg-success-soft text-success",
@@ -138,6 +139,8 @@ export default async function RequestDetailPage({
           blockedEventStage={needsAttention ? latestFailedEvent!.stage : undefined}
         />
       </Card>
+
+      <WorkingBanner status={req.status} />
 
       <Card className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 p-5 text-sm">
         <dt className="text-muted">Path</dt>

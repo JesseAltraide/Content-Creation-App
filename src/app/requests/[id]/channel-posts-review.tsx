@@ -101,15 +101,10 @@ export default function ChannelPostsReview({
 
       {isAdapting && (
         <Card className="mt-2 p-5">
-          <p className="text-sm text-foreground">
-            Adapting to channels and running Pass 2 evaluation — this can take a couple of
-            minutes across revision rounds, since it's writing for all three channels at once.
-            Refresh to check progress.
-          </p>
-          <p className="mt-2 text-xs text-muted">
+          <p className="text-sm text-muted">
             If the technical log below shows a &ldquo;responded 524&rdquo; entry, that&apos;s just
-            a connection timeout on our end — the work keeps running regardless. Wait a bit longer
-            and refresh again rather than assuming it failed.
+            a connection timeout on our end — the work keeps running regardless of what that
+            entry says on its own (see the working indicator above).
           </p>
         </Card>
       )}
