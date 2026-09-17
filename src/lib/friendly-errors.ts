@@ -8,6 +8,7 @@ const STAGE_MESSAGES: Record<string, string> = {
   generation: "Writing the article failed. Pick the angle again to retry.",
   evaluation: "Evaluating the draft failed. Pick the angle again to retry.",
   revision: "Revising the draft failed. Pick the angle again to retry.",
+  channel_adaptation: "Adapting to channels failed. Retry adaptation below.",
 };
 
 export function friendlyStageMessage(stage: string): string {
@@ -39,6 +40,13 @@ export function explainNeedsAttention(stage: string, detail: string | null) {
     return {
       why,
       action: "Try a different idea, or add sources that more directly support this one.",
+    };
+  }
+  if (stage === "pass2_evaluation") {
+    return {
+      why,
+      action:
+        "At least one channel post couldn't pass Pass 2 evaluation even after revision. Reject and start channel adaptation over, or accept the current draft manually if it's close enough.",
     };
   }
   return { why, action: "Review the technical log below for the exact reason, then decide how to proceed." };

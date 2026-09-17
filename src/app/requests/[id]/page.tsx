@@ -12,6 +12,7 @@ import { friendlyStageMessage, explainNeedsAttention } from "@/lib/friendly-erro
 import SelectAngleButton from "./select-angle-button";
 import BackToAngleSelectionButton from "./back-to-angle-selection-button";
 import ArticleReview from "./article-review";
+import ChannelPostsReview from "./channel-posts-review";
 
 const SOURCE_STATUS_STYLES: Record<string, string> = {
   scraped: "bg-success-soft text-success",
@@ -67,6 +68,19 @@ export default async function RequestDetailPage({
     .from("excerpts")
     .select("*")
     .eq("request_id", id);
+
+  const { data: channelPosts } = await supabase
+    .from("channel_posts")
+    .select("*")
+    .eq("request_id", id)
+    .order("version");
+
+  const { data: pass2Evaluations } = await supabase
+    .from("evaluation_results")
+    .select("*")
+    .eq("request_id", id)
+    .eq("pass", "pass_2_channel")
+    .order("content_version");
 
   const sourceUrlsById = Object.fromEntries((sources ?? []).map((s) => [s.id, s.url]));
 
@@ -215,6 +229,14 @@ export default async function RequestDetailPage({
         evaluations={evaluations ?? []}
         excerpts={excerpts ?? []}
         sourceUrlsById={sourceUrlsById}
+      />
+
+      <ChannelPostsReview
+        requestId={id}
+        requestStatus={req.status}
+        latestEvent={latestEvent}
+        channelPosts={channelPosts ?? []}
+        evaluations={pass2Evaluations ?? []}
       />
 
       {sources && sources.length > 0 && (

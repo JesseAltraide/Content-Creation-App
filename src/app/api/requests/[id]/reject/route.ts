@@ -32,17 +32,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const admin = createAdminClient();
 
+  // Allowed from needs_human_attention too, not just pending_approval - a Pass 2
+  // cap-reached dead end (Workflow D) deserves the same "give up on this, with a
+  // reason" escape hatch as a Pass 1 one always has.
   const { data: updatedRequest, error: transitionError } = await admin
     .from("requests")
     .update({ status: "rejected" })
     .eq("id", requestId)
-    .eq("status", "pending_approval")
+    .in("status", ["pending_approval", "needs_human_attention"])
     .select()
     .single();
 
   if (transitionError || !updatedRequest) {
     return NextResponse.json(
-      { error: "This request is not pending approval (already progressed, or refresh to see the latest)." },
+      { error: "This request is not awaiting review (already progressed, or refresh to see the latest)." },
       { status: 409 }
     );
   }
