@@ -48,10 +48,7 @@ export default function ChannelPostsReview({
   const failedSetup = requestStatus === "approved" && latestEvent?.status === "failed";
   if (channelPosts.length === 0 && !isAdapting && !failedSetup) return null;
 
-  // Only the chosen variant per channel, at its latest version - a channel could in
-  // principle have more than one tone_variant row once the alternate-tone action
-  // exists, but that's not built yet (Decision #66/#78), so "chosen" is always the
-  // only row per channel today.
+  // Only the chosen variant per channel, at its latest version.
   const latestByChannel = new Map<string, ChannelPost>();
   for (const post of channelPosts) {
     if (!post.chosen) continue;
@@ -65,6 +62,22 @@ export default function ChannelPostsReview({
     if (!ev.channel) continue;
     const post = latestByChannel.get(ev.channel);
     if (post && ev.content_version === post.version) evalByChannel.set(ev.channel, ev);
+  }
+
+  // A not-yet-chosen row at a higher version than the current chosen one is a
+  // pending alternate tone awaiting a human pick (see generate-alternate-tone/
+  // select-tone-variant routes) - at most one per channel by construction.
+  const alternateByChannel = new Map<string, ChannelPost>();
+  for (const post of channelPosts) {
+    if (post.chosen) continue;
+    const chosen = latestByChannel.get(post.channel);
+    if (chosen && post.version > chosen.version) alternateByChannel.set(post.channel, post);
+  }
+  const alternateEvalByChannel = new Map<string, EvalResult>();
+  for (const ev of evaluations) {
+    if (!ev.channel) continue;
+    const alt = alternateByChannel.get(ev.channel);
+    if (alt && ev.content_version === alt.version) alternateEvalByChannel.set(ev.channel, ev);
   }
 
   // The generic needs_human_attention banner (with the why/action explanation) is
@@ -120,15 +133,19 @@ export default function ChannelPostsReview({
       )}
 
       <div className="mt-4 flex flex-col gap-4">
-        {latestPosts.map((post) => (
-          <ChannelPostCard
-            key={post.id}
-            requestId={requestId}
-            channel={post.channel}
-            body={post.body}
-            evaluation={evalByChannel.get(post.channel)}
-          />
-        ))}
+        {latestPosts.map((post) => {
+          const alt = alternateByChannel.get(post.channel);
+          return (
+            <ChannelPostCard
+              key={post.id}
+              requestId={requestId}
+              channel={post.channel}
+              body={post.body}
+              evaluation={evalByChannel.get(post.channel)}
+              alternate={alt ? { version: alt.version, body: alt.body, evaluation: alternateEvalByChannel.get(post.channel) } : undefined}
+            />
+          );
+        })}
       </div>
 
       {stuckHere && (
