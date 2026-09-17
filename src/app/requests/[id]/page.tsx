@@ -107,8 +107,13 @@ export default async function RequestDetailPage({
   const attentionExplanation = needsAttention
     ? explainNeedsAttention(latestFailedEvent!.stage, latestFailedEvent!.detail)
     : null;
+  // angle_proposal excluded deliberately: a hard block there means Claude returned
+  // an empty angles array (see workflow-a's prompt), so there is nothing to fall
+  // back to - "back to angle selection" on that stage produces a dead screen with
+  // zero angles rather than an actual choice. Only excerpt_selection/evaluation
+  // dead ends happen after a real angle already exists to fall back to.
   const canTryDifferentAngle =
-    needsAttention && ["excerpt_selection", "evaluation", "angle_proposal"].includes(latestFailedEvent!.stage);
+    needsAttention && ["excerpt_selection", "evaluation"].includes(latestFailedEvent!.stage);
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-12">

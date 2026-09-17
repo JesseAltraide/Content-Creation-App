@@ -18,6 +18,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const admin = createAdminClient();
 
+  // A hard block at angle_proposal itself means Claude returned an empty angles
+  // array (see workflow-a's prompt) - there is nothing to fall back to in that case,
+  // only a real dead end. This route only makes sense when at least one angle
+  // already exists from a successful proposal that later dead-ended downstream.
+  const { count: angleCount } = await admin
+    .from("angles")
+    .select("id", { count: "exact", head: true })
+    .eq("request_id", requestId);
+  if (!angleCount) {
+    return NextResponse.json(
+      { error: "No angle exists for this request yet — there's nothing to go back to. Try a different idea instead." },
+      { status: 409 }
+    );
+  }
+
   const { data: updatedRequest, error: transitionError } = await admin
     .from("requests")
     .update({ status: "awaiting_angle_selection" })
