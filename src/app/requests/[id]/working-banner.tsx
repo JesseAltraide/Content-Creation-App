@@ -20,10 +20,13 @@ export default function WorkingBanner({
   requestId,
   status,
   stalled,
+  quiet,
 }: {
   requestId: string;
   status: string;
   stalled: boolean;
+  /** Nothing has been logged for this request in a while - see page.tsx. */
+  quiet: boolean;
 }) {
   const router = useRouter();
   const [elapsed, setElapsed] = useState(0);
@@ -39,30 +42,51 @@ export default function WorkingBanner({
   // "something happened" for this request - the row's own status changing, or a
   // new event_log entry landing for it (a failed trigger doesn't always change
   // status, e.g. a webhook erroring before n8n even runs - see retry/route.ts).
-  // Only refreshes on a real change instead of re-fetching on a timer regardless.
+  // Nothing is re-fetched between real changes, and this never re-triggers the
+  // pipeline - it only re-renders the page.
   useEffect(() => {
     if (!label) return;
     setElapsed(0);
     const tickId = setInterval(() => setElapsed((s) => s + 1), 1000);
 
     const supabase = createClient();
-    const channel = supabase
-      .channel(`request-${requestId}-working`)
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "requests", filter: `id=eq.${requestId}` },
-        () => router.refresh()
-      )
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "event_log", filter: `request_id=eq.${requestId}` },
-        () => router.refresh()
-      )
-      .subscribe();
+    let channel: ReturnType<typeof supabase.channel> | undefined;
+    let cancelled = false;
+
+    // The access token has to reach the realtime socket BEFORE subscribing.
+    // postgres_changes enforces RLS, and this project's policies require
+    // auth.role() = 'authenticated' - so a socket that connects on the bare anon
+    // key has every event silently filtered out. It still reports SUBSCRIBED,
+    // which is exactly why this was invisible: confirmed by diagnostic, the same
+    // subscription delivers on the service-role key and delivers nothing on the
+    // anon key. The browser client reads its session from cookies asynchronously,
+    // so awaiting it here is what makes the difference.
+    (async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (cancelled) return;
+      if (session) supabase.realtime.setAuth(session.access_token);
+
+      channel = supabase
+        .channel(`request-${requestId}-working`)
+        .on(
+          "postgres_changes",
+          { event: "UPDATE", schema: "public", table: "requests", filter: `id=eq.${requestId}` },
+          () => router.refresh()
+        )
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "event_log", filter: `request_id=eq.${requestId}` },
+          () => router.refresh()
+        )
+        .subscribe();
+    })();
 
     return () => {
+      cancelled = true;
       clearInterval(tickId);
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
     };
     // `stalled` is a dependency too: when a retry clears it, this has to re-subscribe.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -73,6 +97,32 @@ export default function WorkingBanner({
   const minutes = Math.floor(elapsed / 60);
   const seconds = elapsed % 60;
   const elapsedText = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+
+  // Deliberately does not claim the work is running once it's gone quiet: this app
+  // has no liveness signal from n8n, so "still working" is an inference from a
+  // status field, never an observation. Saying otherwise is what made an offline
+  // n8n look like a healthy long-running job.
+  if (quiet) {
+    return (
+      <div
+        role="status"
+        className="mt-4 flex items-start gap-3 rounded-xl border border-warning/30 bg-warning-soft px-4 py-3"
+      >
+        <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-warning text-[10px] font-bold text-white">
+          !
+        </span>
+        <div className="text-sm text-warning">
+          <p className="font-medium">{label} — but nothing has reported back in a while.</p>
+          <p className="mt-0.5 text-xs text-warning/90">
+            This request is still marked as in progress, but no progress has been logged for
+            over 5 minutes. That usually means the run died or n8n isn&apos;t reachable — this
+            app can&apos;t tell the difference, it only sees what gets written back. Check n8n,
+            then retry.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -85,9 +135,9 @@ export default function WorkingBanner({
           {label} — this page updates itself automatically, no need to refresh.
         </p>
         <p className="mt-0.5 text-xs text-accent/80">
-          Working for {elapsedText}. This can genuinely take a few minutes — a long wait on its
-          own doesn&apos;t mean anything broke, and deleting the request won&apos;t stop it (the
-          work is running on n8n&apos;s side, independent of this page).
+          Working for {elapsedText}. This stage can take a few minutes, so a wait on its own
+          doesn&apos;t mean anything broke. If nothing reports back within 5 minutes,
+          this turns into a warning rather than leaving you guessing.
         </p>
       </div>
     </div>

@@ -92,7 +92,21 @@ export default async function RequestDetailPage({
   const sourceUrlsById = Object.fromEntries((sources ?? []).map((s) => [s.id, s.url]));
 
   const latestEvent = events?.[0];
-  const canRetry = req.status === "researching" && latestEvent?.status === "failed";
+  // There is no liveness signal from n8n - a trigger status only ever gets cleared
+  // by n8n reporting back, so if n8n is offline (or the run died without logging),
+  // the request sits in "working" state forever and the UI keeps reassuring the
+  // human. Silence past this threshold is treated as "probably not running", which
+  // is the honest reading: every stage that IS alive writes events well inside it.
+  const SILENCE_THRESHOLD_MS = 5 * 60 * 1000;
+  const lastEventAt = latestEvent?.created_at ? new Date(latestEvent.created_at).getTime() : null;
+  const silentFor = lastEventAt ? Date.now() - lastEventAt : null;
+  const goneQuiet = silentFor !== null && silentFor > SILENCE_THRESHOLD_MS;
+
+  // Retry is offered on a logged failure, and now also when a research run has
+  // simply gone silent - otherwise a request whose n8n run died without logging
+  // anything has no recovery path at all (the failure banner never appears).
+  const canRetry =
+    req.status === "researching" && (latestEvent?.status === "failed" || goneQuiet);
   const angleAttemptFailed =
     req.status === "awaiting_angle_selection" && latestEvent?.status === "failed";
   // needs_human_attention is a status, not itself a log line - it doesn't change just
@@ -148,7 +162,12 @@ export default async function RequestDetailPage({
         />
       </Card>
 
-      <WorkingBanner requestId={id} status={req.status} stalled={latestIsDeadFailure} />
+      <WorkingBanner
+        requestId={id}
+        status={req.status}
+        stalled={latestIsDeadFailure}
+        quiet={goneQuiet}
+      />
 
       <Card className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 p-5 text-sm">
         <dt className="text-muted">Path</dt>
@@ -159,7 +178,12 @@ export default async function RequestDetailPage({
         <dd className="text-right">{req.channels.join(", ")}</dd>
       </Card>
 
-      {canRetry && (
+      {/* Two distinct reasons to offer a retry, and they shouldn't read the same:
+          a logged failure has an actual error to point at, while a run that just
+          went silent has nothing in the log to explain it - saying "see the
+          technical log for the exact error" there would send the human looking
+          for something that was never written. */}
+      {canRetry && latestEvent?.status === "failed" && (
         <Card className="mt-8 border-danger/20 bg-danger-soft p-5">
           <p className="text-sm font-medium text-danger">
             {friendlyStageMessage(latestEvent!.stage)}
@@ -167,6 +191,16 @@ export default async function RequestDetailPage({
           <p className="mt-1 text-xs text-danger/80">
             Nothing has progressed since — safe to retry from here. See the technical log below
             for the exact error.
+          </p>
+          <RetryButton requestId={id} />
+        </Card>
+      )}
+
+      {canRetry && latestEvent?.status !== "failed" && (
+        <Card className="mt-8 p-5">
+          <p className="text-sm text-foreground">
+            Nothing has progressed since the last step, and no error was ever logged — so there&apos;s
+            nothing to read in the technical log. Retrying re-runs this stage from where it left off.
           </p>
           <RetryButton requestId={id} />
         </Card>
