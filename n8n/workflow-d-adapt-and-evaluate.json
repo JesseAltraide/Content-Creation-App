@@ -28,6 +28,7 @@
       "name": "Config",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "notes": "Non-secret config only. Supabase/Anthropic secrets live in n8n Credentials.",
       "position": [
         20,
@@ -87,7 +88,7 @@
         "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ request_id: $('Pipeline Setup Failure: Extract Error').first().json.requestId, stage: 'channel_adaptation', status: 'failed', detail: `Couldn't start adaptation: ${$('Pipeline Setup Failure: Extract Error').first().json.message}` }) }}",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('Pipeline Setup Failure: Extract Error').first().json.requestId, stage: 'channel_adaptation', status: 'failed', detail: `A step in channel adaptation failed: ${$('Pipeline Setup Failure: Extract Error').first().json.message}` }) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -258,6 +259,7 @@
       "name": "Build Adaptation Context",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "notes": "Aggregates per-channel tone samples, the resolved audience profile, and grounding excerpts into one object the adaptation prompt reads from. Real JS here, not inline HTTP-node expressions, since tone sample content and excerpt text can contain arbitrary characters (backticks, quotes) that break n8n's {{ }} brace-matching (Workflow B Error #9).",
       "position": [
         2620,
@@ -272,6 +274,7 @@
       "name": "Claude: Adapt to Channels: Build Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "notes": "Full Claude request body built in real Code-node JS - n8n's {{ }} expression engine chokes on large inlined JSON tool schemas (Workflow B Error #9).",
       "position": [
         2880,
@@ -325,6 +328,7 @@
       "name": "Claude: Adapt to Channels: Extract Error",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "position": [
         3400,
         -320
@@ -420,6 +424,7 @@
       "name": "Parse Adapted Content",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "position": [
         4440,
         0
@@ -433,6 +438,7 @@
       "name": "Validate X Length",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "position": [
         4700,
         0
@@ -446,6 +452,7 @@
       "name": "Insert Channel Posts v1: Build Rows",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "notes": "X posts and the newsletter's subject/body pair don't fit a single plain-text `body` column cleanly, so both are stored as JSON-stringified structures in that column; the UI parses them back out by channel.",
       "position": [
         4960,
@@ -519,6 +526,7 @@
       "name": "Build Pass 2 Eval Text (Round 0)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "position": [
         5740,
         0
@@ -532,6 +540,7 @@
       "name": "Claude: Evaluate Channels (Round 0): Build Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "notes": "Full Claude request body built in real Code-node JS - n8n's {{ }} expression engine chokes on large inlined JSON tool schemas (Workflow B Error #9).",
       "position": [
         6000,
@@ -585,6 +594,7 @@
       "name": "Claude: Evaluate Channels (Round 0): Extract Error",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "position": [
         6520,
         -320
@@ -680,6 +690,7 @@
       "name": "Parse Pass 2 Evaluation (Round 0)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "position": [
         7560,
         0
@@ -693,6 +704,7 @@
       "name": "Gate (Round 0)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "position": [
         7820,
         0
@@ -856,6 +868,7 @@
       "name": "Claude: Revise Channels (Round 1): Build Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "notes": "Full Claude request body built in real Code-node JS - n8n's {{ }} expression engine chokes on large inlined JSON tool schemas (Workflow B Error #9).",
       "position": [
         9380,
@@ -909,6 +922,7 @@
       "name": "Claude: Revise Channels (Round 1): Extract Error",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "position": [
         9900,
         -320
@@ -1004,6 +1018,7 @@
       "name": "Parse Revised Channels (Round 1)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "position": [
         10940,
         0
@@ -1017,6 +1032,7 @@
       "name": "Validate X Length (Round 1)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "position": [
         11200,
         0
@@ -1030,6 +1046,7 @@
       "name": "Insert Channel Posts v2: Build Rows",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "notes": "X posts and the newsletter's subject/body pair don't fit a single plain-text `body` column cleanly, so both are stored as JSON-stringified structures in that column; the UI parses them back out by channel.",
       "position": [
         11460,
@@ -1103,6 +1120,7 @@
       "name": "Build Pass 2 Eval Text (Round 1)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "position": [
         12240,
         0
@@ -1116,6 +1134,7 @@
       "name": "Claude: Evaluate Channels (Round 1): Build Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "notes": "Full Claude request body built in real Code-node JS - n8n's {{ }} expression engine chokes on large inlined JSON tool schemas (Workflow B Error #9).",
       "position": [
         12500,
@@ -1169,6 +1188,7 @@
       "name": "Claude: Evaluate Channels (Round 1): Extract Error",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "position": [
         13020,
         -320
@@ -1264,6 +1284,7 @@
       "name": "Parse Pass 2 Evaluation (Round 1)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "position": [
         14060,
         0
@@ -1277,6 +1298,7 @@
       "name": "Gate (Round 1)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "position": [
         14320,
         0
@@ -1440,6 +1462,7 @@
       "name": "Claude: Revise Channels (Round 2): Build Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "notes": "Full Claude request body built in real Code-node JS - n8n's {{ }} expression engine chokes on large inlined JSON tool schemas (Workflow B Error #9).",
       "position": [
         15880,
@@ -1493,6 +1516,7 @@
       "name": "Claude: Revise Channels (Round 2): Extract Error",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "position": [
         16400,
         -320
@@ -1588,6 +1612,7 @@
       "name": "Parse Revised Channels (Round 2)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "position": [
         17440,
         0
@@ -1601,6 +1626,7 @@
       "name": "Validate X Length (Round 2)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "position": [
         17700,
         0
@@ -1614,6 +1640,7 @@
       "name": "Insert Channel Posts v3: Build Rows",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "notes": "X posts and the newsletter's subject/body pair don't fit a single plain-text `body` column cleanly, so both are stored as JSON-stringified structures in that column; the UI parses them back out by channel.",
       "position": [
         17960,
@@ -1687,6 +1714,7 @@
       "name": "Build Pass 2 Eval Text (Round 2)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "position": [
         18740,
         0
@@ -1700,6 +1728,7 @@
       "name": "Claude: Evaluate Channels (Round 2): Build Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "notes": "Full Claude request body built in real Code-node JS - n8n's {{ }} expression engine chokes on large inlined JSON tool schemas (Workflow B Error #9).",
       "position": [
         19000,
@@ -1753,6 +1782,7 @@
       "name": "Claude: Evaluate Channels (Round 2): Extract Error",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "position": [
         19520,
         -320
@@ -1848,6 +1878,7 @@
       "name": "Parse Pass 2 Evaluation (Round 2)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "position": [
         20560,
         0
@@ -1861,6 +1892,7 @@
       "name": "Gate (Round 2)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "onError": "continueErrorOutput",
       "position": [
         20820,
         0
@@ -2102,6 +2134,24 @@
     }
   ],
   "connections": {
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Fetch Request Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Webhook: Adapt & Evaluate": {
       "main": [
         [
@@ -2158,17 +2208,6 @@
         [
           {
             "node": "Pipeline Setup Failure: Extract Error",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Config": {
-      "main": [
-        [
-          {
-            "node": "Fetch Request Row",
             "type": "main",
             "index": 0
           }
@@ -2247,6 +2286,24 @@
         ]
       ]
     },
+    "Build Adaptation Context": {
+      "main": [
+        [
+          {
+            "node": "Claude: Adapt to Channels: Build Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Claude: Adapt to Channels: Build Request": {
       "main": [
         [
@@ -2255,14 +2312,28 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
-    "Build Adaptation Context": {
+    "Claude: Adapt to Channels: Extract Error": {
       "main": [
         [
           {
-            "node": "Claude: Adapt to Channels: Build Request",
+            "node": "Claude: Adapt to Channels: Revert Request State",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -2281,17 +2352,6 @@
         [
           {
             "node": "Claude: Adapt to Channels: Extract Error",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Claude: Adapt to Channels: Extract Error": {
-      "main": [
-        [
-          {
-            "node": "Claude: Adapt to Channels: Revert Request State",
             "type": "main",
             "index": 0
           }
@@ -2328,6 +2388,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -2336,6 +2403,31 @@
         [
           {
             "node": "Insert Channel Posts v1: Build Rows",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Channel Posts v1: Build Rows": {
+      "main": [
+        [
+          {
+            "node": "Insert Channel Posts v1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -2360,22 +2452,29 @@
         ]
       ]
     },
-    "Insert Channel Posts v1: Build Rows": {
+    "Fetch Channel Posts v1": {
       "main": [
         [
           {
-            "node": "Insert Channel Posts v1",
+            "node": "Build Pass 2 Eval Text (Round 0)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch Channel Posts v1": {
+    "Build Pass 2 Eval Text (Round 0)": {
       "main": [
         [
           {
-            "node": "Build Pass 2 Eval Text (Round 0)",
+            "node": "Claude: Evaluate Channels (Round 0): Build Request",
             "type": "main",
             "index": 0
           }
@@ -2397,14 +2496,28 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
-    "Build Pass 2 Eval Text (Round 0)": {
+    "Claude: Evaluate Channels (Round 0): Extract Error": {
       "main": [
         [
           {
-            "node": "Claude: Evaluate Channels (Round 0): Build Request",
+            "node": "Claude: Evaluate Channels (Round 0): Revert Request State",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -2423,17 +2536,6 @@
         [
           {
             "node": "Claude: Evaluate Channels (Round 0): Extract Error",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Claude: Evaluate Channels (Round 0): Extract Error": {
-      "main": [
-        [
-          {
-            "node": "Claude: Evaluate Channels (Round 0): Revert Request State",
             "type": "main",
             "index": 0
           }
@@ -2470,17 +2572,6 @@
             "type": "main",
             "index": 0
           }
-        ]
-      ]
-    },
-    "Insert Evaluations (Round 0)": {
-      "main": [
-        [
-          {
-            "node": "IF All Pass (Round 0)",
-            "type": "main",
-            "index": 0
-          }
         ],
         [
           {
@@ -2496,6 +2587,31 @@
         [
           {
             "node": "Insert Evaluations (Round 0)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Evaluations (Round 0)": {
+      "main": [
+        [
+          {
+            "node": "IF All Pass (Round 0)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -2564,6 +2680,31 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Revise Channels (Round 1): Extract Error": {
+      "main": [
+        [
+          {
+            "node": "Claude: Revise Channels (Round 1): Revert Request State",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -2579,17 +2720,6 @@
         [
           {
             "node": "Claude: Revise Channels (Round 1): Extract Error",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Claude: Revise Channels (Round 1): Extract Error": {
-      "main": [
-        [
-          {
-            "node": "Claude: Revise Channels (Round 1): Revert Request State",
             "type": "main",
             "index": 0
           }
@@ -2626,6 +2756,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -2634,6 +2771,31 @@
         [
           {
             "node": "Insert Channel Posts v2: Build Rows",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Channel Posts v2: Build Rows": {
+      "main": [
+        [
+          {
+            "node": "Insert Channel Posts v2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -2658,22 +2820,29 @@
         ]
       ]
     },
-    "Insert Channel Posts v2: Build Rows": {
+    "Fetch Channel Posts v2": {
       "main": [
         [
           {
-            "node": "Insert Channel Posts v2",
+            "node": "Build Pass 2 Eval Text (Round 1)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch Channel Posts v2": {
+    "Build Pass 2 Eval Text (Round 1)": {
       "main": [
         [
           {
-            "node": "Build Pass 2 Eval Text (Round 1)",
+            "node": "Claude: Evaluate Channels (Round 1): Build Request",
             "type": "main",
             "index": 0
           }
@@ -2695,14 +2864,28 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
-    "Build Pass 2 Eval Text (Round 1)": {
+    "Claude: Evaluate Channels (Round 1): Extract Error": {
       "main": [
         [
           {
-            "node": "Claude: Evaluate Channels (Round 1): Build Request",
+            "node": "Claude: Evaluate Channels (Round 1): Revert Request State",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -2721,17 +2904,6 @@
         [
           {
             "node": "Claude: Evaluate Channels (Round 1): Extract Error",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Claude: Evaluate Channels (Round 1): Extract Error": {
-      "main": [
-        [
-          {
-            "node": "Claude: Evaluate Channels (Round 1): Revert Request State",
             "type": "main",
             "index": 0
           }
@@ -2768,17 +2940,6 @@
             "type": "main",
             "index": 0
           }
-        ]
-      ]
-    },
-    "Insert Evaluations (Round 1)": {
-      "main": [
-        [
-          {
-            "node": "IF All Pass (Round 1)",
-            "type": "main",
-            "index": 0
-          }
         ],
         [
           {
@@ -2794,6 +2955,31 @@
         [
           {
             "node": "Insert Evaluations (Round 1)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Evaluations (Round 1)": {
+      "main": [
+        [
+          {
+            "node": "IF All Pass (Round 1)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -2862,6 +3048,31 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Revise Channels (Round 2): Extract Error": {
+      "main": [
+        [
+          {
+            "node": "Claude: Revise Channels (Round 2): Revert Request State",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -2877,17 +3088,6 @@
         [
           {
             "node": "Claude: Revise Channels (Round 2): Extract Error",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Claude: Revise Channels (Round 2): Extract Error": {
-      "main": [
-        [
-          {
-            "node": "Claude: Revise Channels (Round 2): Revert Request State",
             "type": "main",
             "index": 0
           }
@@ -2924,6 +3124,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -2932,6 +3139,31 @@
         [
           {
             "node": "Insert Channel Posts v3: Build Rows",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Channel Posts v3: Build Rows": {
+      "main": [
+        [
+          {
+            "node": "Insert Channel Posts v3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -2956,22 +3188,29 @@
         ]
       ]
     },
-    "Insert Channel Posts v3: Build Rows": {
+    "Fetch Channel Posts v3": {
       "main": [
         [
           {
-            "node": "Insert Channel Posts v3",
+            "node": "Build Pass 2 Eval Text (Round 2)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch Channel Posts v3": {
+    "Build Pass 2 Eval Text (Round 2)": {
       "main": [
         [
           {
-            "node": "Build Pass 2 Eval Text (Round 2)",
+            "node": "Claude: Evaluate Channels (Round 2): Build Request",
             "type": "main",
             "index": 0
           }
@@ -2993,14 +3232,28 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
-    "Build Pass 2 Eval Text (Round 2)": {
+    "Claude: Evaluate Channels (Round 2): Extract Error": {
       "main": [
         [
           {
-            "node": "Claude: Evaluate Channels (Round 2): Build Request",
+            "node": "Claude: Evaluate Channels (Round 2): Revert Request State",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -3019,17 +3272,6 @@
         [
           {
             "node": "Claude: Evaluate Channels (Round 2): Extract Error",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Claude: Evaluate Channels (Round 2): Extract Error": {
-      "main": [
-        [
-          {
-            "node": "Claude: Evaluate Channels (Round 2): Revert Request State",
             "type": "main",
             "index": 0
           }
@@ -3066,17 +3308,6 @@
             "type": "main",
             "index": 0
           }
-        ]
-      ]
-    },
-    "Insert Evaluations (Round 2)": {
-      "main": [
-        [
-          {
-            "node": "IF All Pass (Round 2)",
-            "type": "main",
-            "index": 0
-          }
         ],
         [
           {
@@ -3092,6 +3323,31 @@
         [
           {
             "node": "Insert Evaluations (Round 2)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Evaluations (Round 2)": {
+      "main": [
+        [
+          {
+            "node": "IF All Pass (Round 2)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }

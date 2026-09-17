@@ -105,15 +105,28 @@ function supabaseWrite(id, name, method, url, jsonBody, opts = {}) {
   return node;
 }
 
+// Errors #86/#88 (week4-progress.md): a Code node throwing (a genuine JS exception,
+// or n8n's own "a 'json' property isn't an object" validation error on a malformed
+// return) crashes the whole execution unhandled - Code nodes had no onError
+// coverage at all, unlike the plain Supabase HTTP nodes hardened in Decision #79.
+// Confirmed live: a Round 1 evaluation went silent for 5+ minutes with zero error
+// logged anywhere, leaving the request stuck at 'adapting' indefinitely. Same fix,
+// same default-on pattern: every Code node now gets onError: continueErrorOutput
+// and auto-wires to the shared failure handler, unless explicitly opted out via
+// { noAutoErrorHandling: true } - used only by the handler's own internal node, to
+// avoid wiring it into itself.
 function codeNode(id, name, jsCode, opts = {}) {
-  return addNode({
+  const node = addNode({
     parameters: { jsCode },
     id,
     name,
     type: "n8n-nodes-base.code",
     typeVersion: 2,
+    ...(opts.noAutoErrorHandling ? {} : { onError: "continueErrorOutput" }),
     ...(opts.notes ? { notes: opts.notes } : {}),
   });
+  if (!opts.noAutoErrorHandling) connect(name, SETUP_FAILURE_HANDLER_NAME, 1);
+  return node;
 }
 
 function ifNode(id, name, leftValue, rightValue, operator) {
@@ -234,7 +247,8 @@ function buildSetupFailureHandler() {
       SETUP_FAILURE_HANDLER_NAME,
       "const err = $json.error || {};" + NL +
         "const message = (err.message || JSON.stringify(err) || 'Unknown error').slice(0, 500);" + NL +
-        "return [{ json: { requestId: $('Config').first().json.request_id, message } }];"
+        "return [{ json: { requestId: $('Config').first().json.request_id, message } }];",
+      { noAutoErrorHandling: true }
     );
 
     supabaseWrite(
@@ -252,7 +266,7 @@ function buildSetupFailureHandler() {
       "Pipeline Setup Failure: Log Failed",
       "POST",
       "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
-      "={{ JSON.stringify({ request_id: $('Pipeline Setup Failure: Extract Error').first().json.requestId, stage: 'channel_adaptation', status: 'failed', detail: `Couldn't start adaptation: ${$('Pipeline Setup Failure: Extract Error').first().json.message}` }) }}",
+      "={{ JSON.stringify({ request_id: $('Pipeline Setup Failure: Extract Error').first().json.requestId, stage: 'channel_adaptation', status: 'failed', detail: `A step in channel adaptation failed: ${$('Pipeline Setup Failure: Extract Error').first().json.message}` }) }}",
       { noAutoErrorHandling: true }
     );
     connect("Pipeline Setup Failure: Revert Request State", "Pipeline Setup Failure: Log Failed");
