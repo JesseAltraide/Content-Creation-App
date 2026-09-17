@@ -597,13 +597,23 @@ function pass2EvalPrompt(textNodeName) {
 // Workflow B's Error #9).
 function pass2GateCode(channelPostsSourceName, xLengthSourceName) {
   return (
-    "const rawPerChannel = $json.per_channel || {};" + NL +
-    // Normalize to a real [channel, entry] list regardless of whether Claude
-    // returned the requested object-keyed-by-channel-name shape or strayed into an
-    // array of entries - always trust the entry's own `channel` field (now required
-    // in the schema) over the container's own keys/indices, since an array's
-    // "keys" are just numeric indices ("0", "1", "2"), not channel names.
-    "const rawEntries = Array.isArray(rawPerChannel) ? rawPerChannel.map(r => [r.channel, r]) : Object.entries(rawPerChannel).map(([key, r]) => [r.channel || key, r]);" + NL +
+    // per_channel has now shown up in three different shapes across live testing:
+    // an empty object (Decision/Error #83), an array of entries with no keys at all
+    // (Error #84), and - caught here - a JSON-STRINGIFIED string containing the real
+    // object (confirmed live: Object.entries() on a ~9000-character string iterates
+    // it character by character, producing 9000+ bogus "channel" entries "0".."9344",
+    // one per character). A tool schema describes the intended shape; it does not
+    // guarantee the model won't occasionally serialize a nested value as a string
+    // instead of nesting it directly. This normalizer tolerates all three: parses a
+    // string first, then treats the result as either an array or an object, always
+    // trusting each entry's own `channel` field over the container's keys/indices,
+    // and drops anything that isn't a real object (so a stray character or null
+    // can never masquerade as a channel entry again).
+    "let rawPerChannel = $json.per_channel;" + NL +
+    "if (typeof rawPerChannel === 'string') { try { rawPerChannel = JSON.parse(rawPerChannel); } catch { rawPerChannel = {}; } }" + NL +
+    "if (!rawPerChannel || typeof rawPerChannel !== 'object') rawPerChannel = {};" + NL +
+    "const rawList = Array.isArray(rawPerChannel) ? rawPerChannel : Object.entries(rawPerChannel).map(([key, r]) => (r && typeof r === 'object' ? { ...r, channel: r.channel || key } : null));" + NL +
+    "const rawEntries = rawList.filter(r => r && typeof r === 'object' && r.channel).map(r => [r.channel, r]);" + NL +
     "const results = {};" + NL +
     "let anyReject = false;" + NL +
     "let allPass = rawEntries.length > 0;" + NL +
