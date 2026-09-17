@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { intakeSchema, dedupeUrls } from "@/lib/intake-validation";
@@ -124,10 +124,16 @@ export async function POST(request: Request) {
 
   // Path A (raw idea): kick off search for candidate sources, human picks after.
   // Path B (URL provided): the URL(s) already are the curation — scrape straight away.
+  // Triggered after the response is sent, not awaited inline - the underlying
+  // pipeline can run for minutes across multiple Claude calls, well past what a
+  // synchronous connection (a gateway timeout, or a serverless function's own
+  // duration limit) can be relied on to survive. n8n keeps running regardless of
+  // whether anything is still listening for its response; the human just checks
+  // back on the request page once it's done.
   if (input.inputPath === "raw_idea") {
-    await triggerSearchSources(request_.id);
+    after(() => triggerSearchSources(request_.id));
   } else {
-    await triggerScrapeAndProposeAngle(request_.id);
+    after(() => triggerScrapeAndProposeAngle(request_.id));
   }
 
   return NextResponse.json({ request: request_ }, { status: 201 });

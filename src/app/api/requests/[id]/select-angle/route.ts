@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -63,7 +63,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     detail: "Angle selected; generating the main block.",
   });
 
-  await triggerGenerateAndEvaluate(requestId, parsed.data.angleId);
+  // Not awaited - Workflow B's revision loop can run for minutes; see
+  // approve/route.ts's comment for why this shouldn't block the response.
+  after(() => triggerGenerateAndEvaluate(requestId, parsed.data.angleId));
 
   return NextResponse.json({ ok: true });
 }

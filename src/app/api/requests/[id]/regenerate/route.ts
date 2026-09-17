@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -97,7 +97,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     detail: `Regenerate requested (would be attempt ${wouldBeCount}/${REGENERATION_CAP} if Claude is reached): ${parsed.data.comment}`,
   });
 
-  await triggerRegenerate(requestId, parsed.data.comment, wouldBeCount >= REGENERATION_CAP, priorStatus);
+  // Not awaited - see approve/route.ts's comment on why.
+  after(() => triggerRegenerate(requestId, parsed.data.comment, wouldBeCount >= REGENERATION_CAP, priorStatus));
 
   return NextResponse.json({ ok: true });
 }

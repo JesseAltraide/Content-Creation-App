@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logEvent } from "@/lib/events";
@@ -84,7 +84,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     detail: "Article approved.",
   });
 
-  await triggerAdaptAndEvaluate(requestId);
+  // Not awaited: Workflow D can take minutes across up to 3 revision rounds, well
+  // past what a synchronous connection can be relied on to survive (hit live during
+  // testing as a Cloudflare 524 gateway timeout, even though n8n finished correctly
+  // regardless). after() lets it keep running after this response is already sent.
+  after(() => triggerAdaptAndEvaluate(requestId));
 
   return NextResponse.json({ ok: true });
 }

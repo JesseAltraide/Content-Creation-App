@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { triggerSearchSources, triggerScrapeAndProposeAngle } from "@/lib/n8n";
@@ -48,10 +48,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     detail: "Retried by user after a previous failure.",
   });
 
+  // Not awaited - see approve/route.ts's comment on why.
   if (pastSelectionStage) {
-    await triggerScrapeAndProposeAngle(requestId);
+    after(() => triggerScrapeAndProposeAngle(requestId));
   } else {
-    await triggerSearchSources(requestId);
+    after(() => triggerSearchSources(requestId));
   }
 
   return NextResponse.json({ ok: true });

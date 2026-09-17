@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { triggerAdaptAndEvaluate } from "@/lib/n8n";
@@ -43,7 +43,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     detail: "Retried adaptation by user after a previous failure.",
   });
 
-  await triggerAdaptAndEvaluate(requestId);
+  // Not awaited - see approve/route.ts's comment on why.
+  after(() => triggerAdaptAndEvaluate(requestId));
 
   return NextResponse.json({ ok: true });
 }

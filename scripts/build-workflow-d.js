@@ -510,11 +510,22 @@ const EVAL_TOOL = {
   },
 };
 
+// `channel` is required inside EACH score entry, not just used as the surrounding
+// object's key - live testing caught Claude returning `per_channel` as an ARRAY of
+// these objects instead of an object keyed by channel name (a real, reproducible
+// tool-schema deviation, not a hypothetical one: confirmed via the exact Postgres
+// error `invalid input value for enum channel: "0"`, which is what you get when
+// Object.entries() runs on an array and gets numeric indices back as "keys"). With
+// no channel name embedded in the entry itself, that data was unrecoverable. Now the
+// gate code below reads `r.channel` directly and works the same whether Claude
+// returns the keyed-object shape or strays into an array - the channel name is
+// always present on the entry, never inferred from its position or its container.
 function channelScoreSchema() {
   return {
     type: "object",
-    required: ["overall_score", "status", "criteria"],
+    required: ["channel", "overall_score", "status", "criteria"],
     properties: {
+      channel: { type: "string", enum: ["linkedin", "x", "newsletter"] },
       overall_score: { type: "integer" },
       status: { type: "string", enum: ["pass", "revise", "reject"] },
       criteria: {
@@ -575,7 +586,7 @@ function pass2EvalPrompt(textNodeName) {
     PASS2_RUBRIC_TEXT +
     "\\n\\nOriginal article (for factual comparison):\\n${$('Fetch Approved Section').first().json.body_markdown}\\n\\n" +
     "Grounded excerpts:\\n${$('Build Adaptation Context').first().json.excerptsTextPlain}\\n\\n" +
-    "Adapted posts to evaluate (score every one shown here, using its exact channel name as the per_channel key):\\n${$('" + textNodeName + "').first().json.channelsText}`"
+    "Adapted posts to evaluate - score every one shown here. Each entry in per_channel MUST include its own \\\"channel\\\" field set to that post's exact channel name (linkedin/x/newsletter), in addition to using that name as its key:\\n${$('" + textNodeName + "').first().json.channelsText}`"
   );
 }
 
@@ -586,11 +597,17 @@ function pass2EvalPrompt(textNodeName) {
 // Workflow B's Error #9).
 function pass2GateCode(channelPostsSourceName, xLengthSourceName) {
   return (
-    "const perChannel = $json.per_channel || {};" + NL +
+    "const rawPerChannel = $json.per_channel || {};" + NL +
+    // Normalize to a real [channel, entry] list regardless of whether Claude
+    // returned the requested object-keyed-by-channel-name shape or strayed into an
+    // array of entries - always trust the entry's own `channel` field (now required
+    // in the schema) over the container's own keys/indices, since an array's
+    // "keys" are just numeric indices ("0", "1", "2"), not channel names.
+    "const rawEntries = Array.isArray(rawPerChannel) ? rawPerChannel.map(r => [r.channel, r]) : Object.entries(rawPerChannel).map(([key, r]) => [r.channel || key, r]);" + NL +
     "const results = {};" + NL +
     "let anyReject = false;" + NL +
-    "let allPass = Object.keys(perChannel).length > 0;" + NL +
-    "for (const [channel, r] of Object.entries(perChannel)) {" + NL +
+    "let allPass = rawEntries.length > 0;" + NL +
+    "for (const [channel, r] of rawEntries) {" + NL +
     "  const c = r.criteria || [];" + NL +
     "  const floor = (name, f) => { const crit = c.find(x => x.name.toLowerCase().includes(name)); return crit ? crit.score < f : false; };" + NL +
     "  const hardBlock = r.hard_block_triggered || floor('factual', 15);" + NL +

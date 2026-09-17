@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -77,7 +77,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     detail: `${parsed.data.selectedSourceIds.length} source(s) selected.`,
   });
 
-  await triggerScrapeAndProposeAngle(requestId);
+  // Not awaited - see approve/route.ts's comment on why.
+  after(() => triggerScrapeAndProposeAngle(requestId));
 
   return NextResponse.json({ ok: true });
 }
