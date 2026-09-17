@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 // These are exactly the statuses Next.js sets right before firing an after()
 // trigger (see retry/route.ts, select-angle/route.ts, approve/route.ts) - the
 // webhook runs in the background for real minutes with nothing else on the page
-// to show for it until the *next* status change or a new row appears. Without
+// to show for it until the *next* status change or a new event lands. Without
 // this, the page looks identical before and after clicking retry/approve/select,
 // which is exactly what got a genuinely-still-running request deleted as "broken".
 const WORKING_MESSAGES: Record<string, string> = {
@@ -15,26 +16,42 @@ const WORKING_MESSAGES: Record<string, string> = {
   adapting: "Adapting to channels and running evaluation",
 };
 
-const POLL_INTERVAL_MS = 5000;
-
-export default function WorkingBanner({ status }: { status: string }) {
+export default function WorkingBanner({ requestId, status }: { requestId: string; status: string }) {
   const router = useRouter();
   const [elapsed, setElapsed] = useState(0);
   const label = WORKING_MESSAGES[status];
 
+  // Push-based, not polling: subscribes to the two things that can actually mean
+  // "something happened" for this request - the row's own status changing, or a
+  // new event_log entry landing for it (a failed trigger doesn't always change
+  // status, e.g. a webhook erroring before n8n even runs - see retry/route.ts).
+  // Only refreshes on a real change instead of re-fetching on a timer regardless.
   useEffect(() => {
     if (!label) return;
     setElapsed(0);
-    const pollId = setInterval(() => router.refresh(), POLL_INTERVAL_MS);
     const tickId = setInterval(() => setElapsed((s) => s + 1), 1000);
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`request-${requestId}-working`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "requests", filter: `id=eq.${requestId}` },
+        () => router.refresh()
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "event_log", filter: `request_id=eq.${requestId}` },
+        () => router.refresh()
+      )
+      .subscribe();
+
     return () => {
-      clearInterval(pollId);
       clearInterval(tickId);
+      supabase.removeChannel(channel);
     };
-    // Restart the elapsed clock (but not the "have we ever shown this" logic) each
-    // time we land on a genuinely new working status, not on every re-render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  }, [status, requestId]);
 
   if (!label) return null;
 

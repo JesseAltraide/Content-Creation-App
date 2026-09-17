@@ -140,7 +140,7 @@ export default async function RequestDetailPage({
         />
       </Card>
 
-      <WorkingBanner status={req.status} />
+      <WorkingBanner requestId={id} status={req.status} />
 
       <Card className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 p-5 text-sm">
         <dt className="text-muted">Path</dt>
