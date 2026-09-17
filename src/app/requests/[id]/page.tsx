@@ -318,7 +318,7 @@ export default async function RequestDetailPage({
           <Card className="mt-2 divide-y divide-border p-1">
             {sources.map((s) => (
               <div key={s.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                <span className="truncate text-sm text-foreground">{s.url}</span>
+                <span className="min-w-0 truncate text-sm text-foreground">{s.url}</span>
                 <span
                   className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
                     SOURCE_STATUS_STYLES[s.status] ?? "bg-black/5 text-muted"

@@ -796,7 +796,7 @@
         "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ request_id: $('A2 · Parse Claude Response').first().json.requestId, stage: 'angle_proposal', status: 'failed', detail: $('A2 · Parse Claude Response').first().json.resonance_score <= 6 ? `Audience resonance too low (${$('A2 · Parse Claude Response').first().json.resonance_score}/15).` : `Sources do not support the idea. Alternative: ${$('A2 · Parse Claude Response').first().json.alternative_direction_if_unsupported}` }) }}",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('A2 · Parse Claude Response').first().json.requestId, stage: 'angle_proposal', status: 'failed', detail: $('A2 · Parse Claude Response').first().json.resonance_score <= 6 ? `Audience resonance too low: ${$('A2 · Parse Claude Response').first().json.resonance_score}/15, below the floor of 7. ${$('A2 · Parse Claude Response').first().json.resonance_reasoning}` : `The sources do not support this idea (audience resonance scored ${$('A2 · Parse Claude Response').first().json.resonance_score}/15). ${$('A2 · Parse Claude Response').first().json.resonance_reasoning} Suggested alternative direction: ${$('A2 · Parse Claude Response').first().json.alternative_direction_if_unsupported}` }) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [

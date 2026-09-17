@@ -54,7 +54,10 @@ export default function SourceSelection({
                 onChange={() => toggle(s.id)}
                 className="mt-1 h-4 w-4 accent-accent"
               />
-              <span>
+              {/* min-w-0 is load-bearing: a flex child defaults to min-width:auto, so
+                  without it this span can't shrink below its content and the long
+                  URL pushes the whole card wider than the page instead of truncating. */}
+              <span className="min-w-0 flex-1">
                 <span className="block font-medium">{s.title || s.url}</span>
                 <span className="block truncate text-xs text-muted">{s.url}</span>
               </span>
