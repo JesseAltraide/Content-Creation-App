@@ -402,6 +402,22 @@ const ADAPT_TOOL = {
   },
 };
 
+// Same defensive normalization the Pass 2 gate needed for `per_channel` (Errors
+// #83-#85): Claude occasionally stringifies a nested tool-input object instead of
+// returning it directly. Confirmed live this time on ADAPT_TOOL's `channels` field -
+// a raw string passed straight into `return [{ json: someString }]` crashes with
+// n8n's own "A 'json' property isn't an object" validation error, immediately and
+// unhandled (Code nodes have no onError branch the way the Supabase HTTP nodes do).
+// Parses a string first if that's what comes back, and always guarantees an object.
+function normalizeChannelsCode(inputExpr) {
+  return (
+    `let channels = ${inputExpr} || {};` + NL +
+    "if (typeof channels === 'string') { try { channels = JSON.parse(channels); } catch { channels = {}; } }" + NL +
+    "if (!channels || typeof channels !== 'object' || Array.isArray(channels)) channels = {};" + NL +
+    "return [{ json: channels }];"
+  );
+}
+
 function adaptPrompt(feedbackExpr) {
   return (
     "`Adapt this approved article into platform-native posts for these channels: ${$('Build Adaptation Context').first().json.channels.join(', ')}.\\n\\n" +
@@ -424,7 +440,7 @@ claudeErrorBranch("Claude: Adapt to Channels", "channel_adaptation");
 codeNode(
   "parse-adapted", "Parse Adapted Content",
   "const toolUse = $json.content.find(c => c.type === 'tool_use');" + NL +
-    "return [{ json: toolUse.input.channels || {} }];"
+    normalizeChannelsCode("toolUse.input.channels")
 );
 connect("Claude: Adapt to Channels", "Parse Adapted Content", 0);
 
@@ -752,7 +768,7 @@ function buildPass2RevisionRound(roundNum, prevGateIfName, prevChannelPostsSourc
   codeNode(
     `parse-${idBase}`,
     `Parse Revised Channels (${label})`,
-    "const toolUse = $json.content.find(c => c.type === 'tool_use');" + NL + "return [{ json: toolUse.input.channels || {} }];"
+    "const toolUse = $json.content.find(c => c.type === 'tool_use');" + NL + normalizeChannelsCode("toolUse.input.channels")
   );
   connect(`Claude: Revise Channels (${label})`, `Parse Revised Channels (${label})`, 0);
 

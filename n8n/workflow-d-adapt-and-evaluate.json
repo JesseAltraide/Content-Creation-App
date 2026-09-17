@@ -414,7 +414,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const toolUse = $json.content.find(c => c.type === 'tool_use');\nreturn [{ json: toolUse.input.channels || {} }];"
+        "jsCode": "const toolUse = $json.content.find(c => c.type === 'tool_use');\nlet channels = toolUse.input.channels || {};\nif (typeof channels === 'string') { try { channels = JSON.parse(channels); } catch { channels = {}; } }\nif (!channels || typeof channels !== 'object' || Array.isArray(channels)) channels = {};\nreturn [{ json: channels }];"
       },
       "id": "parse-adapted",
       "name": "Parse Adapted Content",
@@ -998,7 +998,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const toolUse = $json.content.find(c => c.type === 'tool_use');\nreturn [{ json: toolUse.input.channels || {} }];"
+        "jsCode": "const toolUse = $json.content.find(c => c.type === 'tool_use');\nlet channels = toolUse.input.channels || {};\nif (typeof channels === 'string') { try { channels = JSON.parse(channels); } catch { channels = {}; } }\nif (!channels || typeof channels !== 'object' || Array.isArray(channels)) channels = {};\nreturn [{ json: channels }];"
       },
       "id": "parse-revise-1",
       "name": "Parse Revised Channels (Round 1)",
@@ -1582,7 +1582,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const toolUse = $json.content.find(c => c.type === 'tool_use');\nreturn [{ json: toolUse.input.channels || {} }];"
+        "jsCode": "const toolUse = $json.content.find(c => c.type === 'tool_use');\nlet channels = toolUse.input.channels || {};\nif (typeof channels === 'string') { try { channels = JSON.parse(channels); } catch { channels = {}; } }\nif (!channels || typeof channels !== 'object' || Array.isArray(channels)) channels = {};\nreturn [{ json: channels }];"
       },
       "id": "parse-revise-2",
       "name": "Parse Revised Channels (Round 2)",
