@@ -3,6 +3,7 @@ import Link from "next/link";
 const TABS = [
   { href: "/settings/audience-profiles", label: "Audience profiles" },
   { href: "/settings/tone-samples", label: "Tone samples" },
+  { href: "/settings/newsletter-subscribers", label: "Newsletter subscribers" },
 ] as const;
 
 export default function SettingsNav({ active }: { active: string }) {

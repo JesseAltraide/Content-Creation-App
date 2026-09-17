@@ -1,7 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/auth/callback"];
+// /api/cron/publish authenticates itself via CRON_SECRET (Vercel Cron has no
+// Supabase session to send) - without this exemption, Vercel Cron's request would
+// get redirected to /login before the route's own check ever ran, and the whole
+// publishing queue would silently never fire. /api/unsubscribe and /unsubscribed
+// are clicked from an email by someone who was never logged in at all.
+const PUBLIC_PATHS = ["/login", "/auth/callback", "/api/cron", "/api/unsubscribe", "/unsubscribed"];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });

@@ -2,7 +2,14 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logEvent } from "@/lib/events";
 import { sendMail } from "@/lib/mailer";
-import { parseXPosts } from "@/lib/channel-post-format";
+import { parseXPosts, parseNewsletter } from "@/lib/channel-post-format";
+
+// Newsletter's unsubscribe footer, appended to every real send - required
+// alongside real sending, not optional (week4-full-flow.md line 295): a basic
+// unsubscribe link, honored immediately, not a silent compliance gap.
+function unsubscribeFooter(baseUrl: string, subscriberId: string): string {
+  return `\n\n---\nUnsubscribe: ${baseUrl}/api/unsubscribe?id=${subscriberId}`;
+}
 
 // How far past scheduled_for a still-'scheduled' item can sit before it's treated
 // as stale rather than fired late - the docs require a visible "overdue" state for
@@ -117,11 +124,51 @@ export async function GET(request: Request) {
 
       results.published++;
 
-      // Notification failure is tracked separately from the state transition
-      // (week4-full-flow.md line 316: "Log the send separately from the state
-      // transition, and surface the failure") - the item is genuinely published
-      // (its time arrived, the queue did its job) regardless of whether the email
-      // happened to fail; notification_sent staying false is what surfaces that.
+      // Newsletter is the one channel with real, live delivery this week - not a
+      // reminder like LinkedIn/X (Decision #22/#48). Same scheduled_content table
+      // and cron job, different action at fire time: a real send to every active
+      // subscriber, not a single email to the workspace notification address.
+      if (item.channel === "newsletter") {
+        const { subject_line, body_markdown } = parseNewsletter(post.body);
+        const { data: subscribers } = await admin
+          .from("newsletter_subscribers")
+          .select("id, email")
+          .is("unsubscribed_at", null);
+
+        const baseUrl = new URL(request.url).origin;
+        let sent = 0;
+        let failed = 0;
+        for (const sub of subscribers ?? []) {
+          const result = await sendMail({
+            to: sub.email,
+            subject: subject_line || "Newsletter",
+            text: `${body_markdown}${unsubscribeFooter(baseUrl, sub.id)}`,
+          });
+          if (result.ok) sent++;
+          else failed++;
+        }
+
+        // Notification failure is tracked separately from the state transition
+        // (week4-full-flow.md line 316) - the item is genuinely published (its
+        // time arrived) regardless of how many individual sends succeeded;
+        // notification_sent only reflects whether delivery was clean.
+        if (failed === 0) {
+          await admin.from("scheduled_content").update({ notification_sent: true }).eq("id", item.id);
+        } else {
+          results.notificationFailed++;
+        }
+        await logEvent({
+          requestId: post.request_id,
+          stage: "publish_job",
+          status: failed === 0 ? "success" : "failed",
+          detail: `Newsletter sent to ${sent}/${(subscribers ?? []).length} active subscribers${failed > 0 ? ` (${failed} failed)` : ""}.`,
+        });
+        continue;
+      }
+
+      // LinkedIn/X: a scheduled reminder, not automated publishing (Decision #22) -
+      // the human still posts it themselves; the email just has the content ready
+      // to paste.
       const mailResult = await sendMail({
         to: process.env.NOTIFICATION_EMAIL || "",
         subject: `Ready to publish: ${item.channel} post`,

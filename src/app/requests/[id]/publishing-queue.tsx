@@ -2,10 +2,10 @@ import { Card } from "@/components/ui/card";
 import { CHANNEL_LABELS } from "@/lib/channel-post-format";
 import ScheduleChannelForm from "./schedule-channel-form";
 
-// Newsletter isn't part of this queue at all - it has its own real-delivery path
-// (Stage 9b, not yet built), not the LinkedIn/X scheduled-reminder queue (Decision
-// #22/#48).
-const QUEUE_CHANNELS = ["linkedin", "x"] as const;
+// Newsletter shares this same table/cron job but gets real delivery to every
+// active subscriber instead of a reminder email (Decision #22/#48) - see
+// /api/cron/publish for the branch.
+const QUEUE_CHANNELS = ["linkedin", "x", "newsletter"] as const;
 
 type ChannelPost = { id: string; channel: string; version: number; chosen: boolean };
 type EvalResult = { channel: string | null; content_version: number; status: string };
@@ -52,8 +52,9 @@ export default function PublishingQueue({
     <section className="mt-8">
       <h2 className="text-sm font-semibold text-muted">Publishing queue</h2>
       <p className="mt-1 text-xs text-muted">
-        A scheduled reminder, not automated publishing — at the scheduled time you get the
-        ready-to-post content by email and post it yourself.
+        LinkedIn and X are scheduled reminders, not automated publishing — you get the
+        ready-to-post content by email and post it yourself. Newsletter is real delivery — it
+        actually sends to every active subscriber at the scheduled time.
       </p>
 
       <div className="mt-3 flex flex-col gap-3">

@@ -10,7 +10,7 @@ export default function ScheduleChannelForm({
   hasPendingSchedule,
 }: {
   requestId: string;
-  channel: "linkedin" | "x";
+  channel: "linkedin" | "x" | "newsletter";
   hasPendingSchedule: boolean;
 }) {
   const router = useRouter();

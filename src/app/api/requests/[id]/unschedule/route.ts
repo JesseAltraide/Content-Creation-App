@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logEvent } from "@/lib/events";
 
 const bodySchema = z.object({
-  channel: z.enum(["linkedin", "x"]),
+  channel: z.enum(["linkedin", "x", "newsletter"]),
 });
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {

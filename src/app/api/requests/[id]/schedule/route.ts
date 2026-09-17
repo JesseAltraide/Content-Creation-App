@@ -4,12 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logEvent } from "@/lib/events";
 
-// Newsletter has its own real-delivery path (Stage 9b, not this queue) - Decision
-// #22/#48: LinkedIn/X get the scheduled-reminder queue, newsletter gets real Gmail
-// send to an actual subscriber list. Scheduling newsletter through this route would
-// be a genuine category error, not just an unsupported option.
+// Newsletter shares this same scheduled_content table and cron job (Decision
+// #22/#48) but the cron handles it differently at fire time: LinkedIn/X get a
+// reminder email to the workspace notification address, newsletter gets a real
+// send to every active subscriber - see /api/cron/publish.
 const bodySchema = z.object({
-  channel: z.enum(["linkedin", "x"]),
+  channel: z.enum(["linkedin", "x", "newsletter"]),
   scheduledFor: z.string().datetime({ message: "Invalid date/time." }),
 });
 
