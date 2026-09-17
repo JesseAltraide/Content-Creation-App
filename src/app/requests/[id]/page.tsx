@@ -94,12 +94,21 @@ export default async function RequestDetailPage({
   const canRetry = req.status === "researching" && latestEvent?.status === "failed";
   const angleAttemptFailed =
     req.status === "awaiting_angle_selection" && latestEvent?.status === "failed";
-  const needsAttention = req.status === "needs_human_attention" && latestEvent;
+  // needs_human_attention is a status, not itself a log line - it doesn't change just
+  // because something else gets logged afterward (e.g. Workflow E's edit_triage
+  // deliberately never touches requests.status). Using the absolute latest event to
+  // explain *why* we're stuck breaks the moment an unrelated success event follows a
+  // real failure - caught live: fixing one channel's post via a manual edit logged a
+  // clean "re-evaluated: pass" success event while the request was still stuck on a
+  // different channel, and that success message rendered as if it were the reason
+  // for being stuck. The latest *failed* event is what actually explains the status.
+  const latestFailedEvent = events?.find((e) => e.status === "failed");
+  const needsAttention = req.status === "needs_human_attention" && latestFailedEvent;
   const attentionExplanation = needsAttention
-    ? explainNeedsAttention(latestEvent!.stage, latestEvent!.detail)
+    ? explainNeedsAttention(latestFailedEvent!.stage, latestFailedEvent!.detail)
     : null;
   const canTryDifferentAngle =
-    needsAttention && ["excerpt_selection", "evaluation", "angle_proposal"].includes(latestEvent!.stage);
+    needsAttention && ["excerpt_selection", "evaluation", "angle_proposal"].includes(latestFailedEvent!.stage);
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-12">
@@ -121,7 +130,7 @@ export default async function RequestDetailPage({
         <PipelineProgress
           status={req.status}
           failed={canRetry || angleAttemptFailed}
-          blockedEventStage={needsAttention ? latestEvent!.stage : undefined}
+          blockedEventStage={needsAttention ? latestFailedEvent!.stage : undefined}
         />
       </Card>
 
@@ -241,6 +250,7 @@ export default async function RequestDetailPage({
         requestId={id}
         requestStatus={req.status}
         latestEvent={latestEvent}
+        latestFailedEvent={latestFailedEvent}
         channelPosts={channelPosts ?? []}
         evaluations={pass2Evaluations ?? []}
       />

@@ -3,6 +3,7 @@ import { friendlyStageMessage } from "@/lib/friendly-errors";
 import RetryAdaptationButton from "./retry-adaptation-button";
 import RejectButton from "./reject-button";
 import ChannelPostCard from "./channel-post-card";
+import MarkReadyButton from "./mark-ready-button";
 
 type ChannelPost = {
   id: string;
@@ -29,12 +30,14 @@ export default function ChannelPostsReview({
   requestId,
   requestStatus,
   latestEvent,
+  latestFailedEvent,
   channelPosts,
   evaluations,
 }: {
   requestId: string;
   requestStatus: string;
   latestEvent: { stage: string; status: string; detail: string | null } | undefined;
+  latestFailedEvent: { stage: string; status: string; detail: string | null } | undefined;
   channelPosts: ChannelPost[];
   evaluations: EvalResult[];
 }) {
@@ -67,7 +70,17 @@ export default function ChannelPostsReview({
   // The generic needs_human_attention banner (with the why/action explanation) is
   // already rendered by page.tsx for every stage, including this one - only the
   // Reject action itself lives here, scoped to the channel-review section.
-  const stuckHere = requestStatus === "needs_human_attention" && latestEvent?.stage === "pass2_evaluation";
+  // Uses the latest FAILED event, not the absolute latest - needs_human_attention is
+  // a status, not a log line, and doesn't change just because something else (e.g.
+  // a successful edit_triage on a different channel) gets logged afterward. See
+  // page.tsx's latestFailedEvent comment for the live bug this fixes.
+  const stuckHere = requestStatus === "needs_human_attention" && latestFailedEvent?.stage === "pass2_evaluation";
+  // Workflow E can fix the one channel that was still failing via a direct edit
+  // without ever touching requests.status (it's a per-post action, independent of
+  // the request's pipeline stage) - if every channel now individually passes, offer
+  // the explicit re-check rather than leaving Reject as the only visible option.
+  const allNowPass =
+    stuckHere && latestPosts.length > 0 && latestPosts.every((p) => evalByChannel.get(p.channel)?.status === "pass");
 
   return (
     <section className="mt-8">
@@ -114,7 +127,10 @@ export default function ChannelPostsReview({
 
       {stuckHere && (
         <Card className="mt-4 p-5">
-          <RejectButton requestId={requestId} />
+          <div className="flex flex-col gap-3">
+            {allNowPass && <MarkReadyButton requestId={requestId} />}
+            <RejectButton requestId={requestId} />
+          </div>
         </Card>
       )}
     </section>
