@@ -36,6 +36,101 @@
     },
     {
       "parameters": {
+        "jsCode": "const err = $json.error || {};\nconst message = (err.message || JSON.stringify(err) || 'Unknown error').slice(0, 500);\nreturn [{ json: { requestId: $('Config').first().json.request_id, message } }];"
+      },
+      "id": "setup-error-extract",
+      "name": "Pre-Claude Setup: Extract Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        280,
+        -580
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.requestId}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: $('Config').first().json.prior_status }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "setup-revert-status",
+      "name": "Pre-Claude Setup: Revert Request State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "position": [
+        540,
+        -580
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('Pre-Claude Setup: Extract Error').first().json.requestId, stage: 'regeneration_setup', status: 'failed', detail: `Couldn't start regeneration: ${$('Pre-Claude Setup: Extract Error').first().json.message}` }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "setup-log-failed",
+      "name": "Pre-Claude Setup: Log Failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "position": [
+        800,
+        -580
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'setup_failed', detail: $('Pre-Claude Setup: Extract Error').first().json.message }) }}"
+      },
+      "id": "setup-respond-failed",
+      "name": "Pre-Claude Setup: Respond Failed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1060,
+        -580
+      ]
+    },
+    {
+      "parameters": {
         "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('Config').first().json.request_id}}&select=*",
         "options": {},
         "authentication": "predefinedCredentialType",
@@ -52,8 +147,9 @@
         }
       },
       "alwaysOutputData": true,
+      "onError": "continueErrorOutput",
       "position": [
-        280,
+        1320,
         0
       ]
     },
@@ -75,8 +171,9 @@
         }
       },
       "alwaysOutputData": true,
+      "onError": "continueErrorOutput",
       "position": [
-        540,
+        1580,
         0
       ]
     },
@@ -98,8 +195,9 @@
         }
       },
       "alwaysOutputData": true,
+      "onError": "continueErrorOutput",
       "position": [
-        800,
+        1840,
         0
       ]
     },
@@ -121,8 +219,9 @@
         }
       },
       "alwaysOutputData": true,
+      "onError": "continueErrorOutput",
       "position": [
-        1060,
+        2100,
         0
       ]
     },
@@ -136,7 +235,7 @@
       "typeVersion": 2,
       "notes": "Same reason as Workflow B: excerpt text can contain backticks (quoted code), so join in real Code-node JS, never inline in an HTTP node expression.",
       "position": [
-        1320,
+        2360,
         0
       ]
     },
@@ -169,8 +268,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        1580,
+        2620,
         0
       ]
     },
@@ -184,7 +284,7 @@
       "typeVersion": 2,
       "notes": "Full Claude request body built in real Code-node JS - n8n's {{ }} expression engine chokes on large inlined JSON tool schemas (see Workflow B Error #9).",
       "position": [
-        1840,
+        2880,
         0
       ]
     },
@@ -223,7 +323,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        2100,
+        3140,
         0
       ]
     },
@@ -236,7 +336,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2360,
+        3400,
         -320
       ]
     },
@@ -270,7 +370,7 @@
         }
       },
       "position": [
-        2620,
+        3660,
         -320
       ]
     },
@@ -304,7 +404,7 @@
         }
       },
       "position": [
-        2880,
+        3920,
         -320
       ]
     },
@@ -318,7 +418,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        3140,
+        4180,
         -320
       ]
     },
@@ -331,7 +431,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3400,
+        4440,
         0
       ]
     },
@@ -365,7 +465,7 @@
         }
       },
       "position": [
-        3660,
+        4700,
         0
       ]
     },
@@ -379,7 +479,7 @@
       "typeVersion": 2,
       "notes": "Full Claude request body built in real Code-node JS - n8n's {{ }} expression engine chokes on large inlined JSON tool schemas (see Workflow B Error #9).",
       "position": [
-        3920,
+        4960,
         0
       ]
     },
@@ -418,7 +518,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        4180,
+        5220,
         0
       ]
     },
@@ -431,7 +531,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4440,
+        5480,
         -320
       ]
     },
@@ -465,7 +565,7 @@
         }
       },
       "position": [
-        4700,
+        5740,
         -320
       ]
     },
@@ -499,7 +599,7 @@
         }
       },
       "position": [
-        4960,
+        6000,
         -320
       ]
     },
@@ -513,7 +613,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        5220,
+        6260,
         -320
       ]
     },
@@ -526,7 +626,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        5480,
+        6520,
         0
       ]
     },
@@ -560,7 +660,7 @@
         }
       },
       "position": [
-        5740,
+        6780,
         0
       ]
     },
@@ -573,7 +673,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        6000,
+        7040,
         0
       ]
     },
@@ -604,7 +704,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        6260,
+        7300,
         0
       ]
     },
@@ -638,7 +738,7 @@
         }
       },
       "position": [
-        6520,
+        7560,
         -260
       ]
     },
@@ -672,7 +772,7 @@
         }
       },
       "position": [
-        6780,
+        7820,
         -260
       ]
     },
@@ -686,7 +786,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        7040,
+        8080,
         -260
       ]
     },
@@ -717,7 +817,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        7300,
+        8340,
         260
       ]
     },
@@ -751,7 +851,7 @@
         }
       },
       "position": [
-        7560,
+        8600,
         520
       ]
     },
@@ -785,7 +885,7 @@
         }
       },
       "position": [
-        7820,
+        8860,
         520
       ]
     },
@@ -799,7 +899,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        8080,
+        9120,
         520
       ]
     },
@@ -833,7 +933,7 @@
         }
       },
       "position": [
-        8340,
+        9380,
         0
       ]
     },
@@ -867,7 +967,7 @@
         }
       },
       "position": [
-        8600,
+        9640,
         0
       ]
     },
@@ -881,7 +981,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        8860,
+        9900,
         0
       ]
     }
@@ -892,6 +992,39 @@
         [
           {
             "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pre-Claude Setup: Extract Error": {
+      "main": [
+        [
+          {
+            "node": "Pre-Claude Setup: Revert Request State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pre-Claude Setup: Revert Request State": {
+      "main": [
+        [
+          {
+            "node": "Pre-Claude Setup: Log Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pre-Claude Setup: Log Failed": {
+      "main": [
+        [
+          {
+            "node": "Pre-Claude Setup: Respond Failed",
             "type": "main",
             "index": 0
           }
@@ -917,6 +1050,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Pre-Claude Setup: Extract Error",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -925,6 +1065,13 @@
         [
           {
             "node": "Fetch Latest Section",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pre-Claude Setup: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -939,6 +1086,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Pre-Claude Setup: Extract Error",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -947,6 +1101,13 @@
         [
           {
             "node": "Build Excerpts Text",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pre-Claude Setup: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -964,22 +1125,29 @@
         ]
       ]
     },
-    "Claude: Regenerate Article: Build Request": {
+    "Increment Regeneration Count": {
       "main": [
         [
           {
-            "node": "Claude: Regenerate Article",
+            "node": "Claude: Regenerate Article: Build Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pre-Claude Setup: Extract Error",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Increment Regeneration Count": {
+    "Claude: Regenerate Article: Build Request": {
       "main": [
         [
           {
-            "node": "Claude: Regenerate Article: Build Request",
+            "node": "Claude: Regenerate Article",
             "type": "main",
             "index": 0
           }

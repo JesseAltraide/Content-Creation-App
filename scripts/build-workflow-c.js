@@ -65,6 +65,7 @@ function supabaseGet(id, name, url, opts = {}) {
     credentials: { supabaseApi: SUPABASE_CRED },
     alwaysOutputData: opts.alwaysOutputData ?? true,
     ...(opts.executeOnce ? { executeOnce: true } : {}),
+    ...(opts.onError ? { onError: opts.onError } : {}),
     ...(opts.notes ? { notes: opts.notes } : {}),
   });
 }
@@ -93,6 +94,7 @@ function supabaseWrite(id, name, method, url, jsonBody, opts = {}) {
     typeVersion: 4.2,
     credentials: { supabaseApi: SUPABASE_CRED },
     ...(opts.alwaysOutputData ? { alwaysOutputData: true } : {}),
+    ...(opts.onError ? { onError: opts.onError } : {}),
     ...(opts.notes ? { notes: opts.notes } : {}),
   });
 }
@@ -217,6 +219,55 @@ function claudeErrorBranch(claudeNodeName, stage, requestIdExpr) {
   });
 }
 
+// Generic safety net for the plain Supabase GET/PATCH nodes between the webhook and
+// the Claude call (Fetch Request Row through Increment Regeneration Count). Error
+// #10 (week4-progress.md) proved these are real failure points too, not just the
+// Claude calls - a missing credential crashed the whole execution with a raw 500
+// and left the request stuck at 'generating' with no revert, since claudeErrorBranch
+// only guards the two Claude nodes. Every node passed onError:"continueErrorOutput"
+// should have its output 1 connected here via connectToSetupFailureHandler() below.
+// Built once; every guarded node's error output routes into this same shared chain.
+function buildSetupFailureHandler() {
+  withLane(-580, () => {
+    codeNode(
+      "setup-error-extract",
+      "Pre-Claude Setup: Extract Error",
+      "const err = $json.error || {};" + NL +
+        "const message = (err.message || JSON.stringify(err) || 'Unknown error').slice(0, 500);" + NL +
+        "return [{ json: { requestId: $('Config').first().json.request_id, message } }];"
+    );
+
+    supabaseWrite(
+      "setup-revert-status",
+      "Pre-Claude Setup: Revert Request State",
+      "PATCH",
+      "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.requestId}}",
+      "={{ JSON.stringify({ status: $('Config').first().json.prior_status }) }}"
+    );
+    connect("Pre-Claude Setup: Extract Error", "Pre-Claude Setup: Revert Request State");
+
+    supabaseWrite(
+      "setup-log-failed",
+      "Pre-Claude Setup: Log Failed",
+      "POST",
+      "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+      "={{ JSON.stringify({ request_id: $('Pre-Claude Setup: Extract Error').first().json.requestId, stage: 'regeneration_setup', status: 'failed', detail: `Couldn't start regeneration: ${$('Pre-Claude Setup: Extract Error').first().json.message}` }) }}"
+    );
+    connect("Pre-Claude Setup: Revert Request State", "Pre-Claude Setup: Log Failed");
+
+    respondNode(
+      "setup-respond-failed",
+      "Pre-Claude Setup: Respond Failed",
+      "={{ JSON.stringify({ ok: false, reason: 'setup_failed', detail: $('Pre-Claude Setup: Extract Error').first().json.message }) }}"
+    );
+    connect("Pre-Claude Setup: Log Failed", "Pre-Claude Setup: Respond Failed");
+  });
+}
+
+function connectToSetupFailureHandler(nodeName) {
+  connect(nodeName, "Pre-Claude Setup: Extract Error", 1);
+}
+
 function respondNode(id, name, bodyExpr) {
   return addNode({
     parameters: { respondWith: "json", responseBody: bodyExpr },
@@ -253,29 +304,39 @@ codeNode(
 );
 connect("Webhook: Regenerate", "Config");
 
+buildSetupFailureHandler();
+
 supabaseGet(
   "fetch-request", "Fetch Request Row",
-  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('Config').first().json.request_id}}&select=*"
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('Config').first().json.request_id}}&select=*",
+  { onError: "continueErrorOutput" }
 );
 connect("Config", "Fetch Request Row");
+connectToSetupFailureHandler("Fetch Request Row");
 
 supabaseGet(
   "fetch-angle", "Fetch Chosen Angle",
-  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/angles?request_id=eq.{{$('Config').first().json.request_id}}&chosen=eq.true&select=*"
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/angles?request_id=eq.{{$('Config').first().json.request_id}}&chosen=eq.true&select=*",
+  { onError: "continueErrorOutput" }
 );
 connect("Fetch Request Row", "Fetch Chosen Angle");
+connectToSetupFailureHandler("Fetch Chosen Angle");
 
 supabaseGet(
   "fetch-latest-section", "Fetch Latest Section",
-  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/sections?request_id=eq.{{$('Config').first().json.request_id}}&order=version.desc&limit=1&select=*"
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/sections?request_id=eq.{{$('Config').first().json.request_id}}&order=version.desc&limit=1&select=*",
+  { onError: "continueErrorOutput" }
 );
 connect("Fetch Chosen Angle", "Fetch Latest Section");
+connectToSetupFailureHandler("Fetch Latest Section");
 
 supabaseGet(
   "fetch-excerpts", "Fetch Excerpts",
-  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/excerpts?request_id=eq.{{$('Config').first().json.request_id}}&select=id,text,reason,source_id"
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/excerpts?request_id=eq.{{$('Config').first().json.request_id}}&select=id,text,reason,source_id",
+  { onError: "continueErrorOutput" }
 );
 connect("Fetch Latest Section", "Fetch Excerpts");
+connectToSetupFailureHandler("Fetch Excerpts");
 
 codeNode(
   "build-excerpts-text", "Build Excerpts Text",
@@ -316,9 +377,11 @@ const ARTICLE_TOOL = {
 supabaseWrite(
   "increment-regeneration-count", "Increment Regeneration Count", "PATCH",
   "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('Config').first().json.request_id}}",
-  "={{ JSON.stringify({ regeneration_count: $('Fetch Request Row').first().json.regeneration_count + 1 }) }}"
+  "={{ JSON.stringify({ regeneration_count: $('Fetch Request Row').first().json.regeneration_count + 1 }) }}",
+  { onError: "continueErrorOutput" }
 );
 connect("Build Excerpts Text", "Increment Regeneration Count");
+connectToSetupFailureHandler("Increment Regeneration Count");
 
 const regeneratePrompt =
   "`Regenerate this article. The human reviewer read the previous version and asked for a specific change - address it directly, don't just lightly reword the same draft.\\n\\nWorking title: ${$('Fetch Chosen Angle').first().json.working_title}\\nThesis: ${$('Fetch Chosen Angle').first().json.thesis}\\nSection shape: ${JSON.stringify($('Fetch Chosen Angle').first().json.section_shape)}\\nPrimary keyword (must appear naturally, including in a heading): ${$('Fetch Request Row').first().json.primary_keyword}\\nDesired length: ${$('Fetch Request Row').first().json.desired_length || 'no specific target'}\\n\\nPrevious version:\\n${$('Fetch Latest Section').first().json.body_markdown}\\n\\nReviewer's comment on what to change:\\n${$('Config').first().json.comment}\\n\\nStay grounded only in the excerpts below - no unsupported claims or invented statistics, even to satisfy the comment:\\n${$('Build Excerpts Text').first().json.excerptsTextPlain}\\n\\nWrite in markdown with proper H1/H2 heading hierarchy.`";
