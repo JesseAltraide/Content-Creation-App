@@ -114,10 +114,7 @@ export default function WorkingBanner({
         <div className="text-sm text-warning">
           <p className="font-medium">{label} — but nothing has reported back in a while.</p>
           <p className="mt-0.5 text-xs text-warning/90">
-            This request is still marked as in progress, but no progress has been logged for
-            over 5 minutes. That usually means the run died or n8n isn&apos;t reachable — this
-            app can&apos;t tell the difference, it only sees what gets written back. Check n8n,
-            then retry.
+            Something is probably down — we advise you try again later.
           </p>
         </div>
       </div>
