@@ -179,7 +179,7 @@
     },
     {
       "parameters": {
-        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/audience_profiles?id=eq.{{$('Fetch Request Row').first().json.resolved_audience_profile_id}}&select=*",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/audience_profiles?id=eq.{{$('Fetch Request Row').first().json.resolved_audience_profile_id || '00000000-0000-0000-0000-000000000000'}}&select=*",
         "options": {},
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "supabaseApi"

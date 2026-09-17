@@ -313,9 +313,14 @@ supabaseGet(
 );
 connect("Fetch Request Row", "Fetch Approved Section");
 
+// resolved_audience_profile_id can genuinely be null (no audience profile configured
+// yet) - PostgREST rejects `id=eq.null` outright as an invalid UUID (400 Bad
+// Request), which is exactly what crashed here on first live test. Falling back to
+// the nil UUID keeps the query syntactically valid and just yields zero rows, which
+// Build Adaptation Context already handles the same way as "no profile fetched".
 supabaseGet(
   "fetch-audience", "Fetch Audience Profile",
-  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/audience_profiles?id=eq.{{$('Fetch Request Row').first().json.resolved_audience_profile_id}}&select=*"
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/audience_profiles?id=eq.{{$('Fetch Request Row').first().json.resolved_audience_profile_id || '00000000-0000-0000-0000-000000000000'}}&select=*"
 );
 connect("Fetch Approved Section", "Fetch Audience Profile");
 
