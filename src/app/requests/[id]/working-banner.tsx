@@ -16,10 +16,24 @@ const WORKING_MESSAGES: Record<string, string> = {
   adapting: "Adapting to channels and running evaluation",
 };
 
-export default function WorkingBanner({ requestId, status }: { requestId: string; status: string }) {
+export default function WorkingBanner({
+  requestId,
+  status,
+  stalled,
+}: {
+  requestId: string;
+  status: string;
+  stalled: boolean;
+}) {
   const router = useRouter();
   const [elapsed, setElapsed] = useState(0);
-  const label = WORKING_MESSAGES[status];
+  // A trigger status alone doesn't mean work is still happening: these statuses
+  // are set before the webhook fires and nothing sets them back if the run dies.
+  // Caught live - Workflow A crashed on a duplicate-source insert, logged the
+  // failure immediately, and this banner still cheerfully counted to 5 minutes
+  // telling the human to be patient. `stalled` comes from the latest event
+  // actually being a dead failure (see page.tsx).
+  const label = stalled ? undefined : WORKING_MESSAGES[status];
 
   // Push-based, not polling: subscribes to the two things that can actually mean
   // "something happened" for this request - the row's own status changing, or a
@@ -50,8 +64,9 @@ export default function WorkingBanner({ requestId, status }: { requestId: string
       clearInterval(tickId);
       supabase.removeChannel(channel);
     };
+    // `stalled` is a dependency too: when a retry clears it, this has to re-subscribe.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, requestId]);
+  }, [status, requestId, stalled]);
 
   if (!label) return null;
 

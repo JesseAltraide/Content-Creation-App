@@ -199,7 +199,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$('A1 · Config').first().json.SUPABASE_URL}}/rest/v1/sources",
+        "url": "={{$('A1 · Config').first().json.SUPABASE_URL}}/rest/v1/sources?on_conflict=request_id,url",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json.sources) }}",
@@ -208,7 +208,7 @@
           "parameters": [
             {
               "name": "Prefer",
-              "value": "return=minimal"
+              "value": "return=minimal,resolution=ignore-duplicates"
             }
           ]
         },
@@ -217,6 +217,7 @@
       },
       "id": "a1-insert-sources",
       "name": "A1 · Insert Candidate Sources",
+      "notes": "Idempotent on retry: the search stage re-runs the same query and gets the same URLs back, so a plain insert 409s on the sources (request_id, url) unique constraint and crashes the whole workflow - confirmed live, and it left the request stuck at 'researching' with no recoverable path. on_conflict + resolution=ignore-duplicates leaves already-known URLs alone and still inserts genuinely new ones.",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [

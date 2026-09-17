@@ -104,6 +104,14 @@ export default async function RequestDetailPage({
   // different channel, and that success message rendered as if it were the reason
   // for being stuck. The latest *failed* event is what actually explains the status.
   const latestFailedEvent = events?.find((e) => e.status === "failed");
+  // Whether background work is dead rather than slow. A trigger-status alone can't
+  // tell us (nothing resets 'researching'/'generating'/'adapting' when a run dies),
+  // so the signal is: the most recent event is a failure. The one real exception is
+  // a 524 - that's our own outbound connection giving up while n8n keeps executing
+  // (limitation #93 in week4-progress.md), so the work genuinely does continue there
+  // and the working indicator should stay up.
+  const latestIsDeadFailure =
+    latestEvent?.status === "failed" && !latestEvent.detail?.includes("524");
   const needsAttention = req.status === "needs_human_attention" && latestFailedEvent;
   const attentionExplanation = needsAttention
     ? explainNeedsAttention(latestFailedEvent!.stage, latestFailedEvent!.detail)
@@ -140,7 +148,7 @@ export default async function RequestDetailPage({
         />
       </Card>
 
-      <WorkingBanner requestId={id} status={req.status} />
+      <WorkingBanner requestId={id} status={req.status} stalled={latestIsDeadFailure} />
 
       <Card className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 p-5 text-sm">
         <dt className="text-muted">Path</dt>
