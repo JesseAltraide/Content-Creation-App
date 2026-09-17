@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { intakeSchema, dedupeUrls } from "@/lib/intake-validation";
 import { logEvent } from "@/lib/events";
 import { triggerSearchSources, triggerScrapeAndProposeAngle } from "@/lib/n8n";
+import { getOnboardingStatus } from "@/lib/onboarding";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -12,6 +13,17 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+  }
+
+  // Server-enforced, not just hidden behind the /new page's own check (same "hard
+  // rule" discipline as every other gate in this build) - someone hitting this
+  // route directly shouldn't be able to skip workspace setup.
+  const onboarding = await getOnboardingStatus();
+  if (!onboarding.complete) {
+    return NextResponse.json(
+      { error: "This workspace needs an audience profile, a tone sample, and a notification email configured before it can generate content." },
+      { status: 409 }
+    );
   }
 
   const body = await request.json();

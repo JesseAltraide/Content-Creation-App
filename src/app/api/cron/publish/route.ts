@@ -45,6 +45,18 @@ export async function GET(request: Request) {
   const admin = createAdminClient();
   const now = new Date();
 
+  // Shared workspace-level setting (Decision #96), not the env var directly - the
+  // onboarding gate (Decision #97) requires this to be set via the settings UI
+  // before generation is even allowed, so by the time anything reaches this cron
+  // job it should already exist. NOTIFICATION_EMAIL env var stays as a fallback
+  // only for content created before the gate existed.
+  const { data: workspaceSettings } = await admin
+    .from("workspace_settings")
+    .select("notification_email")
+    .eq("id", true)
+    .maybeSingle();
+  const notificationEmail = workspaceSettings?.notification_email || process.env.NOTIFICATION_EMAIL || "";
+
   const { data: due } = await admin
     .from("scheduled_content")
     .select("id, channel_post_id, channel, scheduled_for")
@@ -170,7 +182,7 @@ export async function GET(request: Request) {
       // the human still posts it themselves; the email just has the content ready
       // to paste.
       const mailResult = await sendMail({
-        to: process.env.NOTIFICATION_EMAIL || "",
+        to: notificationEmail,
         subject: `Ready to publish: ${item.channel} post`,
         text: `Your scheduled ${item.channel} post is ready to paste and publish:\n\n${formatChannelBody(item.channel, post.body)}`,
       });
