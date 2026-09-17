@@ -36,6 +36,135 @@
     },
     {
       "parameters": {
+        "jsCode": "const err = $json.error || {};\nconst message = (err.message || JSON.stringify(err) || 'Unknown error').slice(0, 500);\nreturn [{ json: { requestId: $('Config').first().json.request_id, message } }];"
+      },
+      "id": "setup-error-extract",
+      "name": "Pipeline Setup Failure: Extract Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        280,
+        -580
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.requestId}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'awaiting_angle_selection' }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "setup-revert-status",
+      "name": "Pipeline Setup Failure: Revert Request State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "position": [
+        540,
+        -580
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/angles?id=eq.{{$('Config').first().json.angle_id}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chosen: false }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "setup-revert-angle",
+      "name": "Pipeline Setup Failure: Revert Angle Choice",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "position": [
+        800,
+        -580
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('Pipeline Setup Failure: Extract Error').first().json.requestId, stage: 'pipeline_setup', status: 'failed', detail: `A setup step failed: ${$('Pipeline Setup Failure: Extract Error').first().json.message}` }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "setup-log-failed",
+      "name": "Pipeline Setup Failure: Log Failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "position": [
+        1060,
+        -580
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'setup_failed', detail: $('Pipeline Setup Failure: Extract Error').first().json.message }) }}"
+      },
+      "id": "setup-respond-failed",
+      "name": "Pipeline Setup Failure: Respond Failed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1320,
+        -580
+      ]
+    },
+    {
+      "parameters": {
         "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('Config').first().json.request_id}}&select=*",
         "options": {},
         "authentication": "predefinedCredentialType",
@@ -52,8 +181,9 @@
         }
       },
       "alwaysOutputData": true,
+      "onError": "continueErrorOutput",
       "position": [
-        280,
+        1580,
         0
       ]
     },
@@ -75,8 +205,9 @@
         }
       },
       "alwaysOutputData": true,
+      "onError": "continueErrorOutput",
       "position": [
-        540,
+        1840,
         0
       ]
     },
@@ -99,8 +230,9 @@
       },
       "alwaysOutputData": true,
       "executeOnce": true,
+      "onError": "continueErrorOutput",
       "position": [
-        800,
+        2100,
         0
       ]
     },
@@ -114,7 +246,7 @@
       "typeVersion": 2,
       "notes": "Filters alwaysOutputData's placeholder before counting (Error #7). sourcesText is built here in real Code-node JS, not as inline .map/.join inside an HTTP node's {{ }} expression - scraped article text routinely contains markdown code fences (backticks), which broke the downstream Claude node's expression when spliced into a nested template literal there. A Code node evaluates real JS with actual data bindings, so arbitrary content is always safe here regardless of what characters it contains.",
       "position": [
-        1060,
+        2360,
         0
       ]
     },
@@ -145,7 +277,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1320,
+        2620,
         0
       ]
     },
@@ -178,8 +310,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        1580,
+        2880,
         320
       ]
     },
@@ -212,8 +345,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        1840,
+        3140,
         320
       ]
     },
@@ -227,7 +361,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        2100,
+        3400,
         320
       ]
     },
@@ -241,7 +375,7 @@
       "typeVersion": 2,
       "notes": "Builds the full Claude request body in real Code-node JS - see the claudeNode() comment for why this can't live inline in the HTTP node's {{ }} expression.",
       "position": [
-        2360,
+        3660,
         0
       ]
     },
@@ -280,7 +414,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        2620,
+        3920,
         0
       ]
     },
@@ -293,7 +427,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2880,
+        4180,
         -320
       ]
     },
@@ -326,8 +460,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        3140,
+        4440,
         -320
       ]
     },
@@ -360,8 +495,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        3400,
+        4700,
         -320
       ]
     },
@@ -394,8 +530,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        3660,
+        4960,
         -320
       ]
     },
@@ -409,7 +546,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        3920,
+        5220,
         -320
       ]
     },
@@ -422,7 +559,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4180,
+        5480,
         0
       ]
     },
@@ -453,7 +590,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        4440,
+        5740,
         0
       ]
     },
@@ -486,8 +623,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        4700,
+        6000,
         320
       ]
     },
@@ -520,8 +658,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        4960,
+        6260,
         320
       ]
     },
@@ -535,7 +674,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        5220,
+        6520,
         320
       ]
     },
@@ -568,8 +707,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        5480,
+        6780,
         0
       ]
     },
@@ -591,8 +731,9 @@
         }
       },
       "alwaysOutputData": true,
+      "onError": "continueErrorOutput",
       "position": [
-        5740,
+        7040,
         0
       ]
     },
@@ -606,7 +747,7 @@
       "typeVersion": 2,
       "notes": "Same fix as Build Sources Text: excerpt text can itself contain backticks (Claude may quote code from a source), so this formatting happens in real Code-node JS rather than inline .map/.join inside a downstream HTTP node's {{ }} expression.",
       "position": [
-        6000,
+        7300,
         0
       ]
     },
@@ -620,7 +761,7 @@
       "typeVersion": 2,
       "notes": "Builds the full Claude request body in real Code-node JS - see the claudeNode() comment for why this can't live inline in the HTTP node's {{ }} expression.",
       "position": [
-        6260,
+        7560,
         0
       ]
     },
@@ -659,7 +800,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        6520,
+        7820,
         0
       ]
     },
@@ -672,7 +813,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        6780,
+        8080,
         -320
       ]
     },
@@ -705,8 +846,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        7040,
+        8340,
         -320
       ]
     },
@@ -739,8 +881,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        7300,
+        8600,
         -320
       ]
     },
@@ -773,8 +916,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        7560,
+        8860,
         -320
       ]
     },
@@ -788,7 +932,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        7820,
+        9120,
         -320
       ]
     },
@@ -801,7 +945,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        8080,
+        9380,
         0
       ]
     },
@@ -834,8 +978,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        8340,
+        9640,
         0
       ]
     },
@@ -849,7 +994,7 @@
       "typeVersion": 2,
       "notes": "Builds the full Claude request body in real Code-node JS - see the claudeNode() comment for why this can't live inline in the HTTP node's {{ }} expression.",
       "position": [
-        8600,
+        9900,
         0
       ]
     },
@@ -888,7 +1033,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        8860,
+        10160,
         0
       ]
     },
@@ -901,7 +1046,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        9120,
+        10420,
         -320
       ]
     },
@@ -934,8 +1079,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        9380,
+        10680,
         -320
       ]
     },
@@ -968,8 +1114,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        9640,
+        10940,
         -320
       ]
     },
@@ -1002,8 +1149,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        9900,
+        11200,
         -320
       ]
     },
@@ -1017,7 +1165,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        10160,
+        11460,
         -320
       ]
     },
@@ -1030,7 +1178,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        10420,
+        11720,
         0
       ]
     },
@@ -1063,8 +1211,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        10680,
+        11980,
         0
       ]
     },
@@ -1077,7 +1226,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        10940,
+        12240,
         0
       ]
     },
@@ -1108,7 +1257,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        11200,
+        12500,
         0
       ]
     },
@@ -1141,8 +1290,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        11460,
+        12760,
         -260
       ]
     },
@@ -1175,8 +1325,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        11720,
+        13020,
         -260
       ]
     },
@@ -1190,7 +1341,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        11980,
+        13280,
         -260
       ]
     },
@@ -1204,7 +1355,7 @@
       "typeVersion": 2,
       "notes": "Builds the full Claude request body in real Code-node JS - see the claudeNode() comment for why this can't live inline in the HTTP node's {{ }} expression.",
       "position": [
-        12240,
+        13540,
         0
       ]
     },
@@ -1243,7 +1394,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        12500,
+        13800,
         0
       ]
     },
@@ -1256,7 +1407,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        12760,
+        14060,
         -320
       ]
     },
@@ -1289,8 +1440,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        13020,
+        14320,
         -320
       ]
     },
@@ -1323,8 +1475,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        13280,
+        14580,
         -320
       ]
     },
@@ -1357,8 +1510,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        13540,
+        14840,
         -320
       ]
     },
@@ -1372,7 +1526,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        13800,
+        15100,
         -320
       ]
     },
@@ -1385,7 +1539,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        14060,
+        15360,
         0
       ]
     },
@@ -1418,8 +1572,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        14320,
+        15620,
         0
       ]
     },
@@ -1433,7 +1588,7 @@
       "typeVersion": 2,
       "notes": "Builds the full Claude request body in real Code-node JS - see the claudeNode() comment for why this can't live inline in the HTTP node's {{ }} expression.",
       "position": [
-        14580,
+        15880,
         0
       ]
     },
@@ -1472,7 +1627,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        14840,
+        16140,
         0
       ]
     },
@@ -1485,7 +1640,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        15100,
+        16400,
         -320
       ]
     },
@@ -1518,8 +1673,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        15360,
+        16660,
         -320
       ]
     },
@@ -1552,8 +1708,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        15620,
+        16920,
         -320
       ]
     },
@@ -1586,8 +1743,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        15880,
+        17180,
         -320
       ]
     },
@@ -1601,7 +1759,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        16140,
+        17440,
         -320
       ]
     },
@@ -1614,7 +1772,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        16400,
+        17700,
         0
       ]
     },
@@ -1647,8 +1805,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        16660,
+        17960,
         0
       ]
     },
@@ -1661,7 +1820,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        16920,
+        18220,
         0
       ]
     },
@@ -1692,7 +1851,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        17180,
+        18480,
         0
       ]
     },
@@ -1725,8 +1884,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        17440,
+        18740,
         -260
       ]
     },
@@ -1759,8 +1919,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        17700,
+        19000,
         -260
       ]
     },
@@ -1774,7 +1935,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        17960,
+        19260,
         -260
       ]
     },
@@ -1788,7 +1949,7 @@
       "typeVersion": 2,
       "notes": "Builds the full Claude request body in real Code-node JS - see the claudeNode() comment for why this can't live inline in the HTTP node's {{ }} expression.",
       "position": [
-        18220,
+        19520,
         0
       ]
     },
@@ -1827,7 +1988,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        18480,
+        19780,
         0
       ]
     },
@@ -1840,7 +2001,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        18740,
+        20040,
         -320
       ]
     },
@@ -1873,8 +2034,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        19000,
+        20300,
         -320
       ]
     },
@@ -1907,8 +2069,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        19260,
+        20560,
         -320
       ]
     },
@@ -1941,8 +2104,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        19520,
+        20820,
         -320
       ]
     },
@@ -1956,7 +2120,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        19780,
+        21080,
         -320
       ]
     },
@@ -1969,7 +2133,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        20040,
+        21340,
         0
       ]
     },
@@ -2002,8 +2166,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        20300,
+        21600,
         0
       ]
     },
@@ -2017,7 +2182,7 @@
       "typeVersion": 2,
       "notes": "Builds the full Claude request body in real Code-node JS - see the claudeNode() comment for why this can't live inline in the HTTP node's {{ }} expression.",
       "position": [
-        20560,
+        21860,
         0
       ]
     },
@@ -2056,7 +2221,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        20820,
+        22120,
         0
       ]
     },
@@ -2069,7 +2234,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        21080,
+        22380,
         -320
       ]
     },
@@ -2102,8 +2267,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        21340,
+        22640,
         -320
       ]
     },
@@ -2136,8 +2302,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        21600,
+        22900,
         -320
       ]
     },
@@ -2170,8 +2337,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        21860,
+        23160,
         -320
       ]
     },
@@ -2185,7 +2353,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        22120,
+        23420,
         -320
       ]
     },
@@ -2198,7 +2366,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        22380,
+        23680,
         0
       ]
     },
@@ -2231,8 +2399,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        22640,
+        23940,
         0
       ]
     },
@@ -2245,7 +2414,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        22900,
+        24200,
         0
       ]
     },
@@ -2276,7 +2445,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        23160,
+        24460,
         0
       ]
     },
@@ -2309,8 +2478,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        23420,
+        24720,
         -260
       ]
     },
@@ -2343,8 +2513,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        23680,
+        24980,
         -260
       ]
     },
@@ -2358,7 +2529,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        23940,
+        25240,
         -260
       ]
     },
@@ -2391,8 +2562,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        24200,
+        25500,
         260
       ]
     },
@@ -2425,8 +2597,9 @@
           "name": "Supabase account"
         }
       },
+      "onError": "continueErrorOutput",
       "position": [
-        24460,
+        25760,
         260
       ]
     },
@@ -2440,7 +2613,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        24720,
+        26020,
         260
       ]
     }
@@ -2451,6 +2624,68 @@
         [
           {
             "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pipeline Setup Failure: Extract Error": {
+      "main": [
+        [
+          {
+            "node": "Pipeline Setup Failure: Revert Request State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pipeline Setup Failure: Revert Request State": {
+      "main": [
+        [
+          {
+            "node": "Pipeline Setup Failure: Revert Angle Choice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pipeline Setup Failure: Revert Angle Choice": {
+      "main": [
+        [
+          {
+            "node": "Pipeline Setup Failure: Log Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pipeline Setup Failure: Log Failed": {
+      "main": [
+        [
+          {
+            "node": "Pipeline Setup Failure: Respond Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Request Row": {
+      "main": [
+        [
+          {
+            "node": "Fetch Angle Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -2468,22 +2703,18 @@
         ]
       ]
     },
-    "Fetch Request Row": {
-      "main": [
-        [
-          {
-            "node": "Fetch Angle Row",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Fetch Angle Row": {
       "main": [
         [
           {
             "node": "Fetch Scraped Sources",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -2498,6 +2729,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -2506,6 +2744,24 @@
         [
           {
             "node": "IF Zero Scraped Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Needs Attention (no sources)": {
+      "main": [
+        [
+          {
+            "node": "Log Event (no sources)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -2530,22 +2786,18 @@
         ]
       ]
     },
-    "Mark Needs Attention (no sources)": {
-      "main": [
-        [
-          {
-            "node": "Log Event (no sources)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Log Event (no sources)": {
       "main": [
         [
           {
             "node": "Respond (no sources)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -2581,22 +2833,29 @@
         ]
       ]
     },
-    "Claude: Select Excerpts: Extract Error": {
+    "Claude: Select Excerpts: Revert Request State": {
       "main": [
         [
           {
-            "node": "Claude: Select Excerpts: Revert Request State",
+            "node": "Claude: Select Excerpts: Revert Angle Choice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Claude: Select Excerpts: Revert Request State": {
+    "Claude: Select Excerpts: Extract Error": {
       "main": [
         [
           {
-            "node": "Claude: Select Excerpts: Revert Angle Choice",
+            "node": "Claude: Select Excerpts: Revert Request State",
             "type": "main",
             "index": 0
           }
@@ -2611,6 +2870,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -2622,6 +2888,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -2630,6 +2903,24 @@
         [
           {
             "node": "IF Zero Excerpts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Needs Attention (no excerpts)": {
+      "main": [
+        [
+          {
+            "node": "Log Event (no excerpts)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -2654,22 +2945,18 @@
         ]
       ]
     },
-    "Mark Needs Attention (no excerpts)": {
-      "main": [
-        [
-          {
-            "node": "Log Event (no excerpts)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Log Event (no excerpts)": {
       "main": [
         [
           {
             "node": "Respond (no excerpts)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -2684,6 +2971,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -2692,6 +2986,13 @@
         [
           {
             "node": "Build Excerpts Text",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -2738,22 +3039,29 @@
         ]
       ]
     },
-    "Claude: Generate Article: Extract Error": {
+    "Claude: Generate Article: Revert Request State": {
       "main": [
         [
           {
-            "node": "Claude: Generate Article: Revert Request State",
+            "node": "Claude: Generate Article: Revert Angle Choice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Claude: Generate Article: Revert Request State": {
+    "Claude: Generate Article: Extract Error": {
       "main": [
         [
           {
-            "node": "Claude: Generate Article: Revert Angle Choice",
+            "node": "Claude: Generate Article: Revert Request State",
             "type": "main",
             "index": 0
           }
@@ -2768,6 +3076,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -2776,6 +3091,31 @@
         [
           {
             "node": "Claude: Generate Article: Respond Failed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Section v1": {
+      "main": [
+        [
+          {
+            "node": "Claude: Evaluate (Round 0): Build Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -2804,17 +3144,6 @@
         ]
       ]
     },
-    "Insert Section v1": {
-      "main": [
-        [
-          {
-            "node": "Claude: Evaluate (Round 0): Build Request",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Claude: Evaluate (Round 0)": {
       "main": [
         [
@@ -2833,22 +3162,29 @@
         ]
       ]
     },
-    "Claude: Evaluate (Round 0): Extract Error": {
+    "Claude: Evaluate (Round 0): Revert Request State": {
       "main": [
         [
           {
-            "node": "Claude: Evaluate (Round 0): Revert Request State",
+            "node": "Claude: Evaluate (Round 0): Revert Angle Choice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Claude: Evaluate (Round 0): Revert Request State": {
+    "Claude: Evaluate (Round 0): Extract Error": {
       "main": [
         [
           {
-            "node": "Claude: Evaluate (Round 0): Revert Angle Choice",
+            "node": "Claude: Evaluate (Round 0): Revert Request State",
             "type": "main",
             "index": 0
           }
@@ -2863,6 +3199,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -2871,6 +3214,31 @@
         [
           {
             "node": "Claude: Evaluate (Round 0): Respond Failed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Evaluation (Round 0)": {
+      "main": [
+        [
+          {
+            "node": "Gate (Round 0)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -2888,22 +3256,29 @@
         ]
       ]
     },
-    "Insert Evaluation (Round 0)": {
+    "Gate (Round 0)": {
       "main": [
         [
           {
-            "node": "Gate (Round 0)",
+            "node": "IF Pass (Round 0)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Gate (Round 0)": {
+    "Mark Pending Approval (Round 0)": {
       "main": [
         [
           {
-            "node": "IF Pass (Round 0)",
+            "node": "Log Event (pass, Round 0)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -2928,22 +3303,18 @@
         ]
       ]
     },
-    "Mark Pending Approval (Round 0)": {
-      "main": [
-        [
-          {
-            "node": "Log Event (pass, Round 0)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Log Event (pass, Round 0)": {
       "main": [
         [
           {
             "node": "Respond (pass, Round 0)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -2979,22 +3350,29 @@
         ]
       ]
     },
-    "Claude: Revise (Round 1): Extract Error": {
+    "Claude: Revise (Round 1): Revert Request State": {
       "main": [
         [
           {
-            "node": "Claude: Revise (Round 1): Revert Request State",
+            "node": "Claude: Revise (Round 1): Revert Angle Choice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Claude: Revise (Round 1): Revert Request State": {
+    "Claude: Revise (Round 1): Extract Error": {
       "main": [
         [
           {
-            "node": "Claude: Revise (Round 1): Revert Angle Choice",
+            "node": "Claude: Revise (Round 1): Revert Request State",
             "type": "main",
             "index": 0
           }
@@ -3009,6 +3387,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -3017,6 +3402,31 @@
         [
           {
             "node": "Claude: Revise (Round 1): Respond Failed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Section v2": {
+      "main": [
+        [
+          {
+            "node": "Claude: Evaluate (Round 1): Build Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -3045,17 +3455,6 @@
         ]
       ]
     },
-    "Insert Section v2": {
-      "main": [
-        [
-          {
-            "node": "Claude: Evaluate (Round 1): Build Request",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Claude: Evaluate (Round 1)": {
       "main": [
         [
@@ -3074,22 +3473,29 @@
         ]
       ]
     },
-    "Claude: Evaluate (Round 1): Extract Error": {
+    "Claude: Evaluate (Round 1): Revert Request State": {
       "main": [
         [
           {
-            "node": "Claude: Evaluate (Round 1): Revert Request State",
+            "node": "Claude: Evaluate (Round 1): Revert Angle Choice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Claude: Evaluate (Round 1): Revert Request State": {
+    "Claude: Evaluate (Round 1): Extract Error": {
       "main": [
         [
           {
-            "node": "Claude: Evaluate (Round 1): Revert Angle Choice",
+            "node": "Claude: Evaluate (Round 1): Revert Request State",
             "type": "main",
             "index": 0
           }
@@ -3104,6 +3510,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -3112,6 +3525,31 @@
         [
           {
             "node": "Claude: Evaluate (Round 1): Respond Failed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Evaluation (Round 1)": {
+      "main": [
+        [
+          {
+            "node": "Gate (Round 1)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -3129,22 +3567,29 @@
         ]
       ]
     },
-    "Insert Evaluation (Round 1)": {
+    "Gate (Round 1)": {
       "main": [
         [
           {
-            "node": "Gate (Round 1)",
+            "node": "IF Pass (Round 1)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Gate (Round 1)": {
+    "Mark Pending Approval (Round 1)": {
       "main": [
         [
           {
-            "node": "IF Pass (Round 1)",
+            "node": "Log Event (pass, Round 1)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -3169,22 +3614,18 @@
         ]
       ]
     },
-    "Mark Pending Approval (Round 1)": {
-      "main": [
-        [
-          {
-            "node": "Log Event (pass, Round 1)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Log Event (pass, Round 1)": {
       "main": [
         [
           {
             "node": "Respond (pass, Round 1)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -3220,22 +3661,29 @@
         ]
       ]
     },
-    "Claude: Revise (Round 2): Extract Error": {
+    "Claude: Revise (Round 2): Revert Request State": {
       "main": [
         [
           {
-            "node": "Claude: Revise (Round 2): Revert Request State",
+            "node": "Claude: Revise (Round 2): Revert Angle Choice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Claude: Revise (Round 2): Revert Request State": {
+    "Claude: Revise (Round 2): Extract Error": {
       "main": [
         [
           {
-            "node": "Claude: Revise (Round 2): Revert Angle Choice",
+            "node": "Claude: Revise (Round 2): Revert Request State",
             "type": "main",
             "index": 0
           }
@@ -3250,6 +3698,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -3258,6 +3713,31 @@
         [
           {
             "node": "Claude: Revise (Round 2): Respond Failed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Section v3": {
+      "main": [
+        [
+          {
+            "node": "Claude: Evaluate (Round 2): Build Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -3286,17 +3766,6 @@
         ]
       ]
     },
-    "Insert Section v3": {
-      "main": [
-        [
-          {
-            "node": "Claude: Evaluate (Round 2): Build Request",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Claude: Evaluate (Round 2)": {
       "main": [
         [
@@ -3315,22 +3784,29 @@
         ]
       ]
     },
-    "Claude: Evaluate (Round 2): Extract Error": {
+    "Claude: Evaluate (Round 2): Revert Request State": {
       "main": [
         [
           {
-            "node": "Claude: Evaluate (Round 2): Revert Request State",
+            "node": "Claude: Evaluate (Round 2): Revert Angle Choice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Claude: Evaluate (Round 2): Revert Request State": {
+    "Claude: Evaluate (Round 2): Extract Error": {
       "main": [
         [
           {
-            "node": "Claude: Evaluate (Round 2): Revert Angle Choice",
+            "node": "Claude: Evaluate (Round 2): Revert Request State",
             "type": "main",
             "index": 0
           }
@@ -3345,6 +3821,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -3353,6 +3836,31 @@
         [
           {
             "node": "Claude: Evaluate (Round 2): Respond Failed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Evaluation (Round 2)": {
+      "main": [
+        [
+          {
+            "node": "Gate (Round 2)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -3370,22 +3878,29 @@
         ]
       ]
     },
-    "Insert Evaluation (Round 2)": {
+    "Gate (Round 2)": {
       "main": [
         [
           {
-            "node": "Gate (Round 2)",
+            "node": "IF Pass (Round 2)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Gate (Round 2)": {
+    "Mark Pending Approval (Round 2)": {
       "main": [
         [
           {
-            "node": "IF Pass (Round 2)",
+            "node": "Log Event (pass, Round 2)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -3410,22 +3925,18 @@
         ]
       ]
     },
-    "Mark Pending Approval (Round 2)": {
-      "main": [
-        [
-          {
-            "node": "Log Event (pass, Round 2)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Log Event (pass, Round 2)": {
       "main": [
         [
           {
             "node": "Respond (pass, Round 2)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }
@@ -3440,6 +3951,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -3448,6 +3966,13 @@
         [
           {
             "node": "Respond (cap reached)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
             "type": "main",
             "index": 0
           }

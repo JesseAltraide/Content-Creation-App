@@ -56,8 +56,22 @@ function connect(fromName, toName, outputIndex = 0) {
   connections[fromName].main[outputIndex].push({ node: toName, type: "main", index: 0 });
 }
 
+// Error #10 (week4-progress.md, found live while testing Workflow C): a plain
+// Supabase GET/PATCH/POST node failing (bad credential, transient outage, malformed
+// query) crashes the whole n8n execution with a raw 500, completely bypassing
+// claudeErrorBranch below since that only guards the Claude HTTP nodes - the request
+// was left stuck at whatever status it last reached, with no revert and no way back.
+// Fix applied here to every plain Supabase node in this workflow too: onError
+// defaults to continueErrorOutput and its error output auto-wires to one shared
+// handler (SETUP_FAILURE_HANDLER_NAME, built once below) that reverts the request to
+// awaiting_angle_selection and un-chooses the angle - the same safe fallback
+// claudeErrorBranch already uses, since nothing downstream of any failed node here
+// succeeded either. Opt out per-call with { noAutoErrorHandling: true } - used only
+// by the handler's own three writes, to avoid wiring the handler into itself.
+const SETUP_FAILURE_HANDLER_NAME = "Pipeline Setup Failure: Extract Error";
+
 function supabaseGet(id, name, url, opts = {}) {
-  return addNode({
+  const node = addNode({
     parameters: {
       url,
       options: {},
@@ -71,13 +85,16 @@ function supabaseGet(id, name, url, opts = {}) {
     credentials: { supabaseApi: SUPABASE_CRED },
     alwaysOutputData: opts.alwaysOutputData ?? true,
     ...(opts.executeOnce ? { executeOnce: true } : {}),
+    ...(opts.noAutoErrorHandling ? {} : { onError: "continueErrorOutput" }),
     ...(opts.notes ? { notes: opts.notes } : {}),
   });
+  if (!opts.noAutoErrorHandling) connect(name, SETUP_FAILURE_HANDLER_NAME, 1);
+  return node;
 }
 
 function supabaseWrite(id, name, method, url, jsonBody, opts = {}) {
   const returnMinimal = opts.returnMinimal !== false;
-  return addNode({
+  const node = addNode({
     parameters: {
       method,
       url,
@@ -99,7 +116,64 @@ function supabaseWrite(id, name, method, url, jsonBody, opts = {}) {
     typeVersion: 4.2,
     credentials: { supabaseApi: SUPABASE_CRED },
     ...(opts.alwaysOutputData ? { alwaysOutputData: true } : {}),
+    ...(opts.noAutoErrorHandling ? {} : { onError: "continueErrorOutput" }),
     ...(opts.notes ? { notes: opts.notes } : {}),
+  });
+  if (!opts.noAutoErrorHandling) connect(name, SETUP_FAILURE_HANDLER_NAME, 1);
+  return node;
+}
+
+// Built once, after supabaseGet/supabaseWrite exist. Every plain Supabase node
+// created above this call in program order already registered its connection into
+// `connections[name]` via the auto-wiring above - connect() just stores name
+// strings, so call order relative to this doesn't matter as long as this function
+// runs before the script writes the final JSON (it's called immediately below).
+function buildSetupFailureHandler() {
+  withLane(-580, () => {
+    codeNode(
+      "setup-error-extract",
+      SETUP_FAILURE_HANDLER_NAME,
+      "const err = $json.error || {};" + NL +
+        "const message = (err.message || JSON.stringify(err) || 'Unknown error').slice(0, 500);" + NL +
+        "return [{ json: { requestId: $('Config').first().json.request_id, message } }];"
+    );
+
+    supabaseWrite(
+      "setup-revert-status",
+      "Pipeline Setup Failure: Revert Request State",
+      "PATCH",
+      "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.requestId}}",
+      "={{ JSON.stringify({ status: 'awaiting_angle_selection' }) }}",
+      { noAutoErrorHandling: true }
+    );
+    connect(SETUP_FAILURE_HANDLER_NAME, "Pipeline Setup Failure: Revert Request State");
+
+    supabaseWrite(
+      "setup-revert-angle",
+      "Pipeline Setup Failure: Revert Angle Choice",
+      "PATCH",
+      "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/angles?id=eq.{{$('Config').first().json.angle_id}}",
+      "={{ JSON.stringify({ chosen: false }) }}",
+      { noAutoErrorHandling: true }
+    );
+    connect("Pipeline Setup Failure: Revert Request State", "Pipeline Setup Failure: Revert Angle Choice");
+
+    supabaseWrite(
+      "setup-log-failed",
+      "Pipeline Setup Failure: Log Failed",
+      "POST",
+      "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+      `={{ JSON.stringify({ request_id: $('${SETUP_FAILURE_HANDLER_NAME}').first().json.requestId, stage: 'pipeline_setup', status: 'failed', detail: \`A setup step failed: \${$('${SETUP_FAILURE_HANDLER_NAME}').first().json.message}\` }) }}`,
+      { noAutoErrorHandling: true }
+    );
+    connect("Pipeline Setup Failure: Revert Angle Choice", "Pipeline Setup Failure: Log Failed");
+
+    respondNode(
+      "setup-respond-failed",
+      "Pipeline Setup Failure: Respond Failed",
+      `={{ JSON.stringify({ ok: false, reason: 'setup_failed', detail: $('${SETUP_FAILURE_HANDLER_NAME}').first().json.message }) }}`
+    );
+    connect("Pipeline Setup Failure: Log Failed", "Pipeline Setup Failure: Respond Failed");
   });
 }
 
@@ -275,6 +349,8 @@ codeNode(
   { notes: "Non-secret config only. Supabase/Anthropic secrets live in n8n Credentials." }
 );
 connect("Webhook: Generate & Evaluate", "Config");
+
+buildSetupFailureHandler();
 
 supabaseGet(
   "fetch-request",
