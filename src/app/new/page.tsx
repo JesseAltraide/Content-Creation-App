@@ -10,7 +10,8 @@ export default async function NewRequestPage() {
   if (!onboarding.complete) {
     return (
       <main className="mx-auto max-w-2xl px-6 py-12">
-        <h1 className="text-2xl font-semibold tracking-tight">Finish setup first</h1>
+        <BackLink />
+        <h1 className="mt-4 text-2xl font-semibold tracking-tight">Finish setup first</h1>
         <p className="mt-1 text-sm text-muted">
           This workspace needs a few things configured before it can generate content — same
           settings the evaluator grades everything against, so they need to actually exist first.
@@ -50,12 +51,24 @@ export default async function NewRequestPage() {
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-12">
-      <h1 className="text-2xl font-semibold tracking-tight">New content request</h1>
+      <BackLink />
+      <h1 className="mt-4 text-2xl font-semibold tracking-tight">New content request</h1>
       <p className="mt-1 text-sm text-muted">
         Start from a raw idea, or from source material you already have.
       </p>
       <IntakeForm audienceProfiles={audienceProfiles ?? []} toneSampleCounts={toneSampleCounts} />
     </main>
+  );
+}
+
+function BackLink() {
+  return (
+    <Link
+      href="/"
+      className="inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-foreground"
+    >
+      ← Back to requests
+    </Link>
   );
 }
 
