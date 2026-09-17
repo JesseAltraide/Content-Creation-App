@@ -627,7 +627,13 @@ function buildPass2EvalRound(roundLabel, channelPostsSourceName, isFinalRound) {
     "claude-opus-5",
     EVAL_TOOL,
     pass2EvalPrompt(textNodeName),
-    3000
+    // Scoring 3 separate channel posts (each with its own criteria array, notes, and
+    // weakest_criteria_suggestions) needs far more output than Workflow B's Pass 1
+    // eval, which only ever scores one article. 3000 (copied from Pass 1 without
+    // adjusting for 3x the content) truncated mid-generation - confirmed live via
+    // stop_reason: "max_tokens" with an empty tool_use input, not a prompt/schema
+    // problem as first suspected.
+    8000
   );
   connect(textNodeName, `Claude: Evaluate Channels (${roundLabel}): Build Request`);
   claudeErrorBranch(`Claude: Evaluate Channels (${roundLabel})`, "pass2_evaluation");
