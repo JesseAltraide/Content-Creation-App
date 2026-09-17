@@ -3,6 +3,32 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+// A profile of "everyone" / "professionals" / "people online" isn't a description
+// of anyone - every idea scores as resonant against it, which defeats the whole
+// point of the resonance gate and every downstream Audience Fit score (week4-data-
+// quality.md section 3, explicitly "Block on save"). Heuristic: if every
+// non-trivial word in the description is drawn from this generic-audience denylist,
+// there's nothing specific being described at all. A real description inevitably
+// contains plenty of words outside this set (an industry, a role, a company size,
+// a behavior), so this doesn't risk flagging genuine profiles that merely happen to
+// use one of these words as part of a real, specific description.
+const GENERIC_AUDIENCE_WORDS = new Set([
+  "everyone", "everybody", "everything", "anybody", "anyone", "professionals",
+  "people", "person", "folks", "individuals", "users", "audience", "consumers",
+  "clients", "customers", "general", "public", "online", "internet", "world",
+  "the", "a", "an", "and", "or", "of", "for",
+]);
+
+function isVagueAudienceDescription(description: string): boolean {
+  const words = description
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length === 0) return true;
+  return words.every((w) => GENERIC_AUDIENCE_WORDS.has(w));
+}
+
 const bodySchema = z.object({
   name: z.string().trim().min(1, "Name is required."),
   description: z
@@ -11,6 +37,10 @@ const bodySchema = z.object({
     .min(10, "Description must be a real description (at least 10 characters).")
     .refine((s) => s.split(/[.!?]+/).filter(Boolean).length <= 3, {
       message: "Keep it to 3 sentences or less.",
+    })
+    .refine((s) => !isVagueAudienceDescription(s), {
+      message:
+        "This isn't specific enough — \"everyone\" or \"professionals\" describes no one in particular. Name an industry, role, company size, or behavior.",
     }),
 });
 
