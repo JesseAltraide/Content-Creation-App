@@ -17,7 +17,7 @@ export default async function WorkspaceSettingsPage() {
 
       <h1 className="mt-4 text-2xl font-semibold tracking-tight">Workspace</h1>
       <p className="mt-1 text-sm text-muted">
-        Shared across the whole team — one workspace, not per-user settings (this app is built for
+        Shared across the whole team: one workspace, not per-user settings (this app is built for
         one company).
       </p>
 

@@ -147,7 +147,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   if (pendingAlternate) {
     return NextResponse.json(
-      { error: "An alternate tone already exists for this channel — pick one before generating another." },
+      { error: "An alternate tone already exists for this channel. Pick one before generating another." },
       { status: 409 }
     );
   }
@@ -195,13 +195,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     });
   } catch (err) {
     await logEvent({ requestId, stage: "alternate_tone", status: "failed", detail: `Generation failed: ${err instanceof Error ? err.message : String(err)}` });
-    return NextResponse.json({ error: "Generation failed — try again." }, { status: 502 });
+    return NextResponse.json({ error: "Generation failed. Try again." }, { status: 502 });
   }
 
   const genToolUse = genResponse.content.find((c) => c.type === "tool_use");
   if (!genToolUse || genToolUse.type !== "tool_use") {
     await logEvent({ requestId, stage: "alternate_tone", status: "failed", detail: "Claude didn't return structured output." });
-    return NextResponse.json({ error: "Generation failed — try again." }, { status: 502 });
+    return NextResponse.json({ error: "Generation failed. Try again." }, { status: 502 });
   }
   const genInput = genToolUse.input as Record<string, unknown>;
 
@@ -221,13 +221,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     });
   } catch (err) {
     await logEvent({ requestId, stage: "alternate_tone", status: "failed", detail: `Evaluation failed: ${err instanceof Error ? err.message : String(err)}` });
-    return NextResponse.json({ error: "Evaluation failed — try again." }, { status: 502 });
+    return NextResponse.json({ error: "Evaluation failed. Try again." }, { status: 502 });
   }
 
   const evalToolUse = evalResponse.content.find((c) => c.type === "tool_use");
   if (!evalToolUse || evalToolUse.type !== "tool_use") {
     await logEvent({ requestId, stage: "alternate_tone", status: "failed", detail: "Claude didn't return structured evaluation." });
-    return NextResponse.json({ error: "Evaluation failed — try again." }, { status: 502 });
+    return NextResponse.json({ error: "Evaluation failed. Try again." }, { status: 502 });
   }
   const evalInput = evalToolUse.input as {
     overall_score: number;
@@ -264,7 +264,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     chosen: false,
   });
   if (insertError) {
-    return NextResponse.json({ error: "Couldn't save the alternate — try again." }, { status: 500 });
+    return NextResponse.json({ error: "Couldn't save the alternate. Try again." }, { status: 500 });
   }
 
   await admin.from("evaluation_results").insert({

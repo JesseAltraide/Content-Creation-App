@@ -91,7 +91,7 @@ export default function ChannelToneSection({
         {mode === "described_target" && (
           <p className="mb-2 text-xs text-muted">
             For a brand-new channel with no posts yet. Weaker than a real sample, but better than
-            nothing — replace it with real posts once they exist.
+            nothing. Replace it with real posts once they exist.
           </p>
         )}
 
@@ -102,7 +102,7 @@ export default function ChannelToneSection({
           placeholder={
             mode === "real_post"
               ? `Paste a real ${label} post here…`
-              : `Describe the ${label} voice you're going for — e.g. "confident but not salesy, short sentences, no corporate jargon, occasional dry humor"`
+              : `Describe the ${label} voice you're going for, e.g. "confident but not salesy, short sentences, no corporate jargon, occasional dry humor"`
           }
           className="w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
         />

@@ -1,5 +1,5 @@
 // Plain-English translations for banners shown to the human. The technical detail
-// (exact stage, raw error) still lives in the collapsed Technical log below — this is
+// (exact stage, raw error) still lives in the collapsed Technical log below - this is
 // only ever the headline, never the only place the real detail is recorded.
 const STAGE_MESSAGES: Record<string, string> = {
   research_search_trigger: "Searching for sources failed. Try again.",
@@ -15,8 +15,7 @@ export function friendlyStageMessage(stage: string): string {
   return STAGE_MESSAGES[stage] ?? "Something went wrong on that step. Try again.";
 }
 
-// needs_human_attention is a genuine content-level dead end, not a transient failure —
-// the "why" is usually already a decent plain-English sentence (it's the detail we wrote
+// needs_human_attention is a genuine content-level dead end, not a transient failure - // the "why" is usually already a decent plain-English sentence (it's the detail we wrote
 // to event_log ourselves), but it needs a concrete next action attached, not just a
 // status badge and a buried log line.
 export function explainNeedsAttention(stage: string, detail: string | null) {

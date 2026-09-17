@@ -31,7 +31,7 @@ export default async function AudienceProfilesPage() {
 
         {(!profiles || profiles.length === 0) && (
           <Card className="mt-2 p-6 text-center text-sm text-muted">
-            No audience profiles yet — add one above.
+            No audience profiles yet. Add one above.
           </Card>
         )}
 

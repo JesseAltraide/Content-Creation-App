@@ -189,7 +189,7 @@ export default async function RequestDetailPage({
             {friendlyStageMessage(latestEvent!.stage)}
           </p>
           <p className="mt-1 text-xs text-danger/80">
-            Nothing has progressed since — safe to retry from here. See the technical log below
+            Nothing has progressed since, so it&apos;s safe to retry from here. See the technical log below
             for the exact error.
           </p>
           <RetryButton requestId={id} />
@@ -199,7 +199,7 @@ export default async function RequestDetailPage({
       {canRetry && latestEvent?.status !== "failed" && (
         <Card className="mt-8 p-5">
           <p className="text-sm text-foreground">
-            Nothing has progressed since the last step, and no error was ever logged — so there&apos;s
+            Nothing has progressed since the last step, and no error was ever logged, so there&apos;s
             nothing to read in the technical log. Retrying re-runs this stage from where it left off.
           </p>
           <RetryButton requestId={id} />
@@ -212,7 +212,7 @@ export default async function RequestDetailPage({
             {friendlyStageMessage(latestEvent!.stage)}
           </p>
           <p className="mt-1 text-xs text-danger/80">
-            Nothing has progressed since — pick the angle below again to retry. See the technical
+            Nothing has progressed since. Pick the angle below again to retry. See the technical
             log for the exact error.
           </p>
         </Card>
@@ -256,7 +256,7 @@ export default async function RequestDetailPage({
                 <div className="mt-4">
                   <ScoreBar label="Audience resonance" score={a.resonance_score} max={15} floor={7} />
                   <p className="mt-1 text-xs text-muted">
-                    Floor at 7/15 — below it, generation is hard-blocked; 7-10 proceeds with a
+                    Floor at 7/15. Below it, generation is hard-blocked; 7-10 proceeds with a
                     soft flag; 11-15 proceeds cleanly.
                   </p>
                 </div>

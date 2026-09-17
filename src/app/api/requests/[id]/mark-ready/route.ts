@@ -58,7 +58,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
       if (!evaluation || evaluation.status !== "pass") {
         return NextResponse.json(
-          { error: `${channel} still hasn't passed Pass 2 evaluation — nothing to mark ready.` },
+          { error: `${channel} still hasn't passed Pass 2 evaluation, so there's nothing to mark ready.` },
           { status: 409 }
         );
       }
@@ -75,7 +75,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   if (!updated) {
     return NextResponse.json(
-      { error: "Someone else just acted on this request — refresh to see the latest." },
+      { error: "Someone else just acted on this request. Refresh to see the latest." },
       { status: 409 }
     );
   }
@@ -84,7 +84,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     requestId,
     stage: "pass2_evaluation",
     status: "success",
-    detail: "All channels now pass Pass 2 (after a manual edit fixed the last one) — marked ready to schedule.",
+    detail: "All channels now pass Pass 2 (after a manual edit fixed the last one), marked ready to schedule.",
   });
 
   return NextResponse.json({ ok: true });

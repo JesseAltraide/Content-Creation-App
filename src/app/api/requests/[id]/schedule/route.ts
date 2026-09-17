@@ -73,7 +73,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // server-enforced" applies just as much to publishing as to adaptation).
   if (!evaluation || evaluation.status !== "pass") {
     return NextResponse.json(
-      { error: "This channel's current draft hasn't passed evaluation — it can't be scheduled yet." },
+      { error: "This channel's current draft hasn't passed evaluation, so it can't be scheduled yet." },
       { status: 409 }
     );
   }
@@ -93,7 +93,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   });
 
   if (insertError) {
-    return NextResponse.json({ error: "Couldn't save the schedule — try again." }, { status: 500 });
+    return NextResponse.json({ error: "Couldn't save the schedule. Try again." }, { status: 500 });
   }
 
   await logEvent({

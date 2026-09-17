@@ -92,7 +92,7 @@ export default function EditChannelPostForm({
       setResult({ escalated: responseBody.escalated, score: responseBody.score, status: responseBody.status });
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error - please try again.");
+      setError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -166,7 +166,7 @@ function EditFormActions({
         <p className="text-sm text-success">
           {result.escalated
             ? `Re-evaluated: ${result.score}/100 (${result.status}).`
-            : "Saved — a grammatical edit, no re-evaluation needed."}
+            : "Saved. A grammatical edit, no re-evaluation needed."}
         </p>
       )}
     </div>

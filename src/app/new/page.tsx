@@ -13,7 +13,7 @@ export default async function NewRequestPage() {
         <BackLink />
         <h1 className="mt-4 text-2xl font-semibold tracking-tight">Finish setup first</h1>
         <p className="mt-1 text-sm text-muted">
-          This workspace needs a few things configured before it can generate content — same
+          This workspace needs a few things configured before it can generate content. These are the same
           settings the evaluator grades everything against, so they need to actually exist first.
         </p>
         <Card className="mt-4 divide-y divide-border p-1">

@@ -103,7 +103,7 @@ export default function ChannelPostsReview({
         <Card className="mt-2 p-5">
           <p className="text-sm text-muted">
             If the technical log below shows a &ldquo;responded 524&rdquo; entry, that&apos;s just
-            a connection timeout on our end — the work keeps running regardless of what that
+            a connection timeout on our end. The work keeps running regardless of what that
             entry says on its own (see the working indicator above).
           </p>
         </Card>
@@ -113,7 +113,7 @@ export default function ChannelPostsReview({
         <Card className="mt-2 border-danger/20 bg-danger-soft p-5">
           <p className="text-sm font-medium text-danger">{friendlyStageMessage(latestEvent!.stage)}</p>
           <p className="mt-1 text-xs text-danger/80">
-            The article itself is untouched and still approved — safe to retry adaptation.
+            The article itself is untouched and still approved, so it&apos;s safe to retry adaptation.
           </p>
           <RetryAdaptationButton requestId={requestId} />
         </Card>
@@ -122,7 +122,7 @@ export default function ChannelPostsReview({
       {requestStatus === "ready_to_schedule" && (
         <Card className="mt-2 border-success/20 bg-success-soft p-5">
           <p className="text-sm font-medium text-success">
-            All channels passed Pass 2 evaluation — ready to schedule.
+            All channels passed Pass 2 evaluation. Ready to schedule.
           </p>
         </Card>
       )}

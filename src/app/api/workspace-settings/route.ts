@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     .eq("id", true);
 
   if (error) {
-    return NextResponse.json({ error: "Failed to save — try again." }, { status: 500 });
+    return NextResponse.json({ error: "Failed to save. Try again." }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });

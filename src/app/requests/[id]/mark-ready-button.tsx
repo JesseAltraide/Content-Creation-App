@@ -21,7 +21,7 @@ export default function MarkReadyButton({ requestId }: { requestId: string }) {
       }
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error - please try again.");
+      setError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -30,7 +30,7 @@ export default function MarkReadyButton({ requestId }: { requestId: string }) {
   return (
     <div className="flex items-center gap-2">
       <Button onClick={handleClick} disabled={submitting}>
-        {submitting ? "Checking…" : "All channels pass now — mark ready to schedule"}
+        {submitting ? "Checking…" : "All channels pass now, mark ready to schedule"}
       </Button>
       {error && <span className="text-sm text-danger">{error}</span>}
     </div>

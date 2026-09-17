@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logEvent } from "@/lib/events";
 
-// Mandatory rejection reason (mirrors Week 3's rule) — feedback owed to whoever
+// Mandatory rejection reason (mirrors Week 3's rule) - feedback owed to whoever
 // created the request, distinct from self-regeneration's required-comment rule.
 const bodySchema = z.object({
   reason: z.string().trim().min(10, "A real reason is required (at least 10 characters)."),

@@ -7,7 +7,7 @@ import { triggerAdaptAndEvaluate } from "@/lib/n8n";
 // Hard rule (Decision #36, PRD test #5): approving content for which no passing
 // evaluation record exists is blocked at the state-transition level, not just hidden
 // in the UI. The atomic UPDATE below only succeeds if a real, passing evaluation
-// exists for the current section — checked in the same query, not a separate read.
+// exists for the current section - checked in the same query, not a separate read.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: requestId } = await params;
 
@@ -44,7 +44,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   if (!passingEval) {
     return NextResponse.json(
-      { error: "No passing evaluation exists for the current draft — cannot approve." },
+      { error: "No passing evaluation exists for the current draft, so it cannot be approved." },
       { status: 409 }
     );
   }

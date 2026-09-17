@@ -8,7 +8,7 @@ import { triggerRegenerate } from "@/lib/n8n";
 const REGENERATION_CAP = 5;
 
 // Comment is mandatory (matches Decision #63's rule for every self-regeneration in
-// this system, not just this one) — it's what gives the next generation something
+// this system, not just this one) - it's what gives the next generation something
 // concrete to act on rather than blindly re-rolling.
 const bodySchema = z.object({
   comment: z.string().trim().min(10, "A real comment is required (at least 10 characters)."),
@@ -37,7 +37,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const admin = createAdminClient();
 
   // Read the current status/count only to know what to revert to and what count to
-  // write — the actual transition below is still a single atomic conditional write
+  // write - the actual transition below is still a single atomic conditional write
   // guarded on both the exact status AND the exact prior count, so a concurrent
   // double-click can't both succeed (optimistic concurrency, not read-then-write).
   const { data: current } = await admin
@@ -56,23 +56,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json(
       {
         error:
-          "Regeneration limit (5 attempts) reached for this article — reject it or go back to angle selection instead.",
+          "Regeneration limit (5 attempts) reached for this article. Reject it or go back to angle selection instead.",
       },
       { status: 409 }
     );
   }
 
   const priorStatus = current.status;
-  // The count that THIS attempt would become if Claude actually gets called — used
+  // The count that THIS attempt would become if Claude actually gets called - used
   // to tell the workflow whether a failure here should be the final one, and for the
   // log message below. NOT written yet: regeneration_count only actually advances
   // inside the n8n workflow itself, right before the Claude call. If nothing gets
   // that far (e.g. a bad credential on an earlier Supabase fetch, exactly what broke
-  // during testing), no attempt should be consumed at all — the status-only revert
+  // during testing), no attempt should be consumed at all - the status-only revert
   // below already gives a free retry for that case.
   const wouldBeCount = current.regeneration_count + 1;
 
-  // Atomic conditional write on status only — regeneration_count isn't touched here,
+  // Atomic conditional write on status only - regeneration_count isn't touched here,
   // so this can't double-consume an attempt; it's purely the concurrency guard that
   // stops two double-clicks from both proceeding.
   const { data: updatedRequest, error: transitionError } = await admin
@@ -85,7 +85,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   if (transitionError || !updatedRequest) {
     return NextResponse.json(
-      { error: "Someone else just acted on this request — refresh to see the latest." },
+      { error: "Someone else just acted on this request. Refresh to see the latest." },
       { status: 409 }
     );
   }

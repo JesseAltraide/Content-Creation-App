@@ -47,7 +47,7 @@ export default function ReviewActions({
       }
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error - please try again.");
+      setError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -82,7 +82,7 @@ export default function ReviewActions({
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             rows={2}
-            placeholder="Be specific — this becomes the instruction for the next draft."
+            placeholder="Be specific. This becomes the instruction for the next draft."
             className="rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
           />
         </label>
@@ -152,7 +152,7 @@ export default function ReviewActions({
       <p className="text-xs text-muted">
         {attemptsLeft > 0
           ? `${attemptsLeft} regeneration${attemptsLeft === 1 ? "" : "s"} left for this article.`
-          : "Regeneration limit reached — reject this draft or go back to angle selection instead."}
+          : "Regeneration limit reached. Reject this draft or go back to angle selection instead."}
       </p>
     </div>
   );

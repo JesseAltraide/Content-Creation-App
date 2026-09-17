@@ -15,7 +15,7 @@ export default function DeleteProfileButton({ profileId }: { profileId: string }
     const res = await fetch(`/api/audience-profiles/${profileId}`, { method: "DELETE" });
     setDeleting(false);
     if (!res.ok) {
-      setError("In use by a request — can't delete.");
+      setError("In use by a request, so it can't be deleted.");
       return;
     }
     router.refresh();

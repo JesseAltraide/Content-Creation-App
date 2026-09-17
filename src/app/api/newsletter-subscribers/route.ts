@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     );
 
   if (error) {
-    return NextResponse.json({ error: "Couldn't import subscribers — try again." }, { status: 500 });
+    return NextResponse.json({ error: "Couldn't import subscribers. Try again." }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true, imported: uniqueEmails.length });

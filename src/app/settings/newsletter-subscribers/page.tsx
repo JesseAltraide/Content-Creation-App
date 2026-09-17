@@ -20,7 +20,7 @@ export default async function NewsletterSubscribersPage() {
 
       <h1 className="mt-4 text-2xl font-semibold tracking-tight">Newsletter subscribers</h1>
       <p className="mt-1 text-sm text-muted">
-        This project has no real subscriber base yet — import existing addresses to demonstrate
+        This project has no real subscriber base yet. Import existing addresses to demonstrate
         real newsletter delivery against them, same as a production deployment would already have.
       </p>
 
@@ -32,7 +32,7 @@ export default async function NewsletterSubscribersPage() {
         </h2>
 
         {active.length === 0 && (
-          <Card className="mt-2 p-6 text-center text-sm text-muted">No subscribers yet — import some above.</Card>
+          <Card className="mt-2 p-6 text-center text-sm text-muted">No subscribers yet. Import some above.</Card>
         )}
 
         <Card className="mt-2 divide-y divide-border p-1">

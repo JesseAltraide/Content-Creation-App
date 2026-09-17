@@ -38,7 +38,7 @@ export default function ScheduleChannelForm({
       }
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error - please try again.");
+      setError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -60,7 +60,7 @@ export default function ScheduleChannelForm({
       }
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error - please try again.");
+      setError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
       setSubmitting(false);
     }

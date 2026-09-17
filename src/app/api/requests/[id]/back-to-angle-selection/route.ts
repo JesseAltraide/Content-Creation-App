@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logEvent } from "@/lib/events";
 
-// Recovery action for a genuine content-level dead end (needs_human_attention) — lets
+// Recovery action for a genuine content-level dead end (needs_human_attention) - lets
 // the human pick a different angle rather than the request being a permanent dead end.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: requestId } = await params;
@@ -28,7 +28,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     .eq("request_id", requestId);
   if (!angleCount) {
     return NextResponse.json(
-      { error: "No angle exists for this request yet — there's nothing to go back to. Try a different idea instead." },
+      { error: "No angle exists for this request yet, so there's nothing to go back to. Try a different idea instead." },
       { status: 409 }
     );
   }

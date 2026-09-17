@@ -62,7 +62,7 @@ export default function ArticleReview({
   // Regenerate/Reject are available on any draft awaiting review, whether it just
   // passed or is stuck at needs_human_attention (the internal auto-revision loop's
   // own cap having been reached doesn't remove the human's ability to try again with
-  // guidance — regenerate's own separate 5-attempt cap is what actually stops this).
+  // guidance - regenerate's own separate 5-attempt cap is what actually stops this).
   const canReview = requestStatus === "pending_approval" || requestStatus === "needs_human_attention";
 
   return (
@@ -139,7 +139,7 @@ export default function ArticleReview({
               <div key={e.id} className="px-4 py-3">
                 <p className="text-sm text-foreground">&ldquo;{e.text}&rdquo;</p>
                 <p className="mt-1 text-xs text-muted">
-                  {e.reason} —{" "}
+                  {e.reason}:{" "}
                   <a
                     href={sourceUrlsById[e.source_id]}
                     target="_blank"

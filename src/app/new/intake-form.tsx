@@ -205,7 +205,7 @@ export default function IntakeForm({
         {channelsMissingTone.length > 0 && (
           <div className="flex flex-col gap-3 rounded-lg bg-warning-soft px-3.5 py-3">
             <p className="text-sm font-medium text-warning">
-              No tone samples yet for {channelsMissingTone.join(", ")} — Tone will be graded
+              No tone samples yet for {channelsMissingTone.join(", ")}. Tone will be graded
               against nothing unless you choose one of the options below.
             </p>
             {channelsMissingTone.map((c) => {
@@ -251,7 +251,7 @@ export default function IntakeForm({
                         setDescribedTone((prev) => ({ ...prev, [c]: e.target.value }))
                       }
                       rows={2}
-                      placeholder={`e.g. "confident but not salesy, short sentences, no corporate jargon" — this becomes ${c}'s workspace tone sample going forward.`}
+                      placeholder={`e.g. "confident but not salesy, short sentences, no corporate jargon". This becomes ${c}'s workspace tone sample going forward.`}
                       className="rounded-lg border border-warning/30 bg-surface px-3 py-2 text-sm outline-none focus:border-warning focus:ring-2 focus:ring-warning/20"
                     />
                   )}

@@ -52,8 +52,8 @@ export default function PublishingQueue({
     <section className="mt-8">
       <h2 className="text-sm font-semibold text-muted">Publishing queue</h2>
       <p className="mt-1 text-xs text-muted">
-        LinkedIn and X are scheduled reminders, not automated publishing — you get the
-        ready-to-post content by email and post it yourself. Newsletter is real delivery — it
+        LinkedIn and X are scheduled reminders, not automated publishing. You get the
+        ready-to-post content by email and post it yourself. Newsletter is real delivery: it
         actually sends to every active subscriber at the scheduled time.
       </p>
 
@@ -92,7 +92,7 @@ export default function PublishingQueue({
                 <p className="mt-1 text-xs text-muted">
                   {latestForChannel.status === "published"
                     ? `Published ${new Date(latestForChannel.published_at ?? latestForChannel.scheduled_for).toLocaleString()}${
-                        latestForChannel.notification_sent ? "" : " — notification email failed to send"
+                        latestForChannel.notification_sent ? "" : ", notification email failed to send"
                       }`
                     : `Scheduled for ${new Date(latestForChannel.scheduled_for).toLocaleString()}`}
                 </p>
@@ -106,7 +106,7 @@ export default function PublishingQueue({
 
               {post && !eligible && (
                 <p className="mt-2 text-xs text-muted">
-                  This channel's current draft hasn't passed Pass 2 evaluation yet — nothing to
+                  This channel&apos;s current draft hasn&apos;t passed Pass 2 evaluation yet, so there&apos;s nothing to
                   schedule until it does.
                 </p>
               )}

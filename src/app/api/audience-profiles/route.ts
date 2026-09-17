@@ -40,7 +40,7 @@ const bodySchema = z.object({
     })
     .refine((s) => !isVagueAudienceDescription(s), {
       message:
-        "This isn't specific enough — \"everyone\" or \"professionals\" describes no one in particular. Name an industry, role, company size, or behavior.",
+        "This isn't specific enough. \"everyone\" or \"professionals\" describes no one in particular. Name an industry, role, company size, or behavior.",
     }),
 });
 

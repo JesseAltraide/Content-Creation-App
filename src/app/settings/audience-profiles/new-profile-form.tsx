@@ -52,7 +52,7 @@ export default function NewProfileForm() {
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-medium">Description</span>
-          <span className="text-xs text-muted">3 sentences or less — who they are, what they care about.</span>
+          <span className="text-xs text-muted">3 sentences or less: who they are, what they care about.</span>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}

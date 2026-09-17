@@ -135,7 +135,7 @@ export async function POST(request: Request) {
   });
 
   // Path A (raw idea): kick off search for candidate sources, human picks after.
-  // Path B (URL provided): the URL(s) already are the curation — scrape straight away.
+  // Path B (URL provided): the URL(s) already are the curation - scrape straight away.
   // Triggered after the response is sent, not awaited inline - the underlying
   // pipeline can run for minutes across multiple Claude calls, well past what a
   // synchronous connection (a gateway timeout, or a serverless function's own

@@ -62,7 +62,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       .eq("id", current.id)
       .eq("chosen", true);
     if (unchooseError) {
-      return NextResponse.json({ error: "Couldn't switch variants — try again." }, { status: 500 });
+      return NextResponse.json({ error: "Couldn't switch variants. Try again." }, { status: 500 });
     }
   }
 
@@ -75,7 +75,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (chooseError) {
     // Best-effort revert so we don't end up with zero chosen rows for this channel.
     if (current) await admin.from("channel_posts").update({ chosen: true }).eq("id", current.id);
-    return NextResponse.json({ error: "Couldn't switch variants — try again." }, { status: 500 });
+    return NextResponse.json({ error: "Couldn't switch variants. Try again." }, { status: 500 });
   }
 
   await logEvent({

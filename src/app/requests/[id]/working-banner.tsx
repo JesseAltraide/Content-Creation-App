@@ -112,9 +112,9 @@ export default function WorkingBanner({
           !
         </span>
         <div className="text-sm text-warning">
-          <p className="font-medium">{label} — but nothing has reported back in a while.</p>
+          <p className="font-medium">{label}, but nothing has reported back in a while.</p>
           <p className="mt-0.5 text-xs text-warning/90">
-            Something is probably down — we advise you try again later.
+            Something is probably down. We advise you try again later.
           </p>
         </div>
       </div>
@@ -129,7 +129,7 @@ export default function WorkingBanner({
       <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-accent border-t-transparent" />
       <div className="text-sm text-accent">
         <p className="font-medium">
-          {label} — this page updates itself automatically, no need to refresh.
+          {label}. This page updates itself automatically, no need to refresh.
         </p>
         <p className="mt-0.5 text-xs text-accent/80">
           Working for {elapsedText}. This stage can take a few minutes, so a wait on its own

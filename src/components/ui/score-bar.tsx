@@ -1,5 +1,5 @@
 function tierStyle(score: number, max: number, floor?: number) {
-  // Tiers are derived from the actual floor, not a fixed percentage — a criterion
+  // Tiers are derived from the actual floor, not a fixed percentage - a criterion
   // scoring exactly at its floor is the documented "soft flag, still proceeds" case
   // (e.g. resonance 7-10/15), not a hard failure, and shouldn't render as red.
   if (floor === undefined) {

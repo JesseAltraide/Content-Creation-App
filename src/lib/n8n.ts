@@ -71,13 +71,12 @@ async function pingWebhookForResult(
   }
 }
 
-// Path A: raw idea, no URL — kicks off search for candidate sources.
+// Path A: raw idea, no URL - kicks off search for candidate sources.
 export function triggerSearchSources(requestId: string) {
   return pingWebhook("wf-a-search", { request_id: requestId }, requestId, "research_search_trigger");
 }
 
-// Path B (right after intake), or Path A continuation (after human selects sources) —
-// scrapes selected sources and proposes an angle.
+// Path B (right after intake), or Path A continuation (after human selects sources) - // scrapes selected sources and proposes an angle.
 export function triggerScrapeAndProposeAngle(requestId: string) {
   return pingWebhook(
     "wf-a-scrape-and-propose",
@@ -87,7 +86,7 @@ export function triggerScrapeAndProposeAngle(requestId: string) {
   );
 }
 
-// Human picked an angle — extract excerpts scoped to it, generate the main block,
+// Human picked an angle - extract excerpts scoped to it, generate the main block,
 // evaluate against the Pass 1 rubric, and revise (capped at 2 rounds) if needed.
 export function triggerGenerateAndEvaluate(requestId: string, angleId: string) {
   return pingWebhook(
@@ -98,7 +97,7 @@ export function triggerGenerateAndEvaluate(requestId: string, angleId: string) {
   );
 }
 
-// Human approved the article — adapt it into per-channel posts (LinkedIn/X/
+// Human approved the article - adapt it into per-channel posts (LinkedIn/X/
 // newsletter) and run the Pass 2 evaluation. Workflow D fetches everything else
 // itself from the request_id, same as every other workflow trigger here.
 export function triggerAdaptAndEvaluate(requestId: string) {
@@ -122,7 +121,7 @@ export function triggerEditTriage(requestId: string, channel: string, editedBody
 }
 
 // Human clicked Regenerate with a required comment on a pending_approval or
-// needs_human_attention article — reuses the existing chosen angle and excerpts,
+// needs_human_attention article - reuses the existing chosen angle and excerpts,
 // re-runs generation + Pass 1 evaluation only (Workflow C, not the internal
 // capped auto-revision loop). priorStatus lets the workflow revert to wherever
 // the request actually started from on a Claude failure, not a hardcoded value.

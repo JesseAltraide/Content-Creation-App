@@ -13,7 +13,7 @@ export async function logEvent(params: {
     status: params.status,
     detail: params.detail ?? null,
   });
-  // Logging must never silently swallow its own failure — if the log write
+  // Logging must never silently swallow its own failure - if the log write
   // itself fails, there is nothing left to surface it except the server console.
   if (error) console.error("event_log insert failed", { params, error });
 }
