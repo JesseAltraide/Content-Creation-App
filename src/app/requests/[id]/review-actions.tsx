@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
-const REGENERATION_CAP = 5;
+import { REGENERATION_CAP } from "@/lib/regeneration";
 
 export default function ReviewActions({
   requestId,

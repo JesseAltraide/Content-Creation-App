@@ -5,8 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanModifyRequest } from "@/lib/request-access";
 import { logEvent } from "@/lib/events";
 import { triggerRegenerate } from "@/lib/n8n";
-
-const REGENERATION_CAP = 5;
+import { REGENERATION_CAP } from "@/lib/regeneration";
 
 // Comment is mandatory (matches Decision #63's rule for every self-regeneration in
 // this system, not just this one) - it's what gives the next generation something

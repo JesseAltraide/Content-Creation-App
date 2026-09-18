@@ -7,9 +7,14 @@ import { Button } from "@/components/ui/button";
 export default function SelectAngleButton({
   requestId,
   angleId,
+  alreadyGenerated,
+  attemptsLeft,
 }: {
   requestId: string;
   angleId: string;
+  /** Generation has run against this angle before, so re-picking it spends an attempt. */
+  alreadyGenerated: boolean;
+  attemptsLeft: number;
 }) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
@@ -32,11 +37,23 @@ export default function SelectAngleButton({
     router.refresh();
   }
 
+  // The cost of re-picking is the same full Workflow B run as pressing Regenerate,
+  // so it spends from the same budget. Say so before the click rather than
+  // surfacing it as a 409 afterwards.
+  const blocked = alreadyGenerated && attemptsLeft <= 0;
+
   return (
     <div className="mt-4">
-      <Button onClick={handleSelect} disabled={submitting}>
-        {submitting ? "Selecting…" : "Select this angle"}
+      <Button onClick={handleSelect} disabled={submitting || blocked}>
+        {submitting ? "Selecting…" : alreadyGenerated ? "Generate from this angle again" : "Select this angle"}
       </Button>
+      {alreadyGenerated && (
+        <p className="mt-2 text-xs text-muted">
+          {blocked
+            ? "Regeneration limit reached. Pick a different angle, or reject this draft and start again."
+            : `This angle has already been generated from, so running it again uses one of your ${attemptsLeft} remaining regenerations.`}
+        </p>
+      )}
       {error && <p className="mt-2 text-sm text-danger">{error}</p>}
     </div>
   );

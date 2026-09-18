@@ -14,6 +14,12 @@ type Revert = {
   to: string;
   /** Match Workflow B's handler, which also releases the angle so it can be re-picked. */
   unchooseAngles?: boolean;
+  /**
+   * Give back the regeneration attempt this trigger spent. Same principle the
+   * regenerate route follows by not counting until Claude is actually reached: an
+   * attempt that never got as far as n8n did no work and shouldn't cost anything.
+   */
+  refundRegeneration?: boolean;
 };
 
 async function revertOnTriggerFailure(requestId: string, revert: Revert | undefined) {
@@ -31,6 +37,16 @@ async function revertOnTriggerFailure(requestId: string, revert: Revert | undefi
   // request moved on under us and its angle is none of our business.
   if (data && revert.unchooseAngles) {
     await admin.from("angles").update({ chosen: false }).eq("request_id", requestId);
+  }
+
+  // `data` is the pre-update row, so its count is the one this trigger already
+  // incremented. Guarded on that exact value so a concurrent change isn't clobbered.
+  if (data && revert.refundRegeneration && data.regeneration_count > 0) {
+    await admin
+      .from("requests")
+      .update({ regeneration_count: data.regeneration_count - 1 })
+      .eq("id", requestId)
+      .eq("regeneration_count", data.regeneration_count);
   }
 }
 
@@ -131,7 +147,11 @@ export function triggerScrapeAndProposeAngle(requestId: string) {
 
 // Human picked an angle - extract excerpts scoped to it, generate the main block,
 // evaluate against the Pass 1 rubric, and revise (capped at 2 rounds) if needed.
-export function triggerGenerateAndEvaluate(requestId: string, angleId: string) {
+export function triggerGenerateAndEvaluate(
+  requestId: string,
+  angleId: string,
+  spentRegeneration = false
+) {
   return pingWebhook(
     "wf-b-generate-evaluate",
     { request_id: requestId, angle_id: angleId },
@@ -139,7 +159,12 @@ export function triggerGenerateAndEvaluate(requestId: string, angleId: string) {
     "generate_and_evaluate_trigger",
     // Mirrors Workflow B's own failure handler, so a trigger that never reached
     // n8n leaves exactly the state a mid-run Claude failure would have.
-    { from: "generating", to: "awaiting_angle_selection", unchooseAngles: true }
+    {
+      from: "generating",
+      to: "awaiting_angle_selection",
+      unchooseAngles: true,
+      refundRegeneration: spentRegeneration,
+    }
   );
 }
 

@@ -10,6 +10,7 @@ import { ScoreBar } from "@/components/ui/score-bar";
 import { PipelineProgress } from "@/components/ui/pipeline-progress";
 import { friendlyStageMessage, explainNeedsAttention } from "@/lib/friendly-errors";
 import SelectAngleButton from "./select-angle-button";
+import { REGENERATION_CAP } from "@/lib/regeneration";
 import BackToAngleSelectionButton from "./back-to-angle-selection-button";
 import ArticleReview from "./article-review";
 import ChannelPostsReview from "./channel-posts-review";
@@ -399,7 +400,12 @@ export default async function RequestDetailPage({
                   )}
 
                   {req.status === "awaiting_angle_selection" && (
-                    <SelectAngleButton requestId={id} angleId={a.id} />
+                    <SelectAngleButton
+                      requestId={id}
+                      angleId={a.id}
+                      alreadyGenerated={(a.generation_count ?? 0) > 0}
+                      attemptsLeft={REGENERATION_CAP - (req.regeneration_count ?? 0)}
+                    />
                   )}
                 </Card>
               ))}
