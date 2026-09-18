@@ -353,6 +353,20 @@ codeNode(
     "const currentRow = $('Fetch Current Channel Post').first().json;" + NL +
     "const anchorText = anchorRows.length ? anchorRows[0].json.body : (currentRow.body || '');" + NL +
     "const editedText = $('Config').first().json.edited_body;" + NL +
+    // An X thread is stored, and arrives here, as a JSON array string. Handing that
+    // straight to the evaluator means it scores brackets, quotes and escaped newlines
+    // as if the writer had typed them, and the same goes for the newsletter's
+    // subject+body object. Labelled per post instead, matching Workflow D's Pass 2 and
+    // the app's formatForEvaluator, so structure is stated rather than punctuated.
+    "let evaluatorText = editedText;" + NL +
+    "if ($('Config').first().json.channel === 'x') {" + NL +
+    "  let posts; try { posts = JSON.parse(editedText); } catch { posts = null; }" + NL +
+    "  if (Array.isArray(posts)) evaluatorText = posts.map((p, i) => `Post ${i + 1} of ${posts.length} (${String(p).length} characters${String(p).length > 280 ? ', OVER the 280 limit' : ''}):" + BSN + "${p}`).join('" + BSN + BSN + "');" + NL +
+    "}" + NL +
+    "if ($('Config').first().json.channel === 'newsletter') {" + NL +
+    "  let parsed; try { parsed = JSON.parse(editedText); } catch { parsed = null; }" + NL +
+    "  if (parsed && parsed.body_markdown) evaluatorText = `Subject line: ${parsed.subject_line || ''}" + BSN + BSN + "Body:" + BSN + "${parsed.body_markdown}`;" + NL +
+    "}" + NL +
     "const oldWords = words(anchorText);" + NL +
     "const newWords = words(editedText);" + NL +
     "const lcs = lcsLength(oldWords, newWords);" + NL +
@@ -366,7 +380,7 @@ codeNode(
     "const citationSentenceChanged = removedSentences.some(s => s.includes('[Source: excerpt'));" + NL +
     "const wholeSentenceChanged = removedSentences.length > 0 || newSentenceSet.size !== oldSentences.length;" + NL +
     "const mechanicalEscalate = numeralsChanged || citationSentenceChanged || wholeSentenceChanged || editRatio > 0.15;" + NL +
-    "return [{ json: { anchorText, editedText, editRatio, numeralsChanged, citationSentenceChanged, wholeSentenceChanged, mechanicalEscalate, hasAnyEvaluation: anchorRows.length > 0 } }];",
+    "return [{ json: { anchorText, editedText, evaluatorText, editRatio, numeralsChanged, citationSentenceChanged, wholeSentenceChanged, mechanicalEscalate, hasAnyEvaluation: anchorRows.length > 0 } }];",
   {
     notes:
       "Word-diff ratio uses the same 1 - 2*LCS/(lenA+lenB) metric as Python's difflib.SequenceMatcher.ratio. Mechanical pre-filters (numeral change, a removed excerpt-cited sentence, any whole sentence added/removed, or >15% edit distance) force full re-evaluation regardless of what Haiku would say - these are the project's own judgment calls on what 'numerals changed' / 'excerpt-cited sentence changed' / 'whole sentence added or removed' concretely mean, since the source docs describe the categories but not exact detection logic.",
@@ -400,7 +414,7 @@ const TRIAGE_TOOL = {
 };
 
 const triagePrompt =
-  "`An editor changed a piece of published content. Classify the edit as 'grammatical' (spelling, punctuation, word choice, sentence structure with no change in meaning, claims, or tone) or 'substantive' (changes what's being claimed, adds/removes information, shifts tone or emphasis). If genuinely unsure, classify as 'substantive' - treating an ambiguous edit as needing review is the safe default, silently skipping review on a real content change is not.\\n\\nOriginal:\\n${$('Compute Diff').first().json.anchorText}\\n\\nEdited:\\n${$('Compute Diff').first().json.editedText}`";
+  "`An editor changed a piece of published content. Classify the edit as 'grammatical' (spelling, punctuation, word choice, sentence structure with no change in meaning, claims, or tone) or 'substantive' (changes what's being claimed, adds/removes information, shifts tone or emphasis). If genuinely unsure, classify as 'substantive' - treating an ambiguous edit as needing review is the safe default, silently skipping review on a real content change is not.\\n\\nOriginal:\\n${$('Compute Diff').first().json.anchorText}\\n\\nEdited:\\n${$('Compute Diff').first().json.evaluatorText}`";
 
 claudeNode("claude-triage", "Claude: Classify Edit", "claude-haiku-4-5-20251001", TRIAGE_TOOL, triagePrompt, 500);
 connect("IF Mechanical Escalate", "Claude: Classify Edit: Build Request", 1);
@@ -501,7 +515,7 @@ const X_LENGTH_NOTE =
 const evalPrompt =
   "`Evaluate this edited channel post against the rubric. You have not seen the edit reasoning - judge only what's here. When writing weakest_criteria_suggestions, name what is wrong and where, but do NOT compose replacement wording that restates a figure, unit, name or date. Say 'the odds gap is stated in the wrong unit' rather than quoting a corrected sentence: a suggestion is fed straight back into the next generation, and a figure restated in your words becomes the next version's error.\\n\\nRubric: " +
   PASS2_RUBRIC_TEXT +
-  "\\n\\nChannel: ${$('Config').first().json.channel}\\n\\nEdited post:\\n${$('Compute Diff').first().json.editedText}\\n\\n" +
+  "\\n\\nChannel: ${$('Config').first().json.channel}\\n\\nEdited post:\\n${$('Compute Diff').first().json.evaluatorText}\\n\\n" +
   X_LENGTH_NOTE +
   "\\n\\nAudience this must fit (score Audience Fit against this, not a general reader):\\n${$('Fetch Audience Profile').first().json.description || 'No audience profile on file, judge for a general professional audience.'}" +
   "\\n\\nBrand voice for this channel (score Tone against these real samples, not a generic idea of good writing):\\n${$('Fetch Tone Samples').all().filter(i => i.json && i.json.content).map(i => `[${i.json.source}] ${i.json.content}`).join('" + BSN + BSN + "---" + BSN + BSN + "') || 'No tone samples on file for this channel, judge against a neutral professional default.'}" +

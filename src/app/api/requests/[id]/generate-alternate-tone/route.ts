@@ -7,6 +7,7 @@ import { logEvent } from "@/lib/events";
 import { firedRecently } from "@/lib/debounce-trigger";
 import type Anthropic from "@anthropic-ai/sdk";
 import { getClaude, GENERATION_MODEL, EVALUATION_MODEL } from "@/lib/claude";
+import { formatForEvaluator } from "@/lib/channel-post-format";
 
 // One tone variant per channel by default; a second "alternate tone" is generated
 // only on explicit human request, and the human picks which becomes canonical
@@ -88,10 +89,12 @@ const EVAL_TOOL: Anthropic.Tool = {
   },
 };
 
+// Built from the STORED form so the evaluator sees exactly the shape
+// formatForEvaluator defines, rather than a second, subtly different serialization
+// maintained in parallel here. See that function for what handing an evaluator a
+// naive join actually cost us.
 function bodyForEval(channel: string, input: Record<string, unknown>): string {
-  if (channel === "x") return (input.posts as string[]).join("\n\n---\n\n");
-  if (channel === "newsletter") return `Subject: ${input.subject_line}\n\n${input.body_markdown}`;
-  return input.body_markdown as string;
+  return formatForEvaluator(channel, bodyForStorage(channel, input));
 }
 
 function bodyForStorage(channel: string, input: Record<string, unknown>): string {

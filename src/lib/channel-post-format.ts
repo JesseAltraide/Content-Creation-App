@@ -68,3 +68,35 @@ export function findLengthViolations(channel: string, body: string): LengthViola
 
   return body.length > limit ? [{ label: "Post", length: body.length, limit }] : [];
 }
+
+// How a stored post is presented TO AN EVALUATOR. This is not cosmetic. An X thread
+// is stored as a JSON array, and handing that array to the evaluator in its raw or
+// naively-joined form makes it score our serialization as if the writer had chosen
+// it:
+//
+//   - joined with "\n\n---\n\n", Pass 2 deducted Channel Fit for "'---' horizontal
+//     rules as section dividers... a newsletter/blog or Markdown convention, not
+//     native X". No stored post has ever contained a '---'. That separator was ours.
+//   - handed the raw JSON string, the evaluator sees brackets, quotes and escaped
+//     newlines as post content.
+//
+// Labelled per post with its character count instead, which is what Workflow D's
+// Pass 2 already does correctly, and which tells the evaluator the structure
+// explicitly rather than encoding it in punctuation it has to guess about.
+export function formatForEvaluator(channel: string, storedBody: string): string {
+  if (channel === "x") {
+    const posts = parseXPosts(storedBody);
+    const limit = CHANNEL_CHAR_LIMITS.x;
+    return posts
+      .map(
+        (p, i) =>
+          `Post ${i + 1} of ${posts.length} (${p.length} characters${p.length > limit ? `, OVER the ${limit} limit` : ""}):\n${p}`
+      )
+      .join("\n\n");
+  }
+  if (channel === "newsletter") {
+    const { subject_line, body_markdown } = parseNewsletter(storedBody);
+    return `Subject line: ${subject_line}\n\nBody:\n${body_markdown}`;
+  }
+  return storedBody;
+}
