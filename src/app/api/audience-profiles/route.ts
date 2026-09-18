@@ -7,12 +7,10 @@ import { getManagerState, announceSettingsChange } from "@/lib/content-manager";
 // A profile of "everyone" / "professionals" / "people online" isn't a description
 // of anyone - every idea scores as resonant against it, which defeats the whole
 // point of the resonance gate and every downstream Audience Fit score (week4-data-
-// quality.md section 3, explicitly "Block on save"). Heuristic: if every
-// non-trivial word in the description is drawn from this generic-audience denylist,
-// there's nothing specific being described at all. A real description inevitably
-// contains plenty of words outside this set (an industry, a role, a company size,
-// a behavior), so this doesn't risk flagging genuine profiles that merely happen to
-// use one of these words as part of a real, specific description.
+// quality.md section 3, explicitly "Block on save"). These are the words that carry
+// no narrowing information, so they are subtracted before judging specificity in
+// isVagueAudienceDescription below. Containing one of them is fine; a real
+// description has an industry, a role, a company size or a behaviour on top.
 const GENERIC_AUDIENCE_WORDS = new Set([
   "everyone", "everybody", "everything", "anybody", "anyone", "professionals",
   "people", "person", "folks", "individuals", "users", "audience", "consumers",
@@ -20,14 +18,28 @@ const GENERIC_AUDIENCE_WORDS = new Set([
   "the", "a", "an", "and", "or", "of", "for",
 ]);
 
+// "Everyone", "anyone interested in X", "all users everywhere": a description that
+// opens with a universal quantifier is claiming the audience is unbounded, which
+// is the opposite of a profile, no matter how specific the words after it are.
+const UNIVERSAL_OPENERS = new Set(["everyone", "everybody", "anyone", "anybody", "all", "any"]);
+
 function isVagueAudienceDescription(description: string): boolean {
   const words = description
     .toLowerCase()
     .replace(/[^a-z\s]/g, " ")
     .split(/\s+/)
     .filter(Boolean);
+
   if (words.length === 0) return true;
-  return words.every((w) => GENERIC_AUDIENCE_WORDS.has(w));
+  if (UNIVERSAL_OPENERS.has(words[0])) return true;
+
+  // Everything left after removing filler and generic crowd-nouns is what actually
+  // narrows the audience. One such word ("business people", "our customers") is a
+  // category, not an audience: the evaluator cannot grade Audience Fit against it
+  // any better than against "everyone". Two is a low bar that every real profile
+  // clears easily ("CTOs at fintech startups", "people who watch football").
+  const specific = words.filter((w) => !GENERIC_AUDIENCE_WORDS.has(w));
+  return specific.length < 2;
 }
 
 const bodySchema = z.object({
@@ -41,7 +53,7 @@ const bodySchema = z.object({
     })
     .refine((s) => !isVagueAudienceDescription(s), {
       message:
-        "This isn't specific enough. \"everyone\" or \"professionals\" describes no one in particular. Name an industry, role, company size, or behavior.",
+        "This isn't specific enough. \"Everyone\", \"anyone interested in X\" or \"our customers\" describes no one in particular, and the evaluator grades every draft's Audience Fit against this. Name an industry, role, company size, or behaviour.",
     }),
 });
 
