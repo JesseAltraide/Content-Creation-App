@@ -2,7 +2,9 @@ import { z } from "zod";
 
 const CHANNELS = ["linkedin", "x", "newsletter"] as const;
 
-function isFetchableUrl(value: string): boolean {
+// Exported so the form can disable submit on exactly what the schema would reject,
+// rather than keeping a second, drifting copy of the rule.
+export function isFetchableUrl(value: string): boolean {
   try {
     const url = new URL(value);
     return url.protocol === "http:" || url.protocol === "https:";

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { isFetchableUrl } from "@/lib/intake-validation";
 
 const CHANNELS = [
   { value: "linkedin", label: "LinkedIn" },
@@ -74,9 +75,39 @@ export default function IntakeForm({
   }
 
   const channelsMissingTone = channels.filter((c) => (toneSampleCounts[c] ?? 0) === 0);
-  const canSubmit = channelsMissingTone.every(
+  const toneResolved = channelsMissingTone.every(
     (c) => confirmedGenericTone.includes(c) || (describedTone[c]?.trim().length ?? 0) >= 20
   );
+
+  // Mirrors the server schema field for field, using the same URL check it uses, so
+  // the button cannot be enabled for input the route would reject. Listed rather than
+  // just disabled: a dead button with no explanation is its own kind of bug, and the
+  // person is left clicking it wondering what is wrong.
+  const parsedUrls = urlsText
+    .split(/\r?\n/)
+    .map((u) => u.trim())
+    .filter(Boolean);
+  const missing: string[] = [];
+  if (inputPath === "raw_idea" && rawIdea.trim().length < 10) {
+    missing.push("a content idea (at least 10 characters)");
+  }
+  if (inputPath === "url") {
+    if (parsedUrls.length === 0) missing.push("at least one source URL");
+    else if (!parsedUrls.every(isFetchableUrl)) missing.push("valid http(s) source URLs");
+  }
+  if (!primaryKeyword.trim()) missing.push("a primary keyword");
+  if (channels.length === 0) missing.push("at least one channel");
+  // The tone gate has its own explanation block higher up the form, but that can be
+  // off screen by the time someone reaches the button. Without this line the button
+  // is disabled with nothing beside it saying why.
+  if (!toneResolved) {
+    const names = channelsMissingTone
+      .filter((c) => !confirmedGenericTone.includes(c) && (describedTone[c]?.trim().length ?? 0) < 20)
+      .join(", ");
+    missing.push(`a tone decision for ${names} (see the tone panel above)`);
+  }
+
+  const canSubmit = missing.length === 0;
 
   async function handleSubmit(e: React.FormEvent, acknowledgedWarnings = false) {
     e.preventDefault();
@@ -367,6 +398,12 @@ export default function IntakeForm({
               </Button>
             </div>
           </div>
+        )}
+
+        {missing.length > 0 && (
+          <p className="text-xs text-muted">
+            Still needed: {missing.join(", ")}.
+          </p>
         )}
 
         <Button type="submit" disabled={submitting || !canSubmit}>
