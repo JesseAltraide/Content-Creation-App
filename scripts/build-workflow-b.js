@@ -455,9 +455,16 @@ const EXCERPT_TOOL = {
 };
 
 const excerptPrompt =
-  "`You are selecting source excerpts for a content angle.\\n\\nChosen angle: ${$('Fetch Angle Row').first().json.working_title}\\nThesis: ${$('Fetch Angle Row').first().json.thesis}\\nSection shape: ${JSON.stringify($('Fetch Angle Row').first().json.section_shape)}\\n\\nSources:\\n${$('Count Scraped Sources').first().json.sourcesText}\\n\\nSelect every passage genuinely relevant to this specific angle - not the whole source, just passages that actually support it. For each, give the exact excerpt text (a real quote, not a paraphrase), which source URL it came from, and a one-line reason. If nothing in a source is relevant, select nothing from it. Return an empty excerpts array if truly nothing across all sources supports this angle.`";
+  "`You are selecting source excerpts for a content angle.\\n\\nChosen angle: ${$('Fetch Angle Row').first().json.working_title}\\nThesis: ${$('Fetch Angle Row').first().json.thesis}\\nSection shape: ${JSON.stringify($('Fetch Angle Row').first().json.section_shape)}\\n\\nSources:\\n${$('Count Scraped Sources').first().json.sourcesText}\\n\\nSelect the passages genuinely relevant to this specific angle - not the whole source, just passages that actually support it. Quote at most 5 passages per source, each no longer than 80 words, and prefer the strongest passages over exhaustive coverage. For each, give the exact excerpt text (a real quote, not a paraphrase), which source URL it came from, and a one-line reason. If nothing in a source is relevant, select nothing from it. Return an empty excerpts array if truly nothing across all sources supports this angle.`";
 
-claudeNode("claude-excerpts", "Claude: Select Excerpts", "claude-sonnet-5", EXCERPT_TOOL, excerptPrompt, 4000);
+// 16000, not 4000. Selecting the relevant passages across 8 scraped sources is the
+// largest output in this workflow, and 4000 truncated it mid-tool-call: stop_reason
+// "max_tokens" with an empty tool_use input, so the parse below saw zero excerpts and
+// the run reported "the sources don't support this angle" about sources that plainly
+// did. Identical failure to Workflow D's Pass 2 eval, raised from 3000 to 8000 for
+// exactly this reason. An unused cap costs nothing: output is billed per token
+// actually generated.
+claudeNode("claude-excerpts", "Claude: Select Excerpts", "claude-sonnet-5", EXCERPT_TOOL, excerptPrompt, 16000);
 connect("IF Zero Scraped Sources", "Claude: Select Excerpts: Build Request", 1);
 claudeErrorBranch("Claude: Select Excerpts", "excerpt_selection", "$('Config').first().json.request_id");
 
@@ -471,6 +478,12 @@ codeNode(
   // shape, it does not guarantee the model won't serialize it - so parse-if-string
   // first, then insist on an array of real objects before touching it.
   "const toolUse = $json.content.find(c => c.type === 'tool_use');" + NL +
+    // A truncated response is NOT "nothing was relevant": it is the model cut off
+    // mid-JSON, which arrives here as an empty tool input and is indistinguishable
+    // from a genuine empty result unless stop_reason is checked. Reporting the first
+    // as the second sent a human back to re-pick angles three times against sources
+    // that were fine.
+    "const truncated = $json.stop_reason === 'max_tokens';" + NL +
     "let excerpts = toolUse.input.excerpts;" + NL +
     "if (typeof excerpts === 'string') { try { excerpts = JSON.parse(excerpts); } catch { excerpts = []; } }" + NL +
     // A keyed object instead of an array is the other shape this has taken live
@@ -520,7 +533,7 @@ codeNode(
     "}).filter(e => e.source_id);" + NL +
     "// Surfaced so a zero-excerpt outcome can be told apart from Claude simply" + NL +
     "// finding nothing, which reads identically to the human but means the opposite." + NL +
-    "return [{ json: { requestId, excerpts: mapped, returnedByClaude: excerpts.length, unmatched: excerpts.length - mapped.length } }];"
+    "return [{ json: { requestId, excerpts: mapped, returnedByClaude: excerpts.length, unmatched: excerpts.length - mapped.length, truncated } }];"
 );
 connect("Claude: Select Excerpts", "Parse Excerpts", 0);
 
@@ -542,7 +555,7 @@ withLane(320, () => {
     // plenty and every citation failing to match a stored source is a bug on our
     // side, and telling someone their sources are irrelevant when they are not
     // sends them off rewriting an angle that was fine.
-    "={{ JSON.stringify({ request_id: $('Parse Excerpts').first().json.requestId, stage: 'excerpt_selection', status: 'failed', detail: $('Parse Excerpts').first().json.returnedByClaude > 0 ? `Claude selected ${$('Parse Excerpts').first().json.returnedByClaude} passage(s), but none could be matched back to a scraped source, so none were saved. That is a system fault rather than a problem with your angle - retry, and report it if it happens again.` : 'Sources loaded fine but none contained a passage relevant to the chosen angle.' }) }}"
+    "={{ JSON.stringify({ request_id: $('Parse Excerpts').first().json.requestId, stage: 'excerpt_selection', status: 'failed', detail: $('Parse Excerpts').first().json.truncated ? 'Excerpt selection was cut off before it finished (the model hit its output limit), so nothing was saved. That is a system fault rather than a problem with your angle - retry, and report it if it happens again.' : ($('Parse Excerpts').first().json.returnedByClaude > 0 ? `Claude selected ${$('Parse Excerpts').first().json.returnedByClaude} passage(s), but none could be matched back to a scraped source, so none were saved. That is a system fault rather than a problem with your angle - retry, and report it if it happens again.` : 'Sources loaded fine but none contained a passage relevant to the chosen angle.') }) }}"
   );
   connect("Mark Needs Attention (no excerpts)", "Log Event (no excerpts)");
   respondNode("respond-no-excerpts", "Respond (no excerpts)", "={{ JSON.stringify({ ok: false, reason: 'zero_relevant_excerpts' }) }}");
@@ -602,7 +615,7 @@ const ARTICLE_TOOL = {
 const generatePrompt =
   "`Write a full SEO article grounded only in the excerpts below - no unsupported claims or invented statistics. If the excerpts can't adequately support the desired length, write a shorter, fully-grounded article and say so isn't needed in the output, just write what's honestly supportable.\\n\\nWorking title: ${$('Fetch Angle Row').first().json.working_title}\\nThesis: ${$('Fetch Angle Row').first().json.thesis}\\nSection shape: ${JSON.stringify($('Fetch Angle Row').first().json.section_shape)}\\nPrimary keyword (must appear naturally, including in a heading): ${$('Fetch Request Row').first().json.primary_keyword}\\nDesired length: ${$('Fetch Request Row').first().json.desired_length || 'no specific target'}\\nContext from the manager: ${$('Fetch Request Row').first().json.context || 'none'}\\n\\nGrounded excerpts (cite the source URL inline as [Source: url] after any claim drawn from it):\\n${$('Build Excerpts Text').first().json.excerptsTextWithReason}\\n\\nWrite in markdown with proper H1/H2 heading hierarchy.\\n\\nHouse style: never use em dashes (the character U+2014) anywhere in the output. Use a full stop, a comma, a colon or parentheses instead. Do not state anything the excerpts do not support, and do not use hedging language to smuggle in a claim you cannot cite.`";
 
-claudeNode("claude-generate", "Claude: Generate Article", "claude-sonnet-5", ARTICLE_TOOL, generatePrompt, 4000);
+claudeNode("claude-generate", "Claude: Generate Article", "claude-sonnet-5", ARTICLE_TOOL, generatePrompt, 8000);
 connect("Build Excerpts Text", "Claude: Generate Article: Build Request");
 claudeErrorBranch("Claude: Generate Article", "generation", "$('Config').first().json.request_id");
 
@@ -805,7 +818,7 @@ function buildRevisionRound(roundNum, prevGateIfName, prevSectionName) {
   const REVISE_CACHED_CONTEXT =
     "`Grounded excerpts available:\\n${$('Build Excerpts Text').first().json.excerptsTextPlain}`";
 
-  claudeNode(`claude-${idBase}`, `Claude: Revise (${label})`, "claude-sonnet-5", ARTICLE_TOOL, revisePrompt, 4000, REVISE_CACHED_CONTEXT);
+  claudeNode(`claude-${idBase}`, `Claude: Revise (${label})`, "claude-sonnet-5", ARTICLE_TOOL, revisePrompt, 8000, REVISE_CACHED_CONTEXT);
   connect(prevGateIfName, `Claude: Revise (${label}): Build Request`, 1);
   claudeErrorBranch(`Claude: Revise (${label})`, "revision", "$('Config').first().json.request_id");
 
