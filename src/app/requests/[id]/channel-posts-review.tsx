@@ -1,6 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { friendlyStageMessage } from "@/lib/friendly-errors";
-import { evaluationPassed } from "@/lib/channel-post-format";
+import { evaluationPassed, PASS_MARK, CHANNEL_LABELS } from "@/lib/channel-post-format";
 import RetryAdaptationButton from "./retry-adaptation-button";
 import RejectButton from "./reject-button";
 import ChannelPostCard from "./channel-post-card";
@@ -97,6 +97,20 @@ export default function ChannelPostsReview({
   const allNowPass =
     stuckHere && latestPosts.length > 0 && latestPosts.every((p) => evaluationPassed(evalByChannel.get(p.channel)));
 
+  // Whether every channel currently in use actually passes, computed from the posts
+  // and their scores rather than read off requests.status. The status records what
+  // was true at the moment it was set and nothing re-derives it: an edit or a
+  // revision round afterwards can drop a channel below the mark while the row still
+  // says ready_to_schedule. Caught live on a request sitting at ready_to_schedule
+  // with LinkedIn on 77 and X on 64, under a green banner saying all channels
+  // passed. Same failure as Error #46: trusting a stored label over the numbers.
+  const failingChannels = latestPosts
+    .filter((p) => !evaluationPassed(evalByChannel.get(p.channel)))
+    .map((p) => ({
+      channel: p.channel,
+      score: evalByChannel.get(p.channel)?.overall_score ?? null,
+    }));
+
   // Every version this channel has, newest last, each with the score it was given.
   // Scores are matched on the version number within this channel; a request can hold
   // two different v1 posts when adaptation is re-run, so the LAST evaluation for a
@@ -160,10 +174,30 @@ export default function ChannelPostsReview({
         </Card>
       )}
 
-      {requestStatus === "ready_to_schedule" && (
+      {requestStatus === "ready_to_schedule" && failingChannels.length === 0 && (
         <Card className="mt-2 border-success/20 bg-success-soft p-5">
           <p className="text-sm font-medium text-success">
             All channels passed Pass 2 evaluation. Ready to schedule.
+          </p>
+        </Card>
+      )}
+
+      {requestStatus === "ready_to_schedule" && failingChannels.length > 0 && (
+        <Card className="mt-2 border-warning/30 bg-warning-soft p-5">
+          <p className="text-sm font-medium text-warning">
+            This request was marked ready to schedule, but{" "}
+            {failingChannels.length === 1 ? "one channel is" : `${failingChannels.length} channels are`}{" "}
+            below the {PASS_MARK} needed now:{" "}
+            {failingChannels
+              .map((c) => `${CHANNEL_LABELS[c.channel] ?? c.channel} ${c.score !== null ? `${c.score}/100` : "unscored"}`)
+              .join(", ")}
+            .
+          </p>
+          <p className="mt-1 text-xs text-warning/90">
+            The status records what was true when it was set, and an edit or a revision
+            round since then has changed the score. Those channels cannot be scheduled
+            until they clear the mark. If an earlier version scored better, the version
+            list on each channel will let you go back to it.
           </p>
         </Card>
       )}
