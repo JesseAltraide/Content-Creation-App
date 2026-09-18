@@ -582,7 +582,14 @@ codeNode(
   "build-excerpts-text",
   "Build Excerpts Text",
   "const excerpts = $input.all().map(i => i.json);" + NL +
-    "const withReason = excerpts.map((e, i) => `[${i}] ${e.text} (reason selected: ${e.reason})`).join('" + BSN + BSN + "');" + NL +
+    // The URL belongs in THIS string, not just the plain one. The generation prompt
+    // tells the model to cite "[Source: url]" after any claim drawn from an excerpt,
+    // but this variant is what generation is actually handed, and it carried only an
+    // index - so the model cited what it had and produced "(Source: excerpt 25)".
+    // Fourth instance of the same class of bug (B, C, D, then E were each handed an
+    // id instead of a URL); this one hid because the fix went to excerptsTextPlain,
+    // the string the EVALUATOR sees, and not to the one the WRITER sees.
+    "const withReason = excerpts.map((e, i) => `[${i}] Source: ${(e.sources && e.sources.url) || e.source_id}" + BSN + "${e.text}" + BSN + "(reason selected: ${e.reason})`).join('" + BSN + BSN + "');" + NL +
     "const plain = excerpts.map((e, i) => `[${i}] Source: ${(e.sources && e.sources.url) || e.source_id}" + BSN + "${e.text}`).join('" + BSN + BSN + "');" + NL +
     "return [{ json: { excerpts, excerptsTextWithReason: withReason, excerptsTextPlain: plain } }];",
   {

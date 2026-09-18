@@ -739,7 +739,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const excerpts = $input.all().map(i => i.json);\nconst withReason = excerpts.map((e, i) => `[${i}] ${e.text} (reason selected: ${e.reason})`).join('\\n\\n');\nconst plain = excerpts.map((e, i) => `[${i}] Source: ${(e.sources && e.sources.url) || e.source_id}\\n${e.text}`).join('\\n\\n');\nreturn [{ json: { excerpts, excerptsTextWithReason: withReason, excerptsTextPlain: plain } }];"
+        "jsCode": "const excerpts = $input.all().map(i => i.json);\nconst withReason = excerpts.map((e, i) => `[${i}] Source: ${(e.sources && e.sources.url) || e.source_id}\\n${e.text}\\n(reason selected: ${e.reason})`).join('\\n\\n');\nconst plain = excerpts.map((e, i) => `[${i}] Source: ${(e.sources && e.sources.url) || e.source_id}\\n${e.text}`).join('\\n\\n');\nreturn [{ json: { excerpts, excerptsTextWithReason: withReason, excerptsTextPlain: plain } }];"
       },
       "id": "build-excerpts-text",
       "name": "Build Excerpts Text",

@@ -61,6 +61,12 @@ export default function ArticleReview({
   if (sections.length === 0) return null;
 
   const latest = sections[sections.length - 1];
+  // The generation prompt asks for "proper H1/H2 heading hierarchy", so body_markdown
+  // opens with an H1 of the article's own title, and the title is already rendered
+  // above it from section.title. Two identical headings, one on top of the other.
+  // Stripped at render rather than in the prompt so existing drafts are fixed too,
+  // and only when it really is a leading H1 (never touches body content).
+  const body = (latest.body_markdown ?? "").replace(/^\s*#\s+[^\n]*\n+/, "");
   const latestEval = evaluations.find((e) => e.content_version === latest.version);
   // Regenerate/Reject are available on any draft awaiting review, whether it just
   // passed or is stuck at needs_human_attention (the internal auto-revision loop's
@@ -85,7 +91,7 @@ export default function ArticleReview({
             [&_code]:rounded [&_code]:bg-black/5 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs [&_code]:font-mono
             [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-black/5 [&_pre]:p-3"
         >
-          <ReactMarkdown>{latest.body_markdown ?? ""}</ReactMarkdown>
+          <ReactMarkdown>{body}</ReactMarkdown>
         </div>
       </Card>
 
