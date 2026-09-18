@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import SiteHeader from "@/components/site-header";
+import PendingActionOverlay from "@/components/pending-action-overlay";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,6 +27,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         <SiteHeader />
+        {/* Mounted once at the root so a single in-flight action blocks the whole
+            UI, not just the button that started it. */}
+        <PendingActionOverlay />
         <div className="flex-1">{children}</div>
       </body>
     </html>
