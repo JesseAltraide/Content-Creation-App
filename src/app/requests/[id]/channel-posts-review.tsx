@@ -61,11 +61,13 @@ export default function ChannelPostsReview({
   if (channelPosts.length === 0 && !isAdapting && !failedSetup) return null;
 
   // Only the chosen variant per channel, at its latest version.
+  // Arrives ordered by created_at, so the last chosen row per channel is the newest
+  // one. Comparing version numbers here would tie between two different v2 posts from
+  // two different adaptation runs and keep whichever happened to be read first.
   const latestByChannel = new Map<string, ChannelPost>();
   for (const post of channelPosts) {
     if (!post.chosen) continue;
-    const existing = latestByChannel.get(post.channel);
-    if (!existing || post.version > existing.version) latestByChannel.set(post.channel, post);
+    latestByChannel.set(post.channel, post);
   }
   const latestPosts = Array.from(latestByChannel.values());
 
@@ -73,6 +75,8 @@ export default function ChannelPostsReview({
   for (const ev of evaluations) {
     if (!ev.channel) continue;
     const post = latestByChannel.get(ev.channel);
+    // Last write wins for the same reason as the publishing queue: duplicate version
+    // numbers across adaptation runs mean the first match can be an older score.
     if (post && ev.content_version === post.version) evalByChannel.set(ev.channel, ev);
   }
 

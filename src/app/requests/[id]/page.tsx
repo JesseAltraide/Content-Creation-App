@@ -82,11 +82,11 @@ export default async function RequestDetailPage({
     .eq("request_id", id)
     .order("created_at");
 
-// Ordered by created_at, not version. A re-picked angle starts a fresh generation in
-// Workflow B, which numbers its first section v1 regardless of what already exists, so
-// a newer draft can carry a LOWER version than an older one. Caught live: a re-pick
-// wrote a v1 that scored 85 while the page kept showing the v3 from an hour earlier at
-// 80, and the human reasonably concluded the regeneration had done nothing.
+  // Ordered by created_at, not version. A re-picked angle starts a fresh generation in
+  // Workflow B, which numbers its first section v1 regardless of what already exists, so
+  // a newer draft can carry a LOWER version than an older one. Caught live: a re-pick
+  // wrote a v1 that scored 85 while the page kept showing the v3 from an hour earlier at
+  // 80, and the human reasonably concluded the regeneration had done nothing.
   const { data: sections } = await supabase
     .from("sections")
     .select("*")
@@ -98,25 +98,28 @@ export default async function RequestDetailPage({
     .select("*")
     .eq("request_id", id)
     .eq("pass", "pass_1_article")
-    .order("content_version");
+    .order("created_at");
 
   const { data: excerpts } = await supabase
     .from("excerpts")
     .select("*")
     .eq("request_id", id);
 
+  // created_at, not version: re-running adaptation restarts channel post numbering
+  // at 1, so a request can hold two different v1 posts per channel. Same collision
+  // as sections, and the same consequence if ordered by number.
   const { data: channelPosts } = await supabase
     .from("channel_posts")
     .select("*")
     .eq("request_id", id)
-    .order("version");
+    .order("created_at");
 
   const { data: pass2Evaluations } = await supabase
     .from("evaluation_results")
     .select("*")
     .eq("request_id", id)
     .eq("pass", "pass_2_channel")
-    .order("content_version");
+    .order("created_at");
 
   const channelPostIds = (channelPosts ?? []).map((p) => p.id);
   // Only needed for the newsletter email preview, and only a count, so this stays a

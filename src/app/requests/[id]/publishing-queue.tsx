@@ -84,8 +84,16 @@ export default function PublishingQueue({
       <div className="mt-3 flex flex-col gap-3">
         {QUEUE_CHANNELS.map((channel) => {
           const post = latestByChannel.get(channel);
+          // Latest match wins, not the first. Re-running adaptation restarts channel
+          // post numbering at 1, so a request can hold two different v1 posts per
+          // channel with two different scores. Taking the first match showed a post's
+          // text beside an older post's score (seen live: 54 shown where the current
+          // post had scored 61). Ordered by created_at upstream, so scanning to the
+          // last match takes the evaluation written most recently.
           const evalForPost = post
-            ? evaluations.find((e) => e.channel === channel && e.content_version === post.version)
+            ? [...evaluations]
+                .reverse()
+                .find((e) => e.channel === channel && e.content_version === post.version)
             : undefined;
           // Over-limit content is unpublishable regardless of its score, so it
           // blocks scheduling the same way a failed evaluation does. Same helper
