@@ -1,6 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { asList } from "@/lib/eval-shape";
-import { CHANNEL_LABELS, findLengthViolations } from "@/lib/channel-post-format";
+import { CHANNEL_LABELS, findLengthViolations, evaluationPassed } from "@/lib/channel-post-format";
 import ScheduleChannelForm from "./schedule-channel-form";
 import NewsletterEmailPreview from "./newsletter-email-preview";
 
@@ -100,7 +100,7 @@ export default function PublishingQueue({
           // blocks scheduling the same way a failed evaluation does. Same helper
           // the schedule route enforces with, so the two can't drift.
           const lengthViolations = post ? findLengthViolations(channel, post.body ?? "") : [];
-          const eligible = evalForPost?.status === "pass" && lengthViolations.length === 0;
+          const eligible = evaluationPassed(evalForPost) && lengthViolations.length === 0;
           // Changing the audience or tone does not re-score anything already
           // evaluated, and re-scoring automatically would be worse: it could
           // invalidate something already scheduled to send, and cost a full
@@ -215,7 +215,7 @@ export default function PublishingQueue({
                 </p>
               )}
 
-              {post && evalForPost?.status !== "pass" && (
+              {post && !evaluationPassed(evalForPost) && (
                 <div className="mt-2 rounded-lg bg-warning-soft p-3">
                   <p className="text-xs font-semibold text-warning">
                     {typeof evalForPost?.overall_score !== "number"

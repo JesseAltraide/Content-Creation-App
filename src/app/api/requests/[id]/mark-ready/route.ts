@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanModifyRequest } from "@/lib/request-access";
 import { logEvent } from "@/lib/events";
+import { evaluationPassed } from "@/lib/channel-post-format";
 
 // Workflow D's own gate transitions to ready_to_schedule automatically when every
 // channel passes together in one run - but Workflow E deliberately never touches
@@ -56,14 +57,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
       const { data: evaluation } = await admin
         .from("evaluation_results")
-        .select("status")
+        .select("status, overall_score")
         .eq("request_id", requestId)
         .eq("channel", channel)
         .eq("pass", "pass_2_channel")
         .eq("content_version", post.version)
         .maybeSingle();
 
-      if (!evaluation || evaluation.status !== "pass") {
+      if (!evaluationPassed(evaluation)) {
         return NextResponse.json(
           { error: `${channel} still hasn't passed Pass 2 evaluation, so there's nothing to mark ready.` },
           { status: 409 }

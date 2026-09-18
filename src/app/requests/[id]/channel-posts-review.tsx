@@ -1,5 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { friendlyStageMessage } from "@/lib/friendly-errors";
+import { evaluationPassed } from "@/lib/channel-post-format";
 import RetryAdaptationButton from "./retry-adaptation-button";
 import RejectButton from "./reject-button";
 import ChannelPostCard from "./channel-post-card";
@@ -93,7 +94,7 @@ export default function ChannelPostsReview({
   // the request's pipeline stage) - if every channel now individually passes, offer
   // the explicit re-check rather than leaving Reject as the only visible option.
   const allNowPass =
-    stuckHere && latestPosts.length > 0 && latestPosts.every((p) => evalByChannel.get(p.channel)?.status === "pass");
+    stuckHere && latestPosts.length > 0 && latestPosts.every((p) => evaluationPassed(evalByChannel.get(p.channel)));
 
   if (channelOnly) {
     const post = latestByChannel.get(channelOnly);

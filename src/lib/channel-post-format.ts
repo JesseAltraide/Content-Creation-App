@@ -29,6 +29,20 @@ export function parseNewsletter(body: string): { subject_line: string; body_mark
 // schedulable, bypassing the threshold every other path enforces.
 export const PASS_MARK = 85;
 
+/**
+ * Whether an evaluation actually clears the gate. The stored `status` is not enough on
+ * its own: Workflow E wrote the model's self-assessment straight into the row, so a
+ * post arrived labelled "pass" at 82. Checking the number as well means the UI, the
+ * schedule route and mark-ready all agree, whatever wrote the row.
+ */
+export function evaluationPassed(
+  evaluation: { status?: string | null; overall_score?: number | null } | null | undefined
+): boolean {
+  if (!evaluation) return false;
+  if (evaluation.status !== "pass") return false;
+  return typeof evaluation.overall_score === "number" && evaluation.overall_score >= PASS_MARK;
+}
+
 export const CHANNEL_LABELS: Record<string, string> = {
   linkedin: "LinkedIn",
   x: "X",
