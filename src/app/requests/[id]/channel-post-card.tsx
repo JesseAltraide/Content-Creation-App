@@ -104,6 +104,7 @@ export default function ChannelPostCard({
   isOwner,
   imageSuggestion,
   versions,
+  pendingSendAt,
 }: {
   requestId: string;
   channel: "linkedin" | "x" | "newsletter";
@@ -115,6 +116,8 @@ export default function ChannelPostCard({
   isOwner: boolean;
   /** Every version this channel has, so the author can pick which one to work with. */
   versions: ChannelVersion[];
+  /** Time of a still-pending send on this channel, if there is one. */
+  pendingSendAt?: string | null;
 }) {
   const [editing, setEditing] = useState(false);
   const [confirmingEdit, setConfirmingEdit] = useState(false);
@@ -234,6 +237,7 @@ export default function ChannelPostCard({
           channel={channel}
           versions={versions}
           isOwner={isOwner}
+          pendingSendAt={pendingSendAt}
         />
       )}
 

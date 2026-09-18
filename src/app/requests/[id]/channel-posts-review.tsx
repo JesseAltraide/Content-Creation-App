@@ -40,6 +40,7 @@ export default function ChannelPostsReview({
   evaluations,
   channelOnly,
   isOwner,
+  pendingSends,
 }: {
   requestId: string;
   requestStatus: string;
@@ -54,6 +55,8 @@ export default function ChannelPostsReview({
    */
   channelOnly?: "linkedin" | "x" | "newsletter";
   isOwner: boolean;
+  /** Channel to the time of a send still waiting to go out, for the version picker. */
+  pendingSends: Record<string, string>;
 }) {
   const isAdapting = requestStatus === "adapting";
   // A failed adaptation attempt reverts to 'approved' (see approve/route.ts and
@@ -142,6 +145,7 @@ export default function ChannelPostsReview({
         isOwner={isOwner}
         imageSuggestion={post.image_suggestion ?? null}
         versions={versionsFor(post.channel)}
+        pendingSendAt={pendingSends[post.channel] ?? null}
       />
     );
   }

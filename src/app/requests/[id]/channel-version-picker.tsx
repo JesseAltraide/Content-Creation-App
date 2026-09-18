@@ -24,11 +24,18 @@ export default function ChannelVersionPicker({
   channel,
   versions,
   isOwner,
+  pendingSendAt,
 }: {
   requestId: string;
   channel: string;
   versions: ChannelVersion[];
   isOwner: boolean;
+  /**
+   * When this channel has a send still pending, its time. Switching cancels it,
+   * because the scheduled row points at the post being replaced, so the author is
+   * told before they click rather than discovering it in the queue afterwards.
+   */
+  pendingSendAt?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<number | null>(null);
@@ -112,6 +119,17 @@ export default function ChannelVersionPicker({
             );
           })}
           {error && <p className="text-xs text-danger">{error}</p>}
+          {pendingSendAt ? (
+            <p className="text-xs text-warning">
+              This channel is scheduled for{" "}
+              {new Date(pendingSendAt).toLocaleString(undefined, {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+              . Switching version cancels that, because the schedule points at the
+              version being replaced. You will need to schedule the new one.
+            </p>
+          ) : null}
           <p className="text-xs text-muted">
             Switching only changes which version is up for scheduling and editing.
             Nothing is deleted, and you can switch back.

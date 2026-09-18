@@ -57,26 +57,58 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "That version is already the one in use." }, { status: 409 });
   }
 
-  // A post already scheduled or published is not something to swap underneath the
-  // queue: the scheduled row points at a specific channel_post_id.
+  if ((posts ?? []).some((p) => p.locked)) {
+    return NextResponse.json({ error: "This post is locked." }, { status: 409 });
+  }
+
   // scheduled_content points at a channel_post_id and carries no request_id, so the
   // lookup goes through this channel's own posts.
+  //
+  // Only a PENDING send can conflict. A published row is history: the post already
+  // went out, and switching versions now only affects what gets scheduled next.
+  // Blocking on it meant one send yesterday froze the channel's version choice
+  // forever, which is what happened live: X had a published row from the previous
+  // day and every "Use this one" was refused with "already scheduled".
   const { data: scheduled } = await admin
     .from("scheduled_content")
-    .select("id")
+    .select("id, scheduled_for")
     .in(
       "channel_post_id",
       (posts ?? []).map((p) => p.id)
     )
-    .in("status", ["scheduled", "published"]);
-  if ((scheduled ?? []).length > 0) {
+    .eq("status", "scheduled");
+
+  // A pending send whose time has already come is the one case worth refusing: the
+  // cron could fire it while the switch is in flight, and which version went out
+  // would be a race. Anything still in the future is the author's to change.
+  const due = (scheduled ?? []).filter((s) => new Date(s.scheduled_for) <= new Date());
+  if (due.length > 0) {
     return NextResponse.json(
-      { error: "This channel is already scheduled. Unschedule it first." },
+      {
+        error:
+          "This channel is due to send right now, so the version cannot be changed. Unschedule it first.",
+      },
       { status: 409 }
     );
   }
-  if ((posts ?? []).some((p) => p.locked)) {
-    return NextResponse.json({ error: "This post is locked." }, { status: 409 });
+
+  // The pending schedule points at the post being replaced, so it cannot simply be
+  // carried across: it is cancelled and the author reschedules. Said in the response
+  // rather than done silently, because a cancelled send that nobody mentions is how
+  // something quietly never goes out.
+  const cancelled = (scheduled ?? []).length;
+  if (cancelled > 0) {
+    const { error: cancelError } = await admin
+      .from("scheduled_content")
+      .delete()
+      .in(
+        "channel_post_id",
+        (posts ?? []).map((p) => p.id)
+      )
+      .eq("status", "scheduled");
+    if (cancelError) {
+      return NextResponse.json({ error: "Could not switch version." }, { status: 500 });
+    }
   }
 
   // Clear first, then set: the partial unique index allows exactly one chosen row per
@@ -102,8 +134,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     requestId,
     stage: "channel_revision",
     status: "success",
-    detail: `Switched ${channel} back to version ${version} by hand, after a later revision round scored lower.`,
+    detail:
+      `Switched ${channel} to version ${version} by hand.` +
+      (cancelled > 0 ? " The pending schedule pointed at the previous version and was cancelled." : ""),
   });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, scheduleCancelled: cancelled > 0 });
 }

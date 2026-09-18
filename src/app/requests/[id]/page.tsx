@@ -186,6 +186,14 @@ export default async function RequestDetailPage({
   // score-regression banner correctly and to decide whether going back to an earlier
   // version is offered: an automated round can be replaced, an author's own text
   // never is.
+  // Channel to the time of a send still waiting to go out. Only 'scheduled' counts:
+  // a published row is history and must not be treated as a conflict, which is
+  // exactly the bug that froze X's version choice a day after it had sent.
+  const pendingSends: Record<string, string> = {};
+  for (const item of scheduledContent ?? []) {
+    if (item.status === "scheduled") pendingSends[item.channel] = item.scheduled_for;
+  }
+
   const manuallyEditedChannels = Array.from(
     new Set(
       (events ?? [])
@@ -423,6 +431,7 @@ export default async function RequestDetailPage({
         channelPosts={channelPosts ?? []}
         evaluations={pass2Evaluations ?? []}
         isOwner={canAct}
+        pendingSends={pendingSends}
       />
 
       <RequestTabs
@@ -526,6 +535,7 @@ export default async function RequestDetailPage({
                   channelPosts={channelPosts ?? []}
                   evaluations={pass2Evaluations ?? []}
                   isOwner={canAct}
+                  pendingSends={pendingSends}
                   channelOnly={c}
                 />,
               ])
