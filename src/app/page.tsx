@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/badge";
 import { REVIEWABLE_STATUSES } from "@/lib/request-access";
 import RequestListTabs from "./request-list-tabs";
+import LinkPendingDot from "@/components/link-pending-dot";
 
 // The statuses where n8n is mid-run and the badge on this page will change without
 // anything the human does. Kept next to the only consumer rather than in a shared
@@ -82,7 +83,10 @@ export default async function HomePage() {
                           {r.channels.join(", ")}
                         </p>
                       </div>
-                      <StatusBadge status={r.status} />
+                      <div className="flex shrink-0 items-center gap-2">
+                        <LinkPendingDot />
+                        <StatusBadge status={r.status} />
+                      </div>
                     </Card>
                   </Link>
                 </li>
@@ -114,7 +118,10 @@ export default async function HomePage() {
                     <span className="min-w-0 truncate text-sm font-medium">
                       {r.raw_idea || r.primary_keyword}
                     </span>
-                    <StatusBadge status={r.status} />
+                    <div className="flex shrink-0 items-center gap-2">
+                      <LinkPendingDot />
+                      <StatusBadge status={r.status} />
+                    </div>
                   </Card>
                 </Link>
               ))}
