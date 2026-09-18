@@ -479,14 +479,14 @@ function adaptCachedContext() {
 // Prompt caching re-enabled (Change #10 reversed): the article, excerpts, audience
 // and channel rules are byte-identical across the initial adapt and every revise
 // round, so they become the cached prefix and only the feedback varies.
-function adaptPrompt(feedbackExpr) {
+function adaptPrompt(feedbackExpr, lengthExpr) {
   return feedbackExpr
     // The evaluator writes its suggestions in the same call that scores, and nothing
     // checks them for accuracy before this prompt obeys them. Caught live: Pass 2
     // suggested saying "Bayern Munich 2nd, 9 points behind", the revision complied,
     // and the NEXT Pass 2 scored that exact sentence as a factual distortion, taking
     // Factual Consistency from 18/20 to the 15 floor.
-    ? "`The previous attempt needs these specific changes: ${" + feedbackExpr + "}\n\nThe requested changes are the evaluator's wording, not fact. They are advisory on style and structure, and are NOT authoritative on any figure, unit, name or date. If following one would state something the article or the excerpts do not support, ignore that part and fix the underlying point another way. Accuracy outranks every suggestion here.`"
+    ? "`The previous attempt needs these specific changes: ${" + feedbackExpr + "}\n\nThe requested changes are the evaluator's wording, not fact. They are advisory on style and structure, and are NOT authoritative on any figure, unit, name or date. If following one would state something the article or the excerpts do not support, ignore that part and fix the underlying point another way. Accuracy outranks every suggestion here.\n\n${" + (lengthExpr || "\'\'") + "}`"
     : "`Write the first version now.`";
 }
 
@@ -511,7 +511,12 @@ codeNode(
     "const x = channels.x;" + NL +
     "const posts = x && Array.isArray(x.posts) ? x.posts : [];" + NL +
     "const overLimit = posts.filter(p => p.length > 280);" + NL +
-    "return [{ json: { ...channels, x_length_violation: overLimit.length > 0, x_over_limit_count: overLimit.length } }];"
+    "const detail = posts.map((p, i) => ({ n: i + 1, len: p.length })).filter(x => x.len > 280)" + NL +
+    "  .map(x => `post ${x.n} is ${x.len} characters, ${x.len - 280} over`);" + NL +
+    "const instruction = detail.length" + NL +
+    "  ? `X LENGTH, measured programmatically, not a judgement call: ${detail.join('; ')}. Cut at least that many characters from each, or split the offending post into two. Every post must end up at 280 characters or fewer, and 240-270 leaves margin.`" + NL +
+    "  : '';" + NL +
+    "return [{ json: { ...channels, x_length_violation: overLimit.length > 0, x_over_limit_count: overLimit.length, x_length_instruction: instruction } }];"
 );
 connect("Parse Adapted Content", "Validate X Length");
 
@@ -851,7 +856,14 @@ function buildPass2RevisionRound(roundNum, prevGateIfName, prevChannelPostsSourc
   const feedbackExpr =
     "JSON.stringify($('Gate (" + prevRoundLabel + ")').first().json.perChannel)";
 
-  claudeNode(`claude-${idBase}`, `Claude: Revise Channels (${label})`, "claude-sonnet-5", ADAPT_TOOL, adaptPrompt(feedbackExpr), 4000, adaptCachedContext());
+  // The evaluator only ever mentioned the overage in prose inside its notes, so the
+  // reviser got a hint rather than an instruction. This is the flat arithmetic from
+  // the previous round's own measurement.
+  const prevXLengthNode =
+    prevRoundLabel === "Round 0" ? "Validate X Length" : `Validate X Length (${prevRoundLabel})`;
+  const lengthExpr = `$('${prevXLengthNode}').first().json.x_length_instruction || ''`;
+
+  claudeNode(`claude-${idBase}`, `Claude: Revise Channels (${label})`, "claude-sonnet-5", ADAPT_TOOL, adaptPrompt(feedbackExpr, lengthExpr), 4000, adaptCachedContext());
   connect(prevGateIfName, `Claude: Revise Channels (${label}): Build Request`, 1);
   claudeErrorBranch(`Claude: Revise Channels (${label})`, "channel_adaptation");
 
@@ -868,7 +880,12 @@ function buildPass2RevisionRound(roundNum, prevGateIfName, prevChannelPostsSourc
       "const x = channels.x;" + NL +
       "const posts = x && Array.isArray(x.posts) ? x.posts : [];" + NL +
       "const overLimit = posts.filter(p => p.length > 280);" + NL +
-      "return [{ json: { ...channels, x_length_violation: overLimit.length > 0, x_over_limit_count: overLimit.length } }];"
+      "const detail = posts.map((p, i) => ({ n: i + 1, len: p.length })).filter(x => x.len > 280)" + NL +
+      "  .map(x => `post ${x.n} is ${x.len} characters, ${x.len - 280} over`);" + NL +
+      "const instruction = detail.length" + NL +
+      "  ? `X LENGTH, measured programmatically, not a judgement call: ${detail.join('; ')}. Cut at least that many characters from each, or split the offending post into two. Every post must end up at 280 characters or fewer, and 240-270 leaves margin.`" + NL +
+      "  : '';" + NL +
+      "return [{ json: { ...channels, x_length_violation: overLimit.length > 0, x_over_limit_count: overLimit.length, x_length_instruction: instruction } }];"
   );
   connect(`Parse Revised Channels (${label})`, `Validate X Length (${label})`);
 
