@@ -3,6 +3,7 @@ import { extractCitations } from "@/lib/citations";
 import { Card } from "@/components/ui/card";
 import { ScoreBar } from "@/components/ui/score-bar";
 import ReviewActions from "./review-actions";
+import BackToAngleSelectionButton from "./back-to-angle-selection-button";
 
 const CRITERION_FLOORS: Record<string, number> = {
   "topic relevance": 15,
@@ -44,6 +45,7 @@ export default function ArticleReview({
   requestStatus,
   isOwner,
   regenerationCount,
+  unusedAngles,
   sections,
   evaluations,
   excerpts,
@@ -54,6 +56,8 @@ export default function ArticleReview({
   /** Reviewers read a colleague's draft; every action stays with the author. */
   isOwner: boolean;
   regenerationCount: number;
+  /** Proposed angles never generated from, so "try a different one" can be honest. */
+  unusedAngles: number;
   sections: Section[];
   evaluations: EvalResult[];
   excerpts: Excerpt[];
@@ -164,6 +168,21 @@ export default function ArticleReview({
             regenerationCount={regenerationCount}
             canApprove={latestEval?.status === "pass"}
           />
+          {/* Regenerating reuses the chosen angle, so it produces the same shape of
+              article. When the treatment itself is the problem, the answer is a
+              different angle, and that was only reachable from a dead end until now. */}
+          {requestStatus === "pending_approval" && (
+            <div className="mt-4 border-t border-border pt-4">
+              <p className="text-sm text-muted">
+                Want a different treatment rather than another pass at this one?
+              </p>
+              <BackToAngleSelectionButton
+                requestId={requestId}
+                hasPassingDraft
+                otherAngles={unusedAngles}
+              />
+            </div>
+          )}
         </Card>
       )}
 

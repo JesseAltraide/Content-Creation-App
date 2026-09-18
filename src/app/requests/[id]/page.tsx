@@ -226,6 +226,9 @@ export default async function RequestDetailPage({
   // back to - "back to angle selection" on that stage produces a dead screen with
   // zero angles rather than an actual choice. Only excerpt_selection/evaluation
   // dead ends happen after a real angle already exists to fall back to.
+  // Angles that have never been generated from. Shown in the offer because "try a
+  // different angle" is only worth taking if a different one exists.
+  const unusedAngles = (angles ?? []).filter((a) => (a.generation_count ?? 0) === 0).length;
   const canTryDifferentAngle =
     needsAttention && ["excerpt_selection", "evaluation"].includes(latestFailedEvent!.stage);
 
@@ -370,7 +373,9 @@ export default async function RequestDetailPage({
         <Card className="mt-8 border-danger/20 bg-danger-soft p-5">
           <p className="text-sm font-medium text-danger">{attentionExplanation.why}</p>
           <p className="mt-2 text-sm text-danger/90">{attentionExplanation.action}</p>
-          {canTryDifferentAngle && <BackToAngleSelectionButton requestId={id} />}
+          {canTryDifferentAngle && (
+            <BackToAngleSelectionButton requestId={id} otherAngles={unusedAngles} />
+          )}
         </Card>
       )}
 
@@ -473,6 +478,7 @@ export default async function RequestDetailPage({
             requestStatus={req.status}
             isOwner={canAct}
             regenerationCount={req.regeneration_count ?? 0}
+            unusedAngles={unusedAngles}
             sections={sections ?? []}
             evaluations={evaluations ?? []}
             excerpts={excerpts ?? []}

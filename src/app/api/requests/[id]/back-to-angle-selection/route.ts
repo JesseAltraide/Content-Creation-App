@@ -4,8 +4,17 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanModifyRequest } from "@/lib/request-access";
 import { logEvent } from "@/lib/events";
 
-// Recovery action for a genuine content-level dead end (needs_human_attention) - lets
-// the human pick a different angle rather than the request being a permanent dead end.
+// Recovery action for a content-level dead end (needs_human_attention), and also an
+// ordinary editorial choice from a draft awaiting approval (pending_approval).
+//
+// It was dead-end-only, which left a real gap: a draft that passes but takes the wrong
+// treatment gave the human three options, all bad. Approve something they do not want,
+// regenerate the same angle with a comment (the same angle, so the same shape of
+// article), or reject the whole request and lose the research. Meanwhile a second
+// proposed angle sat unused with no way to reach it. Caught live on exactly that.
+//
+// Picking a genuinely different angle stays free; re-picking the same one costs a
+// regeneration, which select-angle already enforces.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: requestId } = await params;
 
@@ -44,13 +53,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     .from("requests")
     .update({ status: "awaiting_angle_selection" })
     .eq("id", requestId)
-    .eq("status", "needs_human_attention")
+    .in("status", ["needs_human_attention", "pending_approval"])
     .select()
     .single();
 
   if (transitionError || !updatedRequest) {
     return NextResponse.json(
-      { error: "This request is not in a needs-attention state (already progressed, or refresh to see the latest)." },
+      { error: "This request has moved past the point where a different angle can be chosen. Refresh to see where it got to." },
       { status: 409 }
     );
   }
