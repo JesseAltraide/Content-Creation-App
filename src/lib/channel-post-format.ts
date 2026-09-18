@@ -22,6 +22,13 @@ export function parseNewsletter(body: string): { subject_line: string; body_mark
   return { subject_line: "", body_markdown: body };
 }
 
+// Workflow D's gate: 85 or better passes. Exported because three things need to agree
+// about it, and they did not: D applied it, the schedule route trusted whatever
+// `status` the row carried, and Workflow E wrote the model's own self-assessed status
+// straight into the row. An edited post self-scored "pass" at 82 and became
+// schedulable, bypassing the threshold every other path enforces.
+export const PASS_MARK = 85;
+
 export const CHANNEL_LABELS: Record<string, string> = {
   linkedin: "LinkedIn",
   x: "X",

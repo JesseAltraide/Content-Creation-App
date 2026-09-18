@@ -563,7 +563,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r = $json;\nconst c = r.criteria || [];\nconst floor = (name, f) => { const crit = c.find(x => x.name.toLowerCase().includes(name)); return crit ? crit.score < f : false; };\nconst hardBlock = r.hard_block_triggered || floor('factual', 15);\nreturn [{ json: { ...r, hardBlock } }];"
+        "jsCode": "const r = $json;\nconst c = r.criteria || [];\nconst floor = (name, f) => { const crit = c.find(x => x.name.toLowerCase().includes(name)); return crit ? crit.score < f : false; };\nconst hardBlock = r.hard_block_triggered || floor('factual', 15);\nlet status;\nif (hardBlock) { status = r.overall_score < 60 ? 'reject' : 'revise'; }\nelse if (r.overall_score >= 85) { status = 'pass'; }\nelse if (r.overall_score >= 60) { status = 'revise'; }\nelse { status = 'reject'; }\nreturn [{ json: { ...r, hardBlock, status } }];"
       },
       "id": "gate-edit",
       "name": "Gate Edited Evaluation",

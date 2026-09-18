@@ -83,6 +83,8 @@ export default function ChannelPostCard({
   isOwner: boolean;
 }) {
   const [editing, setEditing] = useState(false);
+  const [confirmingEdit, setConfirmingEdit] = useState(false);
+  const suggestions = asList<string>(evaluation?.weakest_criteria_suggestions);
 
   return (
     <Card className="p-6">
@@ -91,21 +93,71 @@ export default function ChannelPostCard({
         <div className="flex items-center gap-3">
           {evaluation && <span className="text-lg font-bold">{evaluation.overall_score}/100</span>}
           {isOwner && !editing && (
-            <Button variant="ghost" onClick={() => setEditing(true)}>
+            <Button variant="ghost" onClick={() => setConfirmingEdit(true)}>
               Edit
             </Button>
           )}
         </div>
       </div>
 
+      {confirmingEdit && !editing && (
+        <div className="mt-3 rounded-lg border border-accent/20 bg-accent-soft p-3">
+          <p className="text-sm font-medium text-accent">Your edit is kept exactly as you write it.</p>
+          <p className="mt-1 text-xs text-accent/90">
+            This works differently from &ldquo;Apply these suggestions&rdquo;. That one discards a
+            rewrite that scores lower and keeps your existing post. A manual edit is yours: it is
+            saved as written and re-scored afterwards, and it is never reverted for scoring less
+            than an earlier version. If the new score is lower, the queue will say so before you
+            schedule, and the choice stays with you.
+          </p>
+          <p className="mt-1.5 text-xs text-accent/90">
+            Small wording or punctuation fixes may be treated as grammatical and keep the existing
+            score rather than triggering a fresh evaluation. Anything touching numbers, claims or
+            whole sentences is always re-scored.
+          </p>
+          <div className="mt-3 flex items-center gap-2">
+            <Button
+              onClick={() => {
+                setEditing(true);
+                setConfirmingEdit(false);
+              }}
+            >
+              Start editing
+            </Button>
+            <Button variant="ghost" onClick={() => setConfirmingEdit(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="mt-3">
         {editing ? (
-          <EditChannelPostForm
-            requestId={requestId}
-            channel={channel}
-            currentBody={body}
-            onCancel={() => setEditing(false)}
-          />
+          // Two columns while editing: the suggestions are the whole reason for the
+          // edit, and they used to sit below the evaluation, far enough down that
+          // acting on them meant scrolling away from the text being changed.
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <EditChannelPostForm
+              requestId={requestId}
+              channel={channel}
+              currentBody={body}
+              onCancel={() => setEditing(false)}
+            />
+            {suggestions.length > 0 && (
+              <aside className="lg:sticky lg:top-6 lg:self-start">
+                <div className="rounded-lg bg-warning-soft p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-warning">
+                    Improvement suggestions
+                  </p>
+                  <ul className="mt-1.5 flex list-disc flex-col gap-2 pl-4 text-xs leading-relaxed text-warning">
+                    {suggestions.map((sug, i) => (
+                      <li key={i}>{sug}</li>
+                    ))}
+                  </ul>
+                </div>
+              </aside>
+            )}
+          </div>
         ) : (
           <ChannelPreview channel={channel} body={body} />
         )}

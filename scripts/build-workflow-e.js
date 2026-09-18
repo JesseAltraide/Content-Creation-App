@@ -537,7 +537,16 @@ codeNode(
     "const c = r.criteria || [];" + NL +
     "const floor = (name, f) => { const crit = c.find(x => x.name.toLowerCase().includes(name)); return crit ? crit.score < f : false; };" + NL +
     "const hardBlock = r.hard_block_triggered || floor('factual', 15);" + NL +
-    "return [{ json: { ...r, hardBlock } }];"
+    // The model's own `status` was being stored as the verdict, so an edit could
+    // self-report "pass" at 82 and become schedulable while Workflow D refuses
+    // anything under 85. The gate belongs here, applied to the number, exactly as D
+    // applies it. Same thresholds deliberately: one rule, three places that read it.
+    "let status;" + NL +
+    "if (hardBlock) { status = r.overall_score < 60 ? 'reject' : 'revise'; }" + NL +
+    "else if (r.overall_score >= 85) { status = 'pass'; }" + NL +
+    "else if (r.overall_score >= 60) { status = 'revise'; }" + NL +
+    "else { status = 'reject'; }" + NL +
+    "return [{ json: { ...r, hardBlock, status } }];"
 );
 connect("Parse Edited Evaluation", "Gate Edited Evaluation");
 

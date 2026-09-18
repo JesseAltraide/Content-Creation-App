@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanModifyRequest } from "@/lib/request-access";
 import { logEvent } from "@/lib/events";
-import { findLengthViolations } from "@/lib/channel-post-format";
+import { findLengthViolations, PASS_MARK } from "@/lib/channel-post-format";
 
 // Newsletter shares this same scheduled_content table and cron job (Decision
 // #22/#48) but the cron handles it differently at fire time: LinkedIn/X get a
@@ -86,7 +86,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const { data: evaluation } = await admin
     .from("evaluation_results")
-    .select("status")
+    .select("status, overall_score")
     .eq("request_id", requestId)
     .eq("channel", parsed.data.channel)
     .eq("pass", "pass_2_channel")
@@ -97,9 +97,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // something that hasn't actually passed evaluation, checked here at the API
   // level, not just hidden in the UI (week4-full-flow.md line 211's "hard rule,
   // server-enforced" applies just as much to publishing as to adaptation).
-  if (!evaluation || evaluation.status !== "pass") {
+  // Both the label and the number. `status` is written by whoever evaluated last, and
+  // Workflow E writes the model's own self-assessment rather than applying the gate,
+  // so a post can arrive here saying "pass" at a score the gate would have refused.
+  const passedGate =
+    evaluation &&
+    evaluation.status === "pass" &&
+    typeof evaluation.overall_score === "number" &&
+    evaluation.overall_score >= PASS_MARK;
+
+  if (!passedGate) {
     return NextResponse.json(
-      { error: "This channel's current draft hasn't passed evaluation, so it can't be scheduled yet." },
+      {
+        error:
+          typeof evaluation?.overall_score === "number" && evaluation.overall_score < PASS_MARK
+            ? `This channel's current draft scored ${evaluation.overall_score}/100, below the ${PASS_MARK} needed to schedule.`
+            : "This channel's current draft hasn't passed evaluation, so it can't be scheduled yet.",
+      },
       { status: 409 }
     );
   }
