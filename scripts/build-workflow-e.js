@@ -353,6 +353,23 @@ codeNode(
     "const currentRow = $('Fetch Current Channel Post').first().json;" + NL +
     "const anchorText = anchorRows.length ? anchorRows[0].json.body : (currentRow.body || '');" + NL +
     "const editedText = $('Config').first().json.edited_body;" + NL +
+    // Everything below compares TEXT, but an X thread and a newsletter are stored as
+    // JSON, so the raw strings carry brackets, quotes and escaped newlines. Sentence
+    // splitting looks for whitespace after a full stop and an escaped newline is not
+    // whitespace, so for those two channels the sentence heuristics were reading one
+    // enormous sentence and detecting almost nothing. Verified live: deleting a whole
+    // sentence from an X thread did not register as a sentence change.
+    "const plainOf = (raw) => {" + NL +
+    "  const text = String(raw == null ? '' : raw);" + NL +
+    "  let parsed; try { parsed = JSON.parse(text); } catch { return text; }" + NL +
+    "  if (Array.isArray(parsed)) return parsed.map(p => String(p)).join(String.fromCharCode(10, 10));" + NL +
+    "  if (parsed && typeof parsed === 'object' && parsed.body_markdown !== undefined) {" + NL +
+    "    return [parsed.subject_line || '', parsed.body_markdown || ''].join(String.fromCharCode(10, 10));" + NL +
+    "  }" + NL +
+    "  return text;" + NL +
+    "};" + NL +
+    "const anchorPlain = plainOf(anchorText);" + NL +
+    "const editedPlain = plainOf(editedText);" + NL +
     // An X thread is stored, and arrives here, as a JSON array string. Handing that
     // straight to the evaluator means it scores brackets, quotes and escaped newlines
     // as if the writer had typed them, and the same goes for the newsletter's
@@ -367,18 +384,44 @@ codeNode(
     "  let parsed; try { parsed = JSON.parse(editedText); } catch { parsed = null; }" + NL +
     "  if (parsed && parsed.body_markdown) evaluatorText = `Subject line: ${parsed.subject_line || ''}" + BSN + BSN + "Body:" + BSN + "${parsed.body_markdown}`;" + NL +
     "}" + NL +
-    "const oldWords = words(anchorText);" + NL +
-    "const newWords = words(editedText);" + NL +
+    "const oldWords = words(anchorPlain);" + NL +
+    "const newWords = words(editedPlain);" + NL +
     "const lcs = lcsLength(oldWords, newWords);" + NL +
     "const editRatio = oldWords.length + newWords.length === 0 ? 0 : 1 - (2 * lcs) / (oldWords.length + newWords.length);" + NL +
-    "const oldNumerals = new Set((anchorText.match(/\\d+(\\.\\d+)?%?/g) || []));" + NL +
-    "const newNumerals = new Set((editedText.match(/\\d+(\\.\\d+)?%?/g) || []));" + NL +
+    "const oldNumerals = new Set((anchorPlain.match(/\\d+(\\.\\d+)?%?/g) || []));" + NL +
+    "const newNumerals = new Set((editedPlain.match(/\\d+(\\.\\d+)?%?/g) || []));" + NL +
     "const numeralsChanged = oldNumerals.size !== newNumerals.size || [...oldNumerals].some(n => !newNumerals.has(n));" + NL +
-    "const oldSentences = sentences(anchorText);" + NL +
-    "const newSentenceSet = new Set(sentences(editedText));" + NL +
+    "const oldSentences = sentences(anchorPlain);" + NL +
+    "const newSentenceSet = new Set(sentences(editedPlain));" + NL +
     "const removedSentences = oldSentences.filter(s => !newSentenceSet.has(s));" + NL +
     "const citationSentenceChanged = removedSentences.some(s => s.includes('[Source: excerpt'));" + NL +
-    "const wholeSentenceChanged = removedSentences.length > 0 || newSentenceSet.size !== oldSentences.length;" + NL +
+    // A sentence being REWORDED is not the same as a sentence being removed or added,
+    // and treating them alike made the cheap path unreachable: any typo fix, contraction
+    // or comma changed a sentence string and escalated straight to a full Opus
+    // evaluation, so the Haiku classifier this step exists to feed was never consulted.
+    // Verified live by editing three contractions and watching it escalate.
+    //
+    // A removed sentence that still has a close relative in the new text is a rewording,
+    // and reworded text is exactly the ambiguous case Haiku is meant to judge (biased to
+    // substantive on uncertainty, Decision #46). A removed sentence with no relative is
+    // content genuinely gone, which still escalates mechanically.
+    //
+    // 0.5 rather than something stricter because contractions delete words: "Here is
+    // what changed, and what did not" to "Here's what changed, and what didn't" shares
+    // only 4 of 7 words, and a contraction is the canonical grammatical edit. A reworded
+    // sentence that changes meaning is not caught here on purpose; that is precisely
+    // what the classifier exists to judge.
+    "const wordsOf = (s) => new Set(String(s).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));" + NL +
+    "const overlap = (a, b) => {" + NL +
+    "  const A = wordsOf(a), B = wordsOf(b);" + NL +
+    "  if (A.size === 0 || B.size === 0) return 0;" + NL +
+    "  let shared = 0;" + NL +
+    "  for (const w of A) if (B.has(w)) shared++;" + NL +
+    "  return shared / Math.max(A.size, B.size);" + NL +
+    "};" + NL +
+    "const newSentenceList = [...newSentenceSet];" + NL +
+    "const orphanedSentences = removedSentences.filter(s => !newSentenceList.some(n => overlap(s, n) >= 0.5));" + NL +
+    "const wholeSentenceChanged = orphanedSentences.length > 0 || newSentenceSet.size !== oldSentences.length;" + NL +
     "const mechanicalEscalate = numeralsChanged || citationSentenceChanged || wholeSentenceChanged || editRatio > 0.15;" + NL +
     "return [{ json: { anchorText, editedText, evaluatorText, editRatio, numeralsChanged, citationSentenceChanged, wholeSentenceChanged, mechanicalEscalate, hasAnyEvaluation: anchorRows.length > 0 } }];",
   {
