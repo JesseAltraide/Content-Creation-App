@@ -59,7 +59,7 @@ export default async function AudienceProfilesPage() {
                 <p className="font-medium">{p.name}</p>
                 <p className="mt-1 text-sm text-muted">{p.description}</p>
               </div>
-              <DeleteProfileButton profileId={p.id} />
+              {manager.canEditSettings && <DeleteProfileButton profileId={p.id} />}
             </Card>
           ))}
         </div>

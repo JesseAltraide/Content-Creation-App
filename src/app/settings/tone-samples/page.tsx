@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import ChannelToneSection from "./channel-tone-section";
 import SettingsNav from "../settings-nav";
+import { getManagerState } from "@/lib/content-manager";
+import { createClient as createUserClient } from "@/lib/supabase/server";
 
 const CHANNELS = [
   { value: "linkedin", label: "LinkedIn" },
@@ -9,6 +11,12 @@ const CHANNELS = [
 ] as const;
 
 export default async function ToneSamplesPage() {
+
+  const userClient = await createUserClient();
+  const {
+    data: { user },
+  } = await userClient.auth.getUser();
+  const manager = await getManagerState(user!.id);
   const supabase = await createClient();
   const { data: samples } = await supabase
     .from("tone_samples")
@@ -30,7 +38,8 @@ export default async function ToneSamplesPage() {
       <div className="mt-8 flex flex-col gap-8">
         {CHANNELS.map((c) => (
           <ChannelToneSection
-            key={c.value}
+canEdit={manager.canEditSettings}
+                      key={c.value}
             channel={c.value}
             label={c.label}
             samples={(samples ?? []).filter((s) => s.channel === c.value)}

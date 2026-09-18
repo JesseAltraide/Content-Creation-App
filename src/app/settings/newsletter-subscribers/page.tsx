@@ -56,7 +56,7 @@ export default async function NewsletterSubscribersPage() {
           {active.map((s) => (
             <div key={s.id} className="flex items-center justify-between gap-3 px-4 py-3">
               <span className="text-sm text-foreground">{s.email}</span>
-              <RemoveSubscriberButton subscriberId={s.id} />
+              {manager.canEditSettings && <RemoveSubscriberButton subscriberId={s.id} />}
             </div>
           ))}
         </Card>

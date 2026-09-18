@@ -11,10 +11,13 @@ export default function ChannelToneSection({
   channel,
   label,
   samples,
+  canEdit,
 }: {
   channel: string;
   label: string;
   samples: Sample[];
+  /** Only the content manager edits the brand voice (migration 009). */
+  canEdit: boolean;
 }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -66,7 +69,7 @@ export default function ChannelToneSection({
         </span>
       </div>
 
-      <Card className="mt-2 p-5">
+      {canEdit && <Card className="mt-2 p-5">
         <div className="mb-3 flex gap-1 rounded-lg bg-background p-1 text-sm">
           <button
             type="button"
@@ -126,7 +129,7 @@ export default function ChannelToneSection({
             </>
           )}
         </div>
-      </Card>
+      </Card>}
 
       {samples.length > 0 && (
         <div className="mt-3 flex flex-col gap-2">
@@ -142,14 +145,16 @@ export default function ChannelToneSection({
                   {s.content.length > 240 ? s.content.slice(0, 240) + "…" : s.content}
                 </p>
               </div>
-              <Button
-                variant="ghost"
-                onClick={() => handleDelete(s.id)}
-                disabled={deletingId === s.id}
-                className="shrink-0 !text-danger"
-              >
-                {deletingId === s.id ? "Removing…" : "Remove"}
-              </Button>
+              {canEdit && (
+                <Button
+                  variant="ghost"
+                  onClick={() => handleDelete(s.id)}
+                  disabled={deletingId === s.id}
+                  className="shrink-0 !text-danger"
+                >
+                  {deletingId === s.id ? "Removing…" : "Remove"}
+                </Button>
+              )}
             </Card>
           ))}
         </div>
