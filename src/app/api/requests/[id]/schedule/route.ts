@@ -118,8 +118,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     scheduled_for: scheduledFor.toISOString(),
   });
 
+  // 23505 means the partial unique index from migration 013 caught a concurrent
+  // schedule of the same post: the delete above is check-then-act and two clicks
+  // landing together both find nothing to delete, so without the index the queue
+  // ended up with two rows and the newsletter would send twice. The loser of that
+  // race still expresses the same intent, so it moves the surviving row to its time
+  // rather than failing at the human.
   if (insertError) {
-    return NextResponse.json({ error: "Couldn't save the schedule. Try again." }, { status: 500 });
+    if (insertError.code !== "23505") {
+      return NextResponse.json({ error: "Couldn't save the schedule. Try again." }, { status: 500 });
+    }
+    const { error: updateError } = await admin
+      .from("scheduled_content")
+      .update({ scheduled_for: scheduledFor.toISOString() })
+      .eq("channel_post_id", post.id)
+      .eq("status", "scheduled");
+    if (updateError) {
+      return NextResponse.json({ error: "Couldn't save the schedule. Try again." }, { status: 500 });
+    }
   }
 
   await logEvent({
