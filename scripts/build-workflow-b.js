@@ -464,8 +464,21 @@ claudeErrorBranch("Claude: Select Excerpts", "excerpt_selection", "$('Config').f
 codeNode(
   "parse-excerpts",
   "Parse Excerpts",
+  // `|| []` only guards null/undefined. Claude intermittently returns a nested
+  // tool-input value as a JSON *string* rather than nesting it (confirmed live on
+  // this node: "excerpts.map is not a function", and three times before that on
+  // Workflow D's per_channel and channels). A tool schema describes the intended
+  // shape, it does not guarantee the model won't serialize it - so parse-if-string
+  // first, then insist on an array of real objects before touching it.
   "const toolUse = $json.content.find(c => c.type === 'tool_use');" + NL +
-    "const excerpts = toolUse.input.excerpts || [];" + NL +
+    "let excerpts = toolUse.input.excerpts;" + NL +
+    "if (typeof excerpts === 'string') { try { excerpts = JSON.parse(excerpts); } catch { excerpts = []; } }" + NL +
+    // A keyed object instead of an array is the other shape this has taken live
+    // (Workflow D's Error #84). Unlike per_channel the keys carry no meaning here,
+    // so the values alone are a faithful recovery rather than a guess.
+    "if (!Array.isArray(excerpts) && excerpts && typeof excerpts === 'object') excerpts = Object.values(excerpts);" + NL +
+    "if (!Array.isArray(excerpts)) excerpts = [];" + NL +
+    "excerpts = excerpts.filter(e => e && typeof e === 'object');" + NL +
     "const sources = $('Count Scraped Sources').first().json.sources;" + NL +
     "const requestId = $('Config').first().json.request_id;" + NL +
     "const mapped = excerpts.map(e => {" + NL +
@@ -606,19 +619,17 @@ const EVAL_TOOL = {
 const RUBRIC_TEXT =
   "Score out of 100 across: Topic Relevance (20, floor 15), Source Grounding (20, floor 15), Factual Consistency (20, floor 15), Audience Fit (15, floor 6), SEO Fit (10, floor 4), Clarity (10, floor 4), Completeness (5, floor 2). Topic Relevance/Source Grounding/Factual Consistency are hard-block tier: if any scores below its floor, hard_block_triggered must be true regardless of the total. Verify every claim against the excerpt it cites and flag any claim citing nothing. Always populate weakest_criteria_suggestions, even on a passing score - a passing draft can still have one mediocre criterion worth naming.";
 
-// Split so the excerpts+rubric block (byte-identical across all 3 eval rounds in
-// a run) can be cached: it's the largest, most repeated part of this prompt,
-// while the article body is exactly what changes every round.
-const EVAL_CACHED_CONTEXT =
-  "`Grounded excerpts to check this article against:\\n${$('Build Excerpts Text').first().json.excerptsTextPlain}\\n\\nRubric: " +
-  RUBRIC_TEXT +
-  "`";
-
+// Prompt caching is PAUSED (programmer's call: see the whole flow working first,
+// with as few moving parts as possible). The split-prompt + cache_control version
+// is in git history and claudeNode still supports it via cachedContextExpr - this
+// is back to the single-block form so Workflow B's reimport carries only bug fixes.
 function evalPrompt(bodyExpr) {
   return (
-    "`Evaluate the article below against the rubric and excerpts above. You have not seen how it was written or planned - judge only what's here.\\n\\nArticle:\\n${" +
+    "`Evaluate this article against the rubric. You have not seen how it was written or planned - judge only what's here.\\n\\nRubric: " +
+    RUBRIC_TEXT +
+    "\\n\\nArticle:\\n${" +
     bodyExpr +
-    "}`"
+    "}\\n\\nGrounded excerpts it should be checked against:\\n${$('Build Excerpts Text').first().json.excerptsTextPlain}`"
   );
 }
 
@@ -646,8 +657,7 @@ function buildEvalRound(roundLabel, sectionSourceName, isFinalRound) {
     "claude-opus-5",
     EVAL_TOOL,
     evalPrompt(`$('${sectionSourceName}').first().json.body_markdown`),
-    3000,
-    EVAL_CACHED_CONTEXT
+    3000
   );
   connect(sectionSourceName, `Claude: Evaluate (${roundLabel}): Build Request`);
   claudeErrorBranch(`Claude: Evaluate (${roundLabel})`, "evaluation", "$('Config').first().json.request_id");
@@ -735,16 +745,8 @@ function buildRevisionRound(roundNum, prevGateIfName, prevSectionName) {
   const label = `Round ${roundNum}`;
   const idBase = `revise-${roundNum}`;
 
-  // Same excerpts block as EVAL_CACHED_CONTEXT content-wise but without the rubric
-  // text (revise doesn't need it) - kept as its own constant so the two revise
-  // calls (Round 1, Round 2) share one cache entry with each other; it won't
-  // share with eval's entry since the bytes differ, but that cross-sharing isn't
-  // where the repeated-call cost actually is.
-  const REVISE_CACHED_CONTEXT =
-    "`Grounded excerpts available:\\n${$('Build Excerpts Text').first().json.excerptsTextPlain}`";
-
   const revisePrompt =
-    "`Revise the article below based on the evaluation feedback, staying grounded only in the excerpts above - don't invent anything new to fill gaps. Address the flagged sections and unsupported claims specifically.\\n\\nCurrent article:\\n${$('" +
+    "`Revise this article based on the evaluation feedback below. Address the flagged sections and unsupported claims specifically - stay grounded only in the excerpts, don't invent anything new to fill gaps.\\n\\nCurrent article:\\n${$('" +
     prevSectionName +
     "').first().json.body_markdown}\\n\\nSections needing revision: ${JSON.stringify($('Gate (" +
     (roundNum === 1 ? "Round 0" : `Round ${roundNum - 1}`) +
@@ -752,9 +754,9 @@ function buildRevisionRound(roundNum, prevGateIfName, prevSectionName) {
     (roundNum === 1 ? "Round 0" : `Round ${roundNum - 1}`) +
     ")').first().json.recommended_changes)}\\nUnsupported/weak claims flagged: ${JSON.stringify($('Gate (" +
     (roundNum === 1 ? "Round 0" : `Round ${roundNum - 1}`) +
-    ")').first().json.unsupported_or_weak_claims)}`";
+    ")').first().json.unsupported_or_weak_claims)}\\n\\nGrounded excerpts available:\\n${$('Build Excerpts Text').first().json.excerptsTextPlain}`";
 
-  claudeNode(`claude-${idBase}`, `Claude: Revise (${label})`, "claude-sonnet-5", ARTICLE_TOOL, revisePrompt, 4000, REVISE_CACHED_CONTEXT);
+  claudeNode(`claude-${idBase}`, `Claude: Revise (${label})`, "claude-sonnet-5", ARTICLE_TOOL, revisePrompt, 4000);
   connect(prevGateIfName, `Claude: Revise (${label}): Build Request`, 1);
   claudeErrorBranch(`Claude: Revise (${label})`, "revision", "$('Config').first().json.request_id");
 

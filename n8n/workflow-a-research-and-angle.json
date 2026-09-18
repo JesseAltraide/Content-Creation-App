@@ -705,7 +705,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const toolUse = $json.content.find(c => c.type === 'tool_use');\nconst result = toolUse.input;\nconst requestId = $('A2 · Fetch Request Row').first().json.id;\n\nreturn [{ json: { requestId, ...result } }];"
+        "jsCode": "const toolUse = $json.content.find(c => c.type === 'tool_use');\nconst result = toolUse.input;\nconst requestId = $('A2 · Fetch Request Row').first().json.id;\n\n// Claude intermittently returns a nested tool-input value as a JSON string rather\n// than nesting it - confirmed live on Workflow B's excerpts ('excerpts.map is not\n// a function') and three times on Workflow D's per_channel/channels. `angles` is\n// consumed downstream by A2 - Insert Angle(s) as $json.angles.map(...) inside an\n// n8n expression, where the same failure would be far harder to read, so it gets\n// normalised to a real array of objects here at the boundary instead.\nlet angles = result.angles;\nif (typeof angles === 'string') { try { angles = JSON.parse(angles); } catch { angles = []; } }\nif (!Array.isArray(angles)) angles = [];\nangles = angles.filter(a => a && typeof a === 'object');\n\nreturn [{ json: { requestId, ...result, angles } }];"
       },
       "id": "a2-parse-claude-response",
       "name": "A2 · Parse Claude Response",
