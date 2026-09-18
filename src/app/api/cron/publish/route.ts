@@ -22,11 +22,17 @@ function unsubscribeFooter(baseUrl: string, subscriberId: string): string {
 // How far past scheduled_for a still-'scheduled' item can sit before it's treated
 // as stale rather than fired late - the docs require a visible "overdue" state for
 // "cron misconfigured, worker down" (week4-full-flow.md line 314) but don't specify
-// a threshold. 2 hours: long enough that a few minutes of cron jitter or a single
-// missed run (this fires every 15 minutes, see vercel.json) never trips it, short
-// enough that a "Tuesday 9am" reminder that would otherwise land Tuesday evening
-// gets flagged instead of silently sent hours late.
-const OVERDUE_THRESHOLD_MS = 2 * 60 * 60 * 1000;
+// a threshold.
+//
+// 26 hours, and that number is a direct consequence of the hosting plan rather than
+// a judgement about content. Vercel's Hobby plan allows a cron to run once a day, so
+// this job fires at 06:00 and an item scheduled for 10:00 is genuinely not sent until
+// the following morning. At the old two-hour threshold every single item would be
+// labelled overdue on arrival, which turns the one signal meant to mean "the worker
+// is down" into noise that means nothing. 26 hours fires only when a daily run was
+// actually missed. On a plan with per-minute cron this should go back to 2 hours
+// along with the schedule in vercel.json.
+const OVERDUE_THRESHOLD_MS = 26 * 60 * 60 * 1000;
 
 function formatChannelBody(channel: string, body: string): string {
   if (channel === "x") {

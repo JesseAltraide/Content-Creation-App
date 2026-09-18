@@ -113,7 +113,7 @@ export default function ScheduleChannelForm({
         )}
       </div>
       <p className="text-xs text-muted">
-        Times are in your own timezone. Only times from now onwards can be chosen.
+        Times are in your own timezone. Only times from now onwards can be chosen. Sending is checked once a day at 06:00 UTC, so this is the earliest it goes out rather than the exact moment.
       </p>
       {error && <p className="text-sm text-danger">{error}</p>}
     </div>

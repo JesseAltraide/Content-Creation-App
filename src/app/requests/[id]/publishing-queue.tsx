@@ -88,7 +88,19 @@ export default function PublishingQueue({
       <p className="mt-1 text-xs text-muted">
         LinkedIn and X are scheduled reminders, not automated publishing. You get the
         ready-to-post content by email and post it yourself. Newsletter is real delivery: it
-        actually sends to every active subscriber at the scheduled time.
+        actually sends to every active subscriber.
+      </p>
+      {/* Stated plainly rather than buried, because the previous wording promised
+          delivery "at the scheduled time" and the hosting plan cannot keep that
+          promise. Vercel's Hobby plan runs a cron once a day, so the scheduled time
+          is the earliest a post goes out, not the time it goes out. Someone picking
+          a 9am slot should learn that here, not by watching it arrive the next
+          morning. */}
+      <p className="mt-1 text-xs text-warning">
+        Sending runs once a day, at 06:00 UTC. A scheduled time is the earliest
+        something will be sent, not the exact moment: anything scheduled after that
+        morning&apos;s run goes out on the next one. This is a limit of the hosting
+        plan, not of the schedule you pick.
       </p>
 
       <div className="mt-3 flex flex-col gap-3">
