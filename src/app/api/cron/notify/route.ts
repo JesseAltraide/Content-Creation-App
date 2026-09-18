@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logEvent } from "@/lib/events";
 import { sendMail } from "@/lib/mailer";
+import { SAFE_STATE, STALLED_SWEEP_MS } from "@/lib/stalled-runs";
 
 // Every stage of this pipeline runs on n8n and writes straight to Supabase, which is
 // what makes it safe to close the tab, and also what made it silent. A run that
@@ -48,6 +49,73 @@ export async function GET(request: Request) {
   const admin = createAdminClient();
   const baseUrl = new URL(request.url).origin;
 
+  // Reclaim runs that stopped without reporting back, BEFORE the notification pass, so
+  // a reclaimed request can be emailed about in the same sweep.
+  //
+  // This exists because a run can die inside n8n without reaching any of its own
+  // failure handlers: nothing is logged, nothing reverts, and the request claims to be
+  // busy indefinitely (seen live at 'adapting' for 112 minutes). The manual reset in
+  // the banner covers the human who is looking at the page. This covers the one who
+  // is not.
+  const reclaimed: string[] = [];
+  const { data: working } = await admin
+    .from("requests")
+    .select("id, status, updated_at, user_id, raw_idea, primary_keyword")
+    .in("status", Object.keys(SAFE_STATE))
+    .lt("updated_at", new Date(Date.now() - STALLED_SWEEP_MS).toISOString())
+    .limit(25);
+
+  for (const req of working ?? []) {
+    const target = SAFE_STATE[req.status];
+    if (!target) continue;
+
+    // Guarded on the exact status read, so a run that finishes between the query and
+    // this write keeps its own result rather than being dragged backwards.
+    const { data: moved } = await admin
+      .from("requests")
+      .update({ status: target.to })
+      .eq("id", req.id)
+      .eq("status", req.status)
+      .select("id")
+      .maybeSingle();
+
+    if (!moved) continue;
+    if (target.unchooseAngles) {
+      await admin.from("angles").update({ chosen: false }).eq("request_id", req.id);
+    }
+
+    const minutes = Math.round((Date.now() - new Date(req.updated_at).getTime()) / 60000);
+    await logEvent({
+      requestId: req.id,
+      stage: "pipeline_setup",
+      status: "failed",
+      detail: `Run stopped without reporting back. Reset automatically from ${req.status} to ${target.to} after ${minutes} minutes of silence, so it can be retried. Nothing was generated. If the original run somehow completes later it will write its own result.`,
+    });
+
+    // Emailed directly rather than through the status-based notifier below: the
+    // state it lands in (usually 'approved') is a normal one that nobody should be
+    // emailed about, but THIS arriving at it is worth knowing.
+    let to = "";
+    if (req.user_id) {
+      const { data: owner } = await admin.auth.admin.getUserById(req.user_id);
+      if (owner?.user?.email) to = owner.user.email;
+    }
+    if (to) {
+      const label = req.raw_idea?.trim() || req.primary_keyword || "your content request";
+      await sendMail({
+        to,
+        subject: `A run stopped and was reset: ${label.slice(0, 60)}`,
+        text: `This request was left at "${req.status}" with nothing reporting back for ${minutes} minutes, so it has been reset to "${target.to}" and can be retried.
+
+${label}
+
+Open it here: ${baseUrl}/requests/${req.id}
+`,
+      });
+    }
+    reclaimed.push(req.id);
+  }
+
   const { data: candidates } = await admin
     .from("requests")
     .select("id, status, raw_idea, primary_keyword, user_id, notified_status")
@@ -56,7 +124,7 @@ export async function GET(request: Request) {
 
   const pending = (candidates ?? []).filter((r) => r.notified_status !== r.status);
   if (pending.length === 0) {
-    return NextResponse.json({ ok: true, notified: 0 });
+    return NextResponse.json({ ok: true, notified: 0, reclaimed: reclaimed.length });
   }
 
   const { data: workspaceSettings } = await admin
@@ -123,5 +191,5 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, notified, failures });
+  return NextResponse.json({ ok: true, notified, reclaimed: reclaimed.length, failures });
 }

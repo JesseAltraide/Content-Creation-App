@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanModifyRequest } from "@/lib/request-access";
 import { logEvent } from "@/lib/events";
+import { SAFE_STATE, STALLED_MANUAL_MS } from "@/lib/stalled-runs";
 
 // A run that dies inside n8n without reaching one of its own failure handlers leaves
 // the request in a working status with nothing logged. The status is the only thing
@@ -17,12 +18,6 @@ import { logEvent } from "@/lib/events";
 // Deliberately does NOT re-trigger anything. Resetting and re-running are two separate
 // decisions: if the original run is somehow still alive, firing a second one writes
 // two sets of channel posts for the same request.
-const SAFE_STATE: Record<string, { to: string; unchooseAngles?: boolean }> = {
-  adapting: { to: "approved" },
-  generating: { to: "awaiting_angle_selection", unchooseAngles: true },
-  revising: { to: "awaiting_angle_selection", unchooseAngles: true },
-  researching: { to: "needs_human_attention" },
-};
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: requestId } = await params;
@@ -58,7 +53,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // The same threshold the banner uses before it stops claiming the work is running.
   // Without it this becomes a button that cancels a healthy run.
   const silentFor = Date.now() - new Date(current.updated_at).getTime();
-  if (silentFor < 5 * 60 * 1000) {
+  if (silentFor < STALLED_MANUAL_MS) {
     return NextResponse.json(
       { error: "This has only just started. Give it five minutes before resetting it." },
       { status: 409 }
