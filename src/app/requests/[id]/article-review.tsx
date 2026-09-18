@@ -1,4 +1,5 @@
 import ReactMarkdown from "react-markdown";
+import { extractCitations } from "@/lib/citations";
 import { Card } from "@/components/ui/card";
 import { ScoreBar } from "@/components/ui/score-bar";
 import ReviewActions from "./review-actions";
@@ -66,7 +67,12 @@ export default function ArticleReview({
   // above it from section.title. Two identical headings, one on top of the other.
   // Stripped at render rather than in the prompt so existing drafts are fixed too,
   // and only when it really is a leading H1 (never touches body content).
-  const body = (latest.body_markdown ?? "").replace(/^\s*#\s+[^\n]*\n+/, "");
+  const stripped = (latest.body_markdown ?? "").replace(/^\s*#\s+[^\n]*\n+/, "");
+  // Display only: the stored text keeps its full [Source: url] trail, which is what the
+  // evaluator scores and what an edit is re-checked against. The reader gets numbered
+  // markers and one reference list, because the same 90-character URL four times in a
+  // paragraph is noise rather than provenance.
+  const { body, citations } = extractCitations(stripped);
   const latestEval = evaluations.find((e) => e.content_version === latest.version);
   // Regenerate/Reject are available on any draft awaiting review, whether it just
   // passed or is stuck at needs_human_attention (the internal auto-revision loop's
@@ -93,6 +99,28 @@ export default function ArticleReview({
         >
           <ReactMarkdown>{body}</ReactMarkdown>
         </div>
+
+        {citations.length > 0 && (
+          <div className="mt-6 border-t border-border pt-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted">Sources</p>
+            <ol className="mt-2 flex flex-col gap-1.5 text-xs">
+              {citations.map((c) => (
+                <li key={c.number} className="flex gap-2">
+                  <span className="shrink-0 font-medium text-muted">[{c.number}]</span>
+                  <a
+                    href={c.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="min-w-0 truncate text-accent hover:underline"
+                    title={c.url}
+                  >
+                    {c.label}
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
       </Card>
 
       {latestEval && (
