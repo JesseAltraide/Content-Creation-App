@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { userCanAccessRequest } from "@/lib/request-access";
+import { userCanModifyRequest } from "@/lib/request-access";
 import { logEvent } from "@/lib/events";
 
 const bodySchema = z.object({
@@ -22,7 +22,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   // Ownership (migration 007). 404 not 403: telling someone a request exists
   // but is not theirs still leaks that it exists.
-  if (!(await userCanAccessRequest(requestId, user.id))) {
+  if (!(await userCanModifyRequest(requestId, user.id))) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
 

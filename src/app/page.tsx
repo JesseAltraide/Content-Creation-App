@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/badge";
+import { REVIEWABLE_STATUSES } from "@/lib/request-access";
 
 export default async function HomePage() {
   const supabase = await createClient();
@@ -18,6 +19,18 @@ export default async function HomePage() {
     .from("requests")
     .select("id, raw_idea, primary_keyword, input_path, channels, status, created_at")
     .or(`user_id.eq.${user!.id},user_id.is.null`)
+    .order("created_at", { ascending: false });
+
+  // Without this nobody would ever discover a colleague's request to review it:
+  // team-readable requests are not yours, so they are excluded from the list
+  // above by design. Everything at a reviewable stage that belongs to someone
+  // else shows up here instead (see REVIEWABLE_STATUSES).
+  const { data: toReview } = await supabase
+    .from("requests")
+    .select("id, raw_idea, primary_keyword, status, created_at")
+    .in("status", REVIEWABLE_STATUSES)
+    .not("user_id", "is", null)
+    .neq("user_id", user!.id)
     .order("created_at", { ascending: false });
 
   return (
@@ -62,6 +75,29 @@ export default async function HomePage() {
           </li>
         ))}
       </ul>
-    </main>
+    
+      {toReview && toReview.length > 0 && (
+        <section className="mt-10">
+          <h2 className="text-sm font-semibold text-muted">Ready to schedule, from the team</h2>
+          <p className="mt-1 text-xs text-muted">
+            Final drafts from other people. You can read them and suggest improvements. Only the
+            author can edit or schedule.
+          </p>
+          <div className="mt-3 flex flex-col gap-2">
+            {toReview.map((r) => (
+              <Link key={r.id} href={`/requests/${r.id}`}>
+                <Card className="flex items-center justify-between gap-4 p-4 hover:border-accent">
+                  <span className="min-w-0 truncate text-sm font-medium">
+                    {r.raw_idea || r.primary_keyword}
+                  </span>
+                  <StatusBadge status={r.status} />
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+</main>
   );
 }

@@ -16,6 +16,8 @@ import ChannelPostsReview from "./channel-posts-review";
 import PublishingQueue from "./publishing-queue";
 import WorkingBanner from "./working-banner";
 import RequestTabs from "./request-tabs";
+import ReviewComments from "./review-comments";
+import { getRequestAccess } from "@/lib/request-access";
 import { CHANNEL_LABELS } from "@/lib/channel-post-format";
 
 const CHANNEL_TABS = [
@@ -43,13 +45,21 @@ export default async function RequestDetailPage({
   const { data: req } = await supabase.from("requests").select("*").eq("id", id).single();
   if (!req) notFound();
 
-  // Ownership check (migration 007). notFound() rather than a "not yours" message
-  // on purpose: confirming a request exists but belongs to someone else leaks that
-  // it exists at all. Null-owner rows predate ownership and stay open to everyone.
+  // notFound() rather than a "not yours" message on purpose: confirming a request
+  // exists but belongs to someone else leaks that it exists at all.
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (req.user_id && req.user_id !== user?.id) notFound();
+  const access = await getRequestAccess(id, user!.id);
+  if (!access.canView) notFound();
+
+  // Comments only exist once a request is readable by the team, so they are
+  // fetched with the same gate rather than separately.
+  const { data: comments } = await supabase
+    .from("request_comments")
+    .select("id, user_id, author_email, channel, body, created_at")
+    .eq("request_id", id)
+    .order("created_at", { ascending: true });
 
   const { data: sources } = await supabase
     .from("sources")
@@ -175,6 +185,18 @@ export default async function RequestDetailPage({
         </h1>
         <StatusBadge status={req.status} />
       </div>
+
+      {!access.isOwner && (
+        <Card className="mt-4 border-accent/20 bg-accent-soft p-4">
+          <p className="text-sm font-medium text-accent">
+            You&apos;re reviewing someone else&apos;s request.
+          </p>
+          <p className="mt-1 text-xs text-accent/80">
+            It&apos;s ready to schedule, so the team can read it. You can leave comments at the
+            bottom. Editing, regenerating and scheduling stay with the author.
+          </p>
+        </Card>
+      )}
 
       <Card className="mt-6 p-5">
         <PipelineProgress
@@ -399,6 +421,13 @@ export default async function RequestDetailPage({
         }}
       />
 
+
+      <ReviewComments
+        requestId={id}
+        comments={comments ?? []}
+        currentUserId={user!.id}
+        isOwner={access.isOwner}
+      />
 
       {/* Never auto-opens, not even on failure: the banners above already say what
           went wrong in plain language, and springing a wall of stage names on
