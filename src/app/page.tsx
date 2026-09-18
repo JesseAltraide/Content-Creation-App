@@ -78,10 +78,11 @@ export default async function HomePage() {
     
       {toReview && toReview.length > 0 && (
         <section className="mt-10">
-          <h2 className="text-sm font-semibold text-muted">Ready to schedule, from the team</h2>
+          <h2 className="text-sm font-semibold text-muted">Open for review, from the team</h2>
           <p className="mt-1 text-xs text-muted">
-            Final drafts from other people. You can read them and suggest improvements. Only the
-            author can edit or schedule.
+            Other people&apos;s work that has reached review: awaiting approval, or ready to
+            schedule. You can read it and suggest improvements. Only the author can edit or
+            schedule.
           </p>
           <div className="mt-3 flex flex-col gap-2">
             {toReview.map((r) => (

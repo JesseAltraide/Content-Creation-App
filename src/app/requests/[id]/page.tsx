@@ -192,8 +192,10 @@ export default async function RequestDetailPage({
             You&apos;re reviewing someone else&apos;s request.
           </p>
           <p className="mt-1 text-xs text-accent/80">
-            It&apos;s ready to schedule, so the team can read it. You can leave comments at the
-            bottom. Editing, regenerating and scheduling stay with the author.
+            {req.status === "pending_approval"
+              ? "It's waiting on the author's approval, so feedback now can still change the article itself. "
+              : "It's ready to schedule, so this is the last look before it goes out. "}
+            Leave comments at the bottom. Editing, regenerating and scheduling stay with the author.
           </p>
         </Card>
       )}

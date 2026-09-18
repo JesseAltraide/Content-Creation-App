@@ -4,7 +4,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 // comment on it. Before that it is the author's private work in progress. This is
 // what lets per-request privacy (migration 007) and team review coexist: nothing
 // is shared manually, visibility just follows the pipeline stage.
-export const REVIEWABLE_STATUSES = ["ready_to_schedule"];
+// pending_approval is included as well as ready_to_schedule: that is the point
+// where feedback can still change the article itself rather than only the channel
+// posts cut from it, so it is arguably the more useful moment to be reviewed.
+export const REVIEWABLE_STATUSES = ["pending_approval", "ready_to_schedule"];
 
 type Access = { exists: boolean; isOwner: boolean; canView: boolean; canModify: boolean };
 
