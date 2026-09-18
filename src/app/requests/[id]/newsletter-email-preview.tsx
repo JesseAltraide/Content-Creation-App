@@ -60,14 +60,24 @@ export default function NewsletterEmailPreview({
             )}
           </div>
 
-          {/* Monospace and whitespace-pre-wrap: this is a plain text email, and showing
-              it in a proportional font with collapsed whitespace would misrepresent
-              what lands in the inbox. */}
-          <div className="bg-surface px-4 py-3">
-            <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-foreground">
-              {body_markdown}
-              {"\n\n---\nUnsubscribe: " + "https://your-app/api/unsubscribe?id=<each subscriber's own id>"}
-            </pre>
+          {/* Rendered, not raw. This was deliberately monospaced plain text while the
+              send itself was plain text, which is how the markdown-in-a-text-email
+              defect surfaced here rather than in a subscriber's inbox. The send now
+              carries an HTML part built from this same markdown, so rendering it is
+              the accurate preview and showing raw asterisks would be the lie. */}
+          <div className="bg-surface px-4 py-4">
+            <div
+              className="flex flex-col gap-3 text-sm leading-relaxed text-foreground
+                [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold
+                [&_h3]:text-sm [&_h3]:font-semibold [&_strong]:font-semibold
+                [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5
+                [&_a]:text-accent [&_a]:underline"
+            >
+              <ReactMarkdown>{body_markdown}</ReactMarkdown>
+            </div>
+            <p className="mt-4 border-t border-border pt-3 text-xs text-muted">
+              You are receiving this because you subscribed. Unsubscribe.
+            </p>
           </div>
 
         </div>

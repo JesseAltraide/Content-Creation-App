@@ -23,6 +23,7 @@ export default function WorkingBanner({
   stalled,
   quiet,
   canReset,
+  renderedEventAt,
 }: {
   requestId: string;
   status: string;
@@ -31,6 +32,12 @@ export default function WorkingBanner({
   quiet: boolean;
   /** Reviewers watch; only the author can reset a run. */
   canReset?: boolean;
+  /**
+   * When the newest event on this request was written, as of this render. Compared
+   * against the polled value so a failure logged WITHOUT a status change (a trigger
+   * failure, a gateway timeout) still counts as something worth reloading for.
+   */
+  renderedEventAt?: string | null;
 }) {
   const router = useRouter();
   const [elapsed, setElapsed] = useState(0);
@@ -76,7 +83,30 @@ export default function WorkingBanner({
     // 10s, only on this page, only while a stage is actually running: cheaper than
     // making someone reload to find out whether their pipeline finished.
     const POLL_MS = 10_000;
-    fallbackId = setInterval(() => router.refresh(), POLL_MS);
+
+    // Ask what the status IS, and reload only when it differs from what is rendered.
+    //
+    // This used to call router.refresh() on the same timer, which did not reliably
+    // re-render the server component: a run would finish, the database would be
+    // correct, and the page would keep saying "adapting" until someone reloaded by
+    // hand. Polling that changes nothing is worse than no polling, because it looks
+    // like it is working. A reload is heavy, so it only happens on a real change.
+    const checkForChange = async () => {
+      try {
+        const res = await fetch(`/api/requests/${requestId}/status`, { cache: "no-store" });
+        if (!res.ok || cancelled) return;
+        const body = (await res.json()) as { status: string | null; latestEventAt: string | null };
+        if (cancelled) return;
+        const changed =
+          (body.status && body.status !== status) ||
+          (body.latestEventAt && body.latestEventAt !== renderedEventAt);
+        if (changed) window.location.reload();
+      } catch {
+        // A failed poll is not worth surfacing: the next one is 10 seconds away, and
+        // the stalled/quiet states already cover work that never reports back.
+      }
+    };
+    fallbackId = setInterval(checkForChange, POLL_MS);
 
     // The access token has to reach the realtime socket BEFORE subscribing.
     // postgres_changes enforces RLS, and this project's policies require
@@ -100,12 +130,12 @@ export default function WorkingBanner({
         .on(
           "postgres_changes",
           { event: "UPDATE", schema: "public", table: "requests", filter: `id=eq.${requestId}` },
-          () => router.refresh()
+          () => void checkForChange()
         )
         .on(
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "event_log", filter: `request_id=eq.${requestId}` },
-          () => router.refresh()
+          () => void checkForChange()
         )
         .subscribe();
     })();
