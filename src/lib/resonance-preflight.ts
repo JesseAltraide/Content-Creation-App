@@ -60,7 +60,10 @@ const RESONANCE_TOOL: Anthropic.Tool = {
  * worse than a wrong guess that mentions it (week4-data-quality.md's own rule that
  * over-blocking is its own failure).
  */
-export type IntakeWarning = { kind: "keyword_mismatch" | "multiple_topics"; message: string };
+export type IntakeWarning = {
+  kind: "keyword_mismatch" | "multiple_topics" | "weak_resonance";
+  message: string;
+};
 
 export type ResonanceVerdict = {
   blocked: boolean;
@@ -75,6 +78,14 @@ export async function preflightResonance(input: {
   context?: string | null;
   primaryKeyword: string;
   audienceProfileId?: string | null;
+  /**
+   * "block" on the raw-idea path, where the author has written an idea and there is a
+   * real argument to judge. "advisory" on the URL path, where there is no idea text at
+   * all: the judgement rests on a keyword and whatever context was typed, which is too
+   * thin to refuse work on. The authoritative gate for that path is Workflow A2's own
+   * resonance block, which runs with the scraped sources in hand.
+   */
+  mode?: "block" | "advisory";
 }): Promise<ResonanceVerdict | null> {
   const admin = createAdminClient();
   const { data: profiles } = await admin.from("audience_profiles").select("id, name, description");
@@ -87,7 +98,18 @@ export async function preflightResonance(input: {
     : profiles;
   const candidates = scoped.length > 0 ? scoped : profiles;
 
-  const prompt = `Judge how strongly this content idea would resonate with the audience below, on a 0-15 scale.
+  const advisory = input.mode === "advisory";
+  const hasIdea = !!input.rawIdea?.trim();
+
+  // No idea text exists on the URL path, so the model is told why rather than left to
+  // treat the blank as the author having nothing to say.
+  const advisoryNote = advisory
+    ? `
+
+Note: no idea text was written. The author supplied source URLs directly, so judge the subject from the primary keyword and any context, and do not penalise the absence of an idea statement itself.`
+    : "";
+
+  const prompt = `Judge how strongly this content idea would resonate with the audience below, on a 0-15 scale.${advisoryNote}
 
 Content idea: ${input.rawIdea?.trim() || "(none given)"}
 Additional context from the author: ${input.context?.trim() || "(none given)"}
@@ -143,7 +165,20 @@ Calibrate against this scale: a topic squarely in this audience's domain, stated
   const topicList = (Array.isArray(topics) ? topics : []).map((t) => String(t)).filter(Boolean);
 
   const warnings: IntakeWarning[] = [];
-  if (result.keyword_matches_idea === false) {
+
+  // On the URL path a low score is a warning rather than a refusal: it was reached
+  // without any idea text, and the author has already committed to specific sources.
+  // A2 still hard-blocks later with those sources actually read.
+  if (advisory && result.resonance_score <= BLOCK_AT_OR_BELOW) {
+    warnings.push({
+      kind: "weak_resonance",
+      message: `Judged only on the keyword "${input.primaryKeyword}" and your context, this scores ${result.resonance_score}/15 against ${result.best_profile_name ?? candidates[0].name}. ${result.reason ?? ""} The sources get read before anything is written, so this may look different then, but it is worth a second look now.`.trim(),
+    });
+  }
+
+  // Meaningless without an idea to compare the keyword against, so it is only ever
+  // raised where there is one.
+  if (hasIdea && result.keyword_matches_idea === false) {
     warnings.push({
       kind: "keyword_mismatch",
       message:
@@ -159,7 +194,7 @@ Calibrate against this scale: a topic squarely in this audience's domain, stated
   }
 
   return {
-    blocked: result.resonance_score <= BLOCK_AT_OR_BELOW,
+    blocked: !advisory && result.resonance_score <= BLOCK_AT_OR_BELOW,
     score: result.resonance_score,
     reason: result.reason ?? "No reason given.",
     profileName: result.best_profile_name ?? candidates[0].name,

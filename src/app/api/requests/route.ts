@@ -44,11 +44,23 @@ export async function POST(request: Request) {
   // or triggered, so a mismatched idea costs one small Claude call instead of a
   // search, the human's source-picking time, and a scrape of every result.
   //
-  // Raw-idea path only: the whole argument for this gate is that we waste effort
-  // searching and scraping on the human's behalf. On the URL path they supplied the
-  // sources themselves, so there is no speculative spend to protect, and the gate
-  // would be judging on a keyword alone.
-  if (input.inputPath === "raw_idea") {
+  // Both paths run it now, but they are not the same check, because they do not have
+  // the same evidence:
+  //
+  //   raw idea  the author wrote an argument, so it can be judged and REFUSED. A bad
+  //             one would otherwise burn a Tavily search, the human's source-picking
+  //             time, and a scrape of every result.
+  //   url       no idea text exists at all. The judgement rests on a keyword and any
+  //             context, which is too thin to refuse work on, especially when the
+  //             author has already committed to specific sources. So it WARNS, and
+  //             the authoritative block stays where the evidence is: Workflow A2,
+  //             which scores resonance with the scraped sources actually read.
+  //
+  // Both are worth running early: the URL path still scrapes every URL and makes an
+  // angle call before A2's gate can fire, so an obvious mismatch is worth mentioning
+  // before that spend rather than after it.
+  {
+    const advisory = input.inputPath === "url";
     let verdict = null;
     try {
       verdict = await preflightResonance({
@@ -56,6 +68,7 @@ export async function POST(request: Request) {
         context: input.context,
         primaryKeyword: input.primaryKeyword,
         audienceProfileId: input.audienceProfileId,
+        mode: advisory ? "advisory" : "block",
       });
     } catch {
       // Fails open on purpose: a gate that takes intake down whenever the Anthropic
@@ -75,10 +88,9 @@ export async function POST(request: Request) {
     }
 
     // Advisory findings from the same call, so they cost nothing extra: a keyword
-    // pointing away from the idea, and an idea that is really several. Neither can be
-    // caught by word rules, and neither justifies a refusal, so they are shown once
-    // and the author decides. Raw-idea path only, which is also the only path where
-    // they are answerable: the URL path has no idea to compare a keyword against.
+    // pointing away from the idea, an idea that is really several, and on the URL
+    // path a weak keyword-to-audience fit. None can be caught by word rules and none
+    // justifies a refusal, so they are shown once and the author decides.
     if (verdict && verdict.warnings.length > 0 && !input.acknowledgedWarnings) {
       return NextResponse.json(
         { error: "intake_warnings", warnings: verdict.warnings },
