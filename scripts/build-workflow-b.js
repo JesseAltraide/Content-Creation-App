@@ -544,10 +544,25 @@ codeNode(
     "  if (hit) return hit;" + NL +
     "  // One side may be a truncated form of the other." + NL +
     "  hit = sources.find(s => { const n = norm(s.url); return n.startsWith(c) || c.startsWith(n); });" + NL +
+    "  if (hit) return hit;" + NL +
+    // Same page, different path: a scraped article often carries a canonical or
+    // AMP form of its own URL, and the model quotes whichever one it saw in the text
+    // rather than the one in the prompt. Only safe when the host appears once.
+    "  const host = c.split('/')[0];" + NL +
+    "  const sameHost = sources.filter(s => norm(s.url).split('/')[0] === host);" + NL +
+    "  if (sameHost.length === 1) return sameHost[0];" + NL +
     "  return hit || null;" + NL +
     "};" + NL +
+    // With exactly one source there is no ambiguity to resolve: whatever was quoted
+    // came from it, whatever the model wrote in source_url. Dropping the excerpt
+    // instead costs the whole run.
+    //
+    // This is what failed live on the URL path, where a request has a single source
+    // by definition: the model returned one passage, its source_url did not match,
+    // and the run stopped at "none could be matched back to a scraped source".
+    "const soleSource = sources.length === 1 ? sources[0] : null;" + NL +
     "const mapped = excerpts.map(e => {" + NL +
-    "  const source = findSource(e.source_url);" + NL +
+    "  const source = findSource(e.source_url) || soleSource;" + NL +
     "  return { request_id: requestId, source_id: source ? source.id : null, text: e.text, reason: e.reason };" + NL +
     "}).filter(e => e.source_id);" + NL +
     "// Surfaced so a zero-excerpt outcome can be told apart from Claude simply" + NL +
