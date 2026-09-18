@@ -464,10 +464,39 @@ function normalizeChannelsCode(inputExpr) {
     // Throwing routes into this workflow's setup-failure handler, which reverts the
     // request to 'approved' and logs, so the human sees a real failure and can retry
     // rather than an empty result they have to diagnose.
+    // Two different malformations have arrived here live, so both are handled before
+    // giving up. (1) The value is valid JSON with something appended after it: seen as
+    // a stray "</invoke>" tag, the model leaking its own tool scaffolding into the
+    // string. (2) The value is genuinely broken, usually an unescaped quote inside a
+    // post. The first is recoverable by reading only the first balanced object, which
+    // is what this scanner does; it tracks string state so a brace inside a post's
+    // text is not mistaken for structure.
+    "const firstJsonObject = (text) => {" + NL +
+    "  const start = text.indexOf('{');" + NL +
+    "  if (start === -1) return null;" + NL +
+    "  let depth = 0, inString = false, escaped = false;" + NL +
+    "  for (let i = start; i < text.length; i++) {" + NL +
+    "    const ch = text[i];" + NL +
+    "    if (escaped) { escaped = false; continue; }" + NL +
+    "    if (ch.charCodeAt(0) === 92) { escaped = true; continue; }" + NL +
+    "    if (ch.charCodeAt(0) === 34) { inString = !inString; continue; }" + NL +
+    "    if (inString) continue;" + NL +
+    "    if (ch === '{') depth++;" + NL +
+    "    else if (ch === '}') { depth--; if (depth === 0) return text.slice(start, i + 1); }" + NL +
+    "  }" + NL +
+    "  return null;" + NL +
+    "};" + NL +
     "if (typeof channels === 'string') {" + NL +
-    "  try { channels = JSON.parse(channels); }" + NL +
+    "  const raw = channels;" + NL +
+    "  try { channels = JSON.parse(raw); }" + NL +
     "  catch (err) {" + NL +
-    "    throw new Error('Claude returned the channels object as a string that is not valid JSON (' + err.message + '). Usually an unescaped quote inside one of the posts. Nothing was saved; retry the adaptation.');" + NL +
+    "    const trimmed = firstJsonObject(raw);" + NL +
+    "    let recovered = null;" + NL +
+    "    if (trimmed) { try { recovered = JSON.parse(trimmed); } catch (e2) { recovered = null; } }" + NL +
+    "    if (!recovered) {" + NL +
+    "      throw new Error('Claude returned the channels object as a string that is not valid JSON (' + err.message + '). Usually an unescaped quote inside one of the posts. Nothing was saved; retry the adaptation.');" + NL +
+    "    }" + NL +
+    "    channels = recovered;" + NL +
     "  }" + NL +
     "}" + NL +
     "if (!channels || typeof channels !== 'object' || Array.isArray(channels)) {" + NL +
