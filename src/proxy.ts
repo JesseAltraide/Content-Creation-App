@@ -42,6 +42,18 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // /login is public so an unauthenticated visitor can reach it, but "public" was
+  // being read as "anyone", so someone already signed in got the sign-in form -
+  // underneath a header showing their own email and a Sign out button, which is
+  // what this looked like live. /auth/callback is deliberately excluded: it has to
+  // run its code exchange even when a session already exists.
+  if (user && request.nextUrl.pathname.startsWith("/login")) {
+    const homeUrl = request.nextUrl.clone();
+    homeUrl.pathname = "/";
+    homeUrl.search = "";
+    return NextResponse.redirect(homeUrl);
+  }
+
   return response;
 }
 
