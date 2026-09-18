@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import CopyLinkButton from "@/components/copy-link-button";
 
 export default function SourceSelection({
   requestId,
@@ -59,7 +60,23 @@ export default function SourceSelection({
                   URL pushes the whole card wider than the page instead of truncating. */}
               <span className="min-w-0 flex-1">
                 <span className="block font-medium">{s.title || s.url}</span>
-                <span className="block truncate text-xs text-muted">{s.url}</span>
+                <span className="flex items-center gap-1.5">
+                  {/* stopPropagation: this sits inside the <label>, so a plain click
+                      would toggle the checkbox instead of opening the source. */}
+                  <a
+                    href={s.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="min-w-0 truncate text-xs text-muted underline decoration-border underline-offset-2 hover:text-foreground"
+                    title={s.url}
+                  >
+                    {s.url}
+                  </a>
+                  <span onClick={(e) => e.stopPropagation()}>
+                    <CopyLinkButton url={s.url} />
+                  </span>
+                </span>
               </span>
             </label>
           </li>

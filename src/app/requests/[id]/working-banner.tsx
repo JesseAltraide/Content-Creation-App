@@ -40,12 +40,12 @@ export default function WorkingBanner({
   // actually being a dead failure (see page.tsx).
   const label = stalled ? undefined : WORKING_MESSAGES[status];
 
-  // Push-based, not polling: subscribes to the two things that can actually mean
-  // "something happened" for this request - the row's own status changing, or a
-  // new event_log entry landing for it (a failed trigger doesn't always change
-  // status, e.g. a webhook erroring before n8n even runs - see retry/route.ts).
-  // Nothing is re-fetched between real changes, and this never re-triggers the
-  // pipeline - it only re-renders the page.
+  // Keeps the page current while a stage is running, by polling and also
+  // subscribing to the two things that mean "something happened" for this request:
+  // the row's own status changing, or a new event_log entry landing for it (a
+  // failed trigger does not always change status, e.g. a webhook erroring before
+  // n8n even runs - see retry/route.ts). Refreshing only re-renders the page; it
+  // never re-triggers the pipeline.
   useEffect(() => {
     if (!label) return;
     // Elapsed is derived from a start timestamp rather than reset via setState in
@@ -61,18 +61,18 @@ export default function WorkingBanner({
     let cancelled = false;
     let fallbackId: ReturnType<typeof setInterval> | undefined;
 
-    // Safety net. Realtime is the primary mechanism and costs nothing between real
-    // changes, but when it silently stops delivering the page just sits there
-    // forever - which is exactly the "it said Researching for 4 minutes while the
-    // work had already finished" failure. Caught live: A1 completed and updated the
-    // request, the page never noticed. A1's success path writes no event_log row at
-    // all, so a missed `requests` UPDATE is the only signal there is.
-    // This only runs when the socket is NOT confirmed healthy, so a working
-    // subscription still does zero polling.
-    const startFallback = () => {
-      if (cancelled || fallbackId) return;
-      fallbackId = setInterval(() => router.refresh(), 15000);
-    };
+    // Realtime is an accelerator here, not the mechanism. It has twice reported
+    // SUBSCRIBED in a real browser session and then delivered nothing, which the
+    // previous safety net did not catch because it only reacted to an UNHEALTHY
+    // socket (CHANNEL_ERROR, TIMED_OUT, never connecting). A socket that connects
+    // and stays silent looked fine and left the page frozen until a manual reload.
+    //
+    // So the poll now runs unconditionally while work is in flight, and realtime
+    // just makes the update land sooner when it happens to work. One request every
+    // 10s, only on this page, only while a stage is actually running: cheaper than
+    // making someone reload to find out whether their pipeline finished.
+    const POLL_MS = 10_000;
+    fallbackId = setInterval(() => router.refresh(), POLL_MS);
 
     // The access token has to reach the realtime socket BEFORE subscribing.
     // postgres_changes enforces RLS, and this project's policies require
@@ -103,24 +103,7 @@ export default function WorkingBanner({
           { event: "INSERT", schema: "public", table: "event_log", filter: `request_id=eq.${requestId}` },
           () => router.refresh()
         )
-        .subscribe((subStatus) => {
-          if (subStatus === "SUBSCRIBED") {
-            if (fallbackId) {
-              clearInterval(fallbackId);
-              fallbackId = undefined;
-            }
-            return;
-          }
-          // CHANNEL_ERROR / TIMED_OUT / CLOSED all mean we are no longer being told
-          // about changes, so stop trusting the socket and start checking.
-          startFallback();
-        });
-
-      // If SUBSCRIBED never arrives at all (the silent case - no error is emitted,
-      // it just never connects), don't wait forever to find out.
-      setTimeout(() => {
-        if (!cancelled && channel?.state !== "joined") startFallback();
-      }, 8000);
+        .subscribe();
     })();
 
     return () => {

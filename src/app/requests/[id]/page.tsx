@@ -16,6 +16,7 @@ import ChannelPostsReview from "./channel-posts-review";
 import PublishingQueue from "./publishing-queue";
 import WorkingBanner from "./working-banner";
 import RequestTabs from "./request-tabs";
+import CopyLinkButton from "@/components/copy-link-button";
 import ReviewComments from "./review-comments";
 import { getRequestAccess, REVIEWABLE_STATUSES } from "@/lib/request-access";
 import { CHANNEL_LABELS } from "@/lib/channel-post-format";
@@ -445,7 +446,16 @@ export default async function RequestDetailPage({
             <Card className="mt-2 divide-y divide-border p-1">
               {sources.map((s) => (
                 <div key={s.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                  <span className="min-w-0 truncate text-sm text-foreground">{s.url}</span>
+                  <a
+                  href={s.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="min-w-0 truncate text-sm text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
+                  title={s.url}
+                >
+                  {s.url}
+                </a>
+                <CopyLinkButton url={s.url} />
                   <span
                     className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
                       SOURCE_STATUS_STYLES[s.status] ?? "bg-black/5 text-muted"
