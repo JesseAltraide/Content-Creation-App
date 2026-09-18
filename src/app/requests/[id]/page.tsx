@@ -136,6 +136,12 @@ export default async function RequestDetailPage({
   // The audience this request was written and graded against, shown so the human
   // can judge it against current intent. More useful than a "something changed"
   // alert, because this value is pinned and cannot drift.
+  //
+  // audience_profile_id is what the human picked at intake and is null when they
+  // left it on auto-match, so the two columns together say WHO chose. With several
+  // profiles on file that matters: an auto-matched audience is Claude's judgement
+  // call, and the human should be able to see it was made and disagree with it.
+  const audienceWasAutoMatched = !req.audience_profile_id && !!req.resolved_audience_profile_id;
   const { data: resolvedAudience } = req.resolved_audience_profile_id
     ? await supabase
         .from("audience_profiles")
@@ -255,7 +261,14 @@ export default async function RequestDetailPage({
         <dt className="text-muted">Primary keyword</dt>
         <dd className="text-right">{req.primary_keyword}</dd>
         <dt className="text-muted">Audience</dt>
-        <dd className="text-right">{resolvedAudience?.name ?? "Not resolved yet"}</dd>
+        <dd className="text-right">
+          {resolvedAudience?.name ?? "Not resolved yet"}
+          {resolvedAudience && (
+            <span className="ml-1.5 text-xs text-muted">
+              {audienceWasAutoMatched ? "(best match)" : "(you chose this)"}
+            </span>
+          )}
+        </dd>
         <dt className="text-muted">Channels</dt>
         <dd className="text-right">{req.channels.join(", ")}</dd>
       </Card>

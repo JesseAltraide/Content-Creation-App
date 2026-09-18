@@ -844,7 +844,7 @@
         "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/angles",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.angles.map(a => ({ request_id: $json.requestId, working_title: a.working_title, thesis: a.thesis, section_shape: a.section_shape, resonance_score: $json.resonance_score }))) }}",
+        "jsonBody": "={{ JSON.stringify($json.angles.map(a => ({ request_id: $json.requestId, working_title: a.working_title, thesis: a.thesis, section_shape: a.section_shape, resonance_score: $json.resonance_score, resonance_reasoning: $json.resonance_reasoning }))) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
