@@ -2,13 +2,16 @@
 
 import { useState } from "react";
 import { parseNewsletter } from "@/lib/channel-post-format";
+import ReactMarkdown from "react-markdown";
 
 // The card preview shows the subject and body. This shows the actual email: who it
-// comes from, who it goes to, and the unsubscribe footer the publish job appends,
-// rendered as plain text because that is genuinely how it is sent (sendMail passes
-// `text` only). That fidelity is the point: any markdown left in the body reaches
-// subscribers as literal asterisks and hashes, and a prettified preview would hide
-// exactly the problem worth seeing before it goes out.
+// comes from, who it goes to, the unsubscribe footer the publish job appends, and the
+// body formatted the way it will arrive.
+//
+// It was deliberately plain text until the send itself was plain text, which made the
+// markdown-in-a-text-email defect visible here rather than in someone's inbox. Now
+// that the newsletter goes out as HTML with a stripped text fallback, rendering the
+// markdown IS the accurate preview, and showing raw asterisks would be the lie.
 export default function NewsletterEmailPreview({
   body,
   subscriberCount,
@@ -21,7 +24,6 @@ export default function NewsletterEmailPreview({
 }) {
   const [open, setOpen] = useState(false);
   const { subject_line, body_markdown } = parseNewsletter(body);
-  const hasMarkdown = /(\*\*|^#{1,6} |\]\()/m.test(body_markdown);
 
   return (
     <div className="mt-3">
@@ -68,18 +70,6 @@ export default function NewsletterEmailPreview({
             </pre>
           </div>
 
-          {hasMarkdown && (
-            <div className="border-t border-border bg-warning-soft px-4 py-3">
-              <p className="text-xs font-semibold text-warning">
-                This body still contains markdown, and the email is sent as plain text.
-              </p>
-              <p className="mt-0.5 text-xs text-warning/90">
-                Subscribers will see the asterisks and hashes exactly as they appear above, not
-                bold text and headings. Edit them out, or ask for the newsletter to be sent as
-                HTML instead.
-              </p>
-            </div>
-          )}
         </div>
       )}
     </div>

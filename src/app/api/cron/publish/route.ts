@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logEvent } from "@/lib/events";
 import { sendMail } from "@/lib/mailer";
 import { parseXPosts, parseNewsletter } from "@/lib/channel-post-format";
+import { newsletterHtml, markdownToPlainText } from "@/lib/newsletter-html";
 
 // Newsletter's unsubscribe footer, appended to every real send - required
 // alongside real sending, not optional (week4-full-flow.md line 295): a basic
@@ -151,10 +152,15 @@ export async function GET(request: Request) {
         let sent = 0;
         let failed = 0;
         for (const sub of subscribers ?? []) {
+          // Both parts, and the text part has its markup stripped. Sending
+          // body_markdown as plain text delivered literal asterisks and hashes to
+          // every subscriber, which is what a newsletter reader notices first.
+          const unsubscribeUrl = `${baseUrl}/api/unsubscribe?id=${sub.id}`;
           const result = await sendMail({
             to: sub.email,
             subject: subject_line || "Newsletter",
-            text: `${body_markdown}${unsubscribeFooter(baseUrl, sub.id)}`,
+            text: `${markdownToPlainText(body_markdown)}${unsubscribeFooter(baseUrl, sub.id)}`,
+            html: newsletterHtml(body_markdown, unsubscribeUrl),
           });
           if (result.ok) sent++;
           else failed++;
