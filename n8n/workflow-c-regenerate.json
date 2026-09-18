@@ -8,7 +8,7 @@
       "parameters": {
         "path": "wf-c-regenerate",
         "httpMethod": "POST",
-        "responseMode": "responseNode",
+        "responseMode": "onReceived",
         "options": {}
       },
       "id": "webhook",
@@ -116,14 +116,11 @@
       ]
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'setup_failed', detail: $('Pre-Claude Setup: Extract Error').first().json.message }) }}"
-      },
+      "parameters": {},
       "id": "setup-respond-failed",
       "name": "Pre-Claude Setup: Respond Failed",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [
         1060,
         -580
@@ -409,14 +406,11 @@
       ]
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'claude_failed', detail: $('Claude: Regenerate Article: Extract Error').first().json.message }) }}"
-      },
+      "parameters": {},
       "id": "claude--regenerate-article-respond-failed",
       "name": "Claude: Regenerate Article: Respond Failed",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [
         4180,
         -320
@@ -604,14 +598,11 @@
       ]
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'claude_failed', detail: $('Claude: Evaluate Regenerated Article: Extract Error').first().json.message }) }}"
-      },
+      "parameters": {},
       "id": "claude--evaluate-regenerated-article-respond-failed",
       "name": "Claude: Evaluate Regenerated Article: Respond Failed",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [
         6260,
         -320
@@ -777,14 +768,11 @@
       ]
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: true, status: 'pass', score: $('Gate').first().json.overall_score }) }}"
-      },
+      "parameters": {},
       "id": "respond-pass",
       "name": "Respond (pass)",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [
         8080,
         -260
@@ -890,14 +878,11 @@
       ]
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'regeneration_cap_reached', status: $('Gate').first().json.decision, score: $('Gate').first().json.overall_score }) }}"
-      },
+      "parameters": {},
       "id": "respond-cap",
       "name": "Respond (cap reached)",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [
         9120,
         520
@@ -972,14 +957,11 @@
       ]
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: true, status: $('Gate').first().json.decision, score: $('Gate').first().json.overall_score }) }}"
-      },
+      "parameters": {},
       "id": "respond-still-pending",
       "name": "Respond (not pass, attempts remain)",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [
         9900,
         0

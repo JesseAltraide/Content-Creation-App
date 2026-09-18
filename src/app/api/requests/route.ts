@@ -73,6 +73,18 @@ export async function POST(request: Request) {
         { status: 422 }
       );
     }
+
+    // Advisory findings from the same call, so they cost nothing extra: a keyword
+    // pointing away from the idea, and an idea that is really several. Neither can be
+    // caught by word rules, and neither justifies a refusal, so they are shown once
+    // and the author decides. Raw-idea path only, which is also the only path where
+    // they are answerable: the URL path has no idea to compare a keyword against.
+    if (verdict && verdict.warnings.length > 0 && !input.acknowledgedWarnings) {
+      return NextResponse.json(
+        { error: "intake_warnings", warnings: verdict.warnings },
+        { status: 409 }
+      );
+    }
   }
 
   const admin = createAdminClient();

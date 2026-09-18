@@ -131,10 +131,14 @@ export default function ChannelPostsReview({
       {isAdapting && (
         <Card className="mt-2 p-5">
           <p className="text-sm text-muted">
-            If the technical log below shows a &ldquo;responded 524&rdquo; entry, that&apos;s just
-            a connection timeout on our end. The work keeps running regardless of what that
-            entry says on its own (see the working indicator above).
+            Adaptation and Pass 2 run on n8n, not in this tab, so it is safe to leave this
+            page or close it. The status updates itself when the run finishes.
           </p>
+          {/* This used to explain away a "responded 524" log entry, which was our own
+              outbound connection giving up at 100 seconds while n8n carried on working.
+              The webhooks now acknowledge immediately (Decision #101), so a new run
+              should not produce one at all. Older requests still carry those entries,
+              and page.tsx still treats them as non-fatal for exactly that reason. */}
         </Card>
       )}
 

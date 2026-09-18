@@ -8,7 +8,7 @@
       "parameters": {
         "path": "wf-d-adapt-evaluate",
         "httpMethod": "POST",
-        "responseMode": "responseNode",
+        "responseMode": "onReceived",
         "options": {}
       },
       "id": "webhook",
@@ -117,14 +117,11 @@
       ]
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'setup_failed', detail: $('Pipeline Setup Failure: Extract Error').first().json.message }) }}"
-      },
+      "parameters": {},
       "id": "setup-respond-failed",
       "name": "Pipeline Setup Failure: Respond Failed",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [
         1060,
         -580
@@ -403,14 +400,11 @@
       ]
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'claude_failed', detail: $('Claude: Adapt to Channels: Extract Error').first().json.message }) }}"
-      },
+      "parameters": {},
       "id": "claude--adapt-to-channels-respond-failed",
       "name": "Claude: Adapt to Channels: Respond Failed",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [
         4180,
         -320
@@ -669,14 +663,11 @@
       ]
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'claude_failed', detail: $('Claude: Evaluate Channels (Round 0): Extract Error').first().json.message }) }}"
-      },
+      "parameters": {},
       "id": "claude--evaluate-channels--round-0--respond-failed",
       "name": "Claude: Evaluate Channels (Round 0): Respond Failed",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [
         7300,
         -320
@@ -847,14 +838,11 @@
       ]
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: true, status: 'pass' }) }}"
-      },
+      "parameters": {},
       "id": "respond-ready-round-0",
       "name": "Respond (all pass, Round 0)",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [
         9120,
         -260
@@ -997,14 +985,11 @@
       ]
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'claude_failed', detail: $('Claude: Revise Channels (Round 1): Extract Error').first().json.message }) }}"
-      },
+      "parameters": {},
       "id": "claude--revise-channels--round-1--respond-failed",
       "name": "Claude: Revise Channels (Round 1): Respond Failed",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [
         10680,
         -320
@@ -1298,14 +1283,11 @@
       ]
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'claude_failed', detail: $('Claude: Evaluate Channels (Round 1): Extract Error').first().json.message }) }}"
-      },
+      "parameters": {},
       "id": "claude--evaluate-channels--round-1--respond-failed",
       "name": "Claude: Evaluate Channels (Round 1): Respond Failed",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [
         14060,
         -320
@@ -1476,14 +1458,11 @@
       ]
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: true, status: 'pass' }) }}"
-      },
+      "parameters": {},
       "id": "respond-ready-round-1",
       "name": "Respond (all pass, Round 1)",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [
         15880,
         -260
@@ -1626,14 +1605,11 @@
       ]
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'claude_failed', detail: $('Claude: Revise Channels (Round 2): Extract Error').first().json.message }) }}"
-      },
+      "parameters": {},
       "id": "claude--revise-channels--round-2--respond-failed",
       "name": "Claude: Revise Channels (Round 2): Respond Failed",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [
         17440,
         -320
@@ -1927,14 +1903,11 @@
       ]
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'claude_failed', detail: $('Claude: Evaluate Channels (Round 2): Extract Error').first().json.message }) }}"
-      },
+      "parameters": {},
       "id": "claude--evaluate-channels--round-2--respond-failed",
       "name": "Claude: Evaluate Channels (Round 2): Respond Failed",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [
         20820,
         -320
@@ -2105,14 +2078,11 @@
       ]
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: true, status: 'pass' }) }}"
-      },
+      "parameters": {},
       "id": "respond-ready-round-2",
       "name": "Respond (all pass, Round 2)",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [
         22640,
         -260
@@ -2189,14 +2159,11 @@
       ]
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'revision_cap_reached' }) }}"
-      },
+      "parameters": {},
       "id": "respond-cap-round-2",
       "name": "Respond (cap reached, Round 2)",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [
         23420,
         260

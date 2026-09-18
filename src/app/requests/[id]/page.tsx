@@ -201,9 +201,10 @@ export default async function RequestDetailPage({
   // Whether background work is dead rather than slow. A trigger-status alone can't
   // tell us (nothing resets 'researching'/'generating'/'adapting' when a run dies),
   // so the signal is: the most recent event is a failure. The one real exception is
-  // a 524 - that's our own outbound connection giving up while n8n keeps executing
-  // (limitation #93 in week4-progress.md), so the work genuinely does continue there
-  // and the working indicator should stay up.
+  // a 524, our own outbound connection giving up while n8n kept executing. The
+  // workflows now acknowledge immediately (Decision #101) so new runs should not log
+  // one, but requests created before that change still carry those entries and would
+  // otherwise be shown as dead when their work actually completed.
   const latestIsDeadFailure =
     latestEvent?.status === "failed" && !latestEvent.detail?.includes("524");
   const needsAttention = req.status === "needs_human_attention" && latestFailedEvent;

@@ -23,6 +23,8 @@ export const intakeSchema = z
     audienceProfileId: z.string().uuid().optional().nullable(),
     xThreadLength: z.enum(["single", "mini", "expansive"]).default("single"),
     confirmedGenericToneChannels: z.array(z.enum(CHANNELS)).optional().default([]),
+    /** Set once the author has seen the intake warnings and chosen to proceed anyway. */
+    acknowledgedWarnings: z.boolean().optional(),
     describedToneByChannel: z.record(z.string(), z.string()).optional().default({}),
   })
   .superRefine((data, ctx) => {

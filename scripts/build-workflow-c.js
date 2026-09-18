@@ -274,13 +274,17 @@ function connectToSetupFailureHandler(nodeName) {
   connect(nodeName, "Pre-Claude Setup: Extract Error", 1);
 }
 
-function respondNode(id, name, bodyExpr) {
+// Terminal marker only. With onReceived the response has already been sent by the
+// time any of these run, so a real Respond to Webhook node here would have nothing
+// to respond to. The outcome is already in event_log, written by the Log node
+// immediately before each of these, so nothing is lost by making them no-ops.
+function respondNode(id, name) {
   return addNode({
-    parameters: { respondWith: "json", responseBody: bodyExpr },
+    parameters: {},
     id,
     name,
-    type: "n8n-nodes-base.respondToWebhook",
-    typeVersion: 1.4,
+    type: "n8n-nodes-base.noOp",
+    typeVersion: 1,
   });
 }
 
@@ -288,8 +292,19 @@ function respondNode(id, name, bodyExpr) {
 // Trigger + shared setup
 // ---------------------------------------------------------------------------
 
+// onReceived, not responseNode (Decision #101). These workflows run for minutes:
+// Workflow B's generation plus two revision rounds, C's regeneration, D's adaptation
+// plus Pass 2. Holding the HTTP connection open for that long means Cloudflare cuts
+// it at 100 seconds and the caller records a 524 for work that is still running and
+// usually succeeds. Confirmed live: a 524 logged at 10:37 for an adaptation that
+// completed at 10:39.
+//
+// Nothing reads these responses. Every trigger for A, B, C and D is fired from
+// after() and only checks that n8n accepted the call; the real outcome arrives via
+// requests.status and event_log. Workflow E is deliberately left on responseNode,
+// because its edit-triage verdict is the one response a human is actually waiting on.
 addNode({
-  parameters: { path: "wf-c-regenerate", httpMethod: "POST", responseMode: "responseNode", options: {} },
+  parameters: { path: "wf-c-regenerate", httpMethod: "POST", responseMode: "onReceived", options: {} },
   id: "webhook",
   name: "Webhook: Regenerate",
   type: "n8n-nodes-base.webhook",

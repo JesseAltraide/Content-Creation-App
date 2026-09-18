@@ -1,18 +1,18 @@
 {
-  "name": "Content Agent — Workflow A (Research & Angle Proposal)",
+  "name": "Content Agent \u2014 Workflow A (Research & Angle Proposal)",
   "meta": {
-    "notes": "Two independent webhook entry points live on this one canvas, per team preference — not two separate workflow pages. A1 handles Path A search (raw idea, no URL). A2 handles both: Path B (URL provided) scraping straight away, and the continuation after a human has selected sources in Path A. Both triggers converge into the shared scrape -> gate -> angle-proposal -> gate chain. Scraping uses Firecrawl's hosted API, not self-hosted Crawl4AI (see Change entry reversing Decision #2 in week4-progress.md — self-hosting friction on n8n.cloud wasn't worth it). SECRETS: create four n8n Credentials before activating — (1) 'Supabase API' (dedicated credential type — Host = your project URL, Secret Key = your service role key); (2) 'Anthropic' (dedicated credential type — API Key = your Anthropic key); (3) 'Firecrawl' (dedicated credential type — API Key = your Firecrawl key); each used via Authentication -> Predefined Credential Type on their respective nodes. (4) 'Header Auth' named 'Tavily API Key (Authorization header)' (header name 'Authorization', value = 'Bearer <your Tavily key>') — Tavily is the only one with no dedicated n8n credential type. On import n8n will flag each node's credential as unmapped and let you pick the real one you created. Non-secret config (just SUPABASE_URL now) still lives in the 'A1 . Config' / 'A2 . Config' Code nodes."
+    "notes": "Two independent webhook entry points live on this one canvas, per team preference \u2014 not two separate workflow pages. A1 handles Path A search (raw idea, no URL). A2 handles both: Path B (URL provided) scraping straight away, and the continuation after a human has selected sources in Path A. Both triggers converge into the shared scrape -> gate -> angle-proposal -> gate chain. Scraping uses Firecrawl's hosted API, not self-hosted Crawl4AI (see Change entry reversing Decision #2 in week4-progress.md \u2014 self-hosting friction on n8n.cloud wasn't worth it). SECRETS: create four n8n Credentials before activating \u2014 (1) 'Supabase API' (dedicated credential type \u2014 Host = your project URL, Secret Key = your service role key); (2) 'Anthropic' (dedicated credential type \u2014 API Key = your Anthropic key); (3) 'Firecrawl' (dedicated credential type \u2014 API Key = your Firecrawl key); each used via Authentication -> Predefined Credential Type on their respective nodes. (4) 'Header Auth' named 'Tavily API Key (Authorization header)' (header name 'Authorization', value = 'Bearer <your Tavily key>') \u2014 Tavily is the only one with no dedicated n8n credential type. On import n8n will flag each node's credential as unmapped and let you pick the real one you created. Non-secret config (just SUPABASE_URL now) still lives in the 'A1 . Config' / 'A2 . Config' Code nodes."
   },
   "nodes": [
     {
       "parameters": {
         "path": "wf-a-search",
         "httpMethod": "POST",
-        "responseMode": "responseNode",
+        "responseMode": "onReceived",
         "options": {}
       },
       "id": "a1-webhook",
-      "name": "A1 · Webhook: Search Sources",
+      "name": "A1 \u00b7 Webhook: Search Sources",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
@@ -22,13 +22,13 @@
     },
     {
       "parameters": {
-        "url": "={{$('A1 · Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.request_id}}&select=*",
+        "url": "={{$('A1 \u00b7 Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.request_id}}&select=*",
         "options": {},
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "supabaseApi"
       },
       "id": "a1-fetch-request",
-      "name": "A1 · Fetch Request Row",
+      "name": "A1 \u00b7 Fetch Request Row",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -55,14 +55,14 @@
         "genericAuthType": "httpHeaderAuth"
       },
       "id": "a1-search",
-      "name": "A1 · Search (Tavily)",
+      "name": "A1 \u00b7 Search (Tavily)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         80,
         -200
       ],
-      "notes": "Swap for Serper/Brave/Google CSE if you're using a different search API — same shape (title/url/snippet/date) is all downstream nodes need.",
+      "notes": "Swap for Serper/Brave/Google CSE if you're using a different search API \u2014 same shape (title/url/snippet/date) is all downstream nodes need.",
       "credentials": {
         "httpHeaderAuth": {
           "id": "tavily-api-key",
@@ -72,10 +72,10 @@
     },
     {
       "parameters": {
-        "jsCode": "// Stage 2, Path A: search returned nothing useful -> tell the human plainly instead of proceeding on weak results.\nconst requestId = $('A1 · Fetch Request Row').first().json.id;\nconst results = $json.results || [];\n\nif (results.length === 0) {\n  return [{ json: { requestId, noResults: true } }];\n}\n\nreturn [{\n  json: {\n    requestId,\n    noResults: false,\n    sources: results.map(r => ({\n      request_id: requestId,\n      url: r.url,\n      title: r.title || null,\n      status: 'pending_selection'\n    }))\n  }\n}];"
+        "jsCode": "// Stage 2, Path A: search returned nothing useful -> tell the human plainly instead of proceeding on weak results.\nconst requestId = $('A1 \u00b7 Fetch Request Row').first().json.id;\nconst results = $json.results || [];\n\nif (results.length === 0) {\n  return [{ json: { requestId, noResults: true } }];\n}\n\nreturn [{\n  json: {\n    requestId,\n    noResults: false,\n    sources: results.map(r => ({\n      request_id: requestId,\n      url: r.url,\n      title: r.title || null,\n      status: 'pending_selection'\n    }))\n  }\n}];"
       },
       "id": "a1-map-results",
-      "name": "A1 · Map Results",
+      "name": "A1 \u00b7 Map Results",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -106,7 +106,7 @@
         "options": {}
       },
       "id": "a1-if-no-results",
-      "name": "A1 · IF No Results",
+      "name": "A1 \u00b7 IF No Results",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
@@ -117,7 +117,7 @@
     {
       "parameters": {
         "method": "PATCH",
-        "url": "={{$('A1 · Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.requestId}}",
+        "url": "={{$('A1 \u00b7 Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.requestId}}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ status: 'needs_human_attention' }) }}",
@@ -134,7 +134,7 @@
         "nodeCredentialType": "supabaseApi"
       },
       "id": "a1-mark-no-results",
-      "name": "A1 · Mark No Results",
+      "name": "A1 \u00b7 Mark No Results",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -151,10 +151,10 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$('A1 · Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+        "url": "={{$('A1 \u00b7 Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ request_id: $('A1 · Map Results').first().json.requestId, stage: 'research_search', status: 'failed', detail: 'Search returned zero results for the stated idea.' }) }}",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('A1 \u00b7 Map Results').first().json.requestId, stage: 'research_search', status: 'failed', detail: 'Search returned zero results for the stated idea.' }) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -168,7 +168,7 @@
         "nodeCredentialType": "supabaseApi"
       },
       "id": "a1-log-no-results",
-      "name": "A1 · Log Event (failed)",
+      "name": "A1 \u00b7 Log Event (failed)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -183,14 +183,11 @@
       }
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'no_search_results' }) }}"
-      },
+      "parameters": {},
       "id": "a1-respond-no-results",
-      "name": "A1 · Respond (no results)",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
+      "name": "A1 \u00b7 Respond (no results)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [
         1280,
         -320
@@ -199,7 +196,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$('A1 · Config').first().json.SUPABASE_URL}}/rest/v1/sources?on_conflict=request_id,url",
+        "url": "={{$('A1 \u00b7 Config').first().json.SUPABASE_URL}}/rest/v1/sources?on_conflict=request_id,url",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json.sources) }}",
@@ -216,7 +213,7 @@
         "nodeCredentialType": "supabaseApi"
       },
       "id": "a1-insert-sources",
-      "name": "A1 · Insert Candidate Sources",
+      "name": "A1 \u00b7 Insert Candidate Sources",
       "notes": "Idempotent on retry: the search stage re-runs the same query and gets the same URLs back, so a plain insert 409s on the sources (request_id, url) unique constraint and crashes the whole workflow - confirmed live, and it left the request stuck at 'researching' with no recoverable path. on_conflict + resolution=ignore-duplicates leaves already-known URLs alone and still inserts genuinely new ones.",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -234,7 +231,7 @@
     {
       "parameters": {
         "method": "PATCH",
-        "url": "={{$('A1 · Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('A1 · Map Results').first().json.requestId}}",
+        "url": "={{$('A1 \u00b7 Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('A1 \u00b7 Map Results').first().json.requestId}}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ status: 'awaiting_source_selection' }) }}",
@@ -251,7 +248,7 @@
         "nodeCredentialType": "supabaseApi"
       },
       "id": "a1-mark-awaiting-selection",
-      "name": "A1 · Mark Awaiting Selection",
+      "name": "A1 \u00b7 Mark Awaiting Selection",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -266,14 +263,11 @@
       }
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: true }) }}"
-      },
+      "parameters": {},
       "id": "a1-respond-ok",
-      "name": "A1 · Respond (ok)",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
+      "name": "A1 \u00b7 Respond (ok)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [
         1280,
         -80
@@ -283,11 +277,11 @@
       "parameters": {
         "path": "wf-a-scrape-and-propose",
         "httpMethod": "POST",
-        "responseMode": "responseNode",
+        "responseMode": "onReceived",
         "options": {}
       },
       "id": "a2-webhook",
-      "name": "A2 · Webhook: Scrape & Propose Angle",
+      "name": "A2 \u00b7 Webhook: Scrape & Propose Angle",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
@@ -298,12 +292,12 @@
     },
     {
       "parameters": {
-        "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.request_id}}&select=*",
+        "url": "={{$('A2 \u00b7 Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.request_id}}&select=*",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "supabaseApi"
       },
       "id": "a2-fetch-request",
-      "name": "A2 · Fetch Request Row",
+      "name": "A2 \u00b7 Fetch Request Row",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -321,7 +315,7 @@
     {
       "parameters": {
         "method": "PATCH",
-        "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/sources?request_id=eq.{{$json.id}}&status=eq.pending_selection",
+        "url": "={{$('A2 \u00b7 Config').first().json.SUPABASE_URL}}/rest/v1/sources?request_id=eq.{{$json.id}}&status=eq.pending_selection",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ status: 'selected' }) }}",
@@ -338,14 +332,14 @@
         "nodeCredentialType": "supabaseApi"
       },
       "id": "a2-auto-select-url-path",
-      "name": "A2 · Auto-select Sources (URL path)",
+      "name": "A2 \u00b7 Auto-select Sources (URL path)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         80,
         200
       ],
-      "notes": "No-op if this is Path A continuation — those sources were already flipped to 'selected' by the Next.js curation screen, so this filter matches zero rows.",
+      "notes": "No-op if this is Path A continuation \u2014 those sources were already flipped to 'selected' by the Next.js curation screen, so this filter matches zero rows.",
       "credentials": {
         "supabaseApi": {
           "id": "supabase-account",
@@ -355,12 +349,12 @@
     },
     {
       "parameters": {
-        "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/sources?request_id=eq.{{$('A2 · Fetch Request Row').first().json.id}}&status=in.(selected,scraped,scrape_failed)&select=*",
+        "url": "={{$('A2 \u00b7 Config').first().json.SUPABASE_URL}}/rest/v1/sources?request_id=eq.{{$('A2 \u00b7 Fetch Request Row').first().json.id}}&status=in.(selected,scraped,scrape_failed)&select=*",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "supabaseApi"
       },
       "id": "a2-fetch-selected-sources",
-      "name": "A2 · Fetch Selected Sources",
+      "name": "A2 \u00b7 Fetch Selected Sources",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -374,7 +368,7 @@
         }
       },
       "executeOnce": true,
-      "notes": "executeOnce=true: an HTTP Request node runs once per INPUT item by default — with >1 item arriving (e.g. from a loop's 'done' output), it would re-run the identical query that many times, duplicating every row in its array response. Caught live: 2 scraped sources became 4 identical (paired-duplicate) items downstream.",
+      "notes": "executeOnce=true: an HTTP Request node runs once per INPUT item by default \u2014 with >1 item arriving (e.g. from a loop's 'done' output), it would re-run the identical query that many times, duplicating every row in its array response. Caught live: 2 scraped sources became 4 identical (paired-duplicate) items downstream.",
       "alwaysOutputData": true
     },
     {
@@ -400,7 +394,7 @@
         "options": {}
       },
       "id": "a2-if-zero-selected",
-      "name": "A2 · IF Zero Selected",
+      "name": "A2 \u00b7 IF Zero Selected",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
@@ -415,7 +409,7 @@
         "options": {}
       },
       "id": "a2-loop-sources",
-      "name": "A2 · Loop Over Selected Sources",
+      "name": "A2 \u00b7 Loop Over Selected Sources",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
       "position": [
@@ -441,14 +435,14 @@
         "nodeCredentialType": "firecrawlApi"
       },
       "id": "a2-crawl4ai-scrape",
-      "name": "A2 · Scrape (Firecrawl)",
+      "name": "A2 \u00b7 Scrape (Firecrawl)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         1040,
         360
       ],
-      "notes": "Switched from self-hosted Crawl4AI to Firecrawl's hosted API (see Change #5 in week4-progress.md) — no self-hosting/tunnel needed, just an API key.",
+      "notes": "Switched from self-hosted Crawl4AI to Firecrawl's hosted API (see Change #5 in week4-progress.md) \u2014 no self-hosting/tunnel needed, just an API key.",
       "credentials": {
         "firecrawlApi": {
           "id": "firecrawl-account",
@@ -458,22 +452,22 @@
     },
     {
       "parameters": {
-        "jsCode": "const source = $('A2 · Loop Over Selected Sources').item.json;\nconst response = $json;\nconst text = (response.data?.markdown || '').trim();\n\n// Near-empty text (a JS shell) is treated as a failure, not a success, or it silently poisons grounding.\nconst MIN_SUBSTANTIVE_CHARS = 200;\nconst success = response.success === true && text.length >= MIN_SUBSTANTIVE_CHARS;\n\nreturn [{\n  json: {\n    id: source.id,\n    url: source.url,\n    success,\n    scraped_text: success ? text : null,\n    fetch_error: success ? null : (response.error || (text.length > 0 ? 'Scrape returned near-empty text (likely a JS-rendered shell).' : 'Firecrawl scrape failed or returned no content.'))\n  }\n}];"
+        "jsCode": "const source = $('A2 \u00b7 Loop Over Selected Sources').item.json;\nconst response = $json;\nconst text = (response.data?.markdown || '').trim();\n\n// Near-empty text (a JS shell) is treated as a failure, not a success, or it silently poisons grounding.\nconst MIN_SUBSTANTIVE_CHARS = 200;\nconst success = response.success === true && text.length >= MIN_SUBSTANTIVE_CHARS;\n\nreturn [{\n  json: {\n    id: source.id,\n    url: source.url,\n    success,\n    scraped_text: success ? text : null,\n    fetch_error: success ? null : (response.error || (text.length > 0 ? 'Scrape returned near-empty text (likely a JS-rendered shell).' : 'Firecrawl scrape failed or returned no content.'))\n  }\n}];"
       },
       "id": "a2-evaluate-scrape",
-      "name": "A2 · Evaluate Scrape Result",
+      "name": "A2 \u00b7 Evaluate Scrape Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         1280,
         360
       ],
-      "jsCode": "const source = $('A2 · Loop Over Selected Sources').item.json;\nconst response = $json;\nconst text = (response.markdown || response.text || '').trim();\n\n// Near-empty text (a JS shell) is treated as a failure, not a success, or it silently poisons grounding.\nconst MIN_SUBSTANTIVE_CHARS = 200;\nconst success = response.success !== false && text.length >= MIN_SUBSTANTIVE_CHARS;\n\nreturn [{\n  json: {\n    id: source.id,\n    url: source.url,\n    success,\n    scraped_text: success ? text : null,\n    fetch_error: success ? null : (response.error || (text.length > 0 ? 'Scrape returned near-empty text (likely a JS-rendered shell).' : 'Scrape failed or returned no content.'))\n  }\n}];"
+      "jsCode": "const source = $('A2 \u00b7 Loop Over Selected Sources').item.json;\nconst response = $json;\nconst text = (response.markdown || response.text || '').trim();\n\n// Near-empty text (a JS shell) is treated as a failure, not a success, or it silently poisons grounding.\nconst MIN_SUBSTANTIVE_CHARS = 200;\nconst success = response.success !== false && text.length >= MIN_SUBSTANTIVE_CHARS;\n\nreturn [{\n  json: {\n    id: source.id,\n    url: source.url,\n    success,\n    scraped_text: success ? text : null,\n    fetch_error: success ? null : (response.error || (text.length > 0 ? 'Scrape returned near-empty text (likely a JS-rendered shell).' : 'Scrape failed or returned no content.'))\n  }\n}];"
     },
     {
       "parameters": {
         "method": "PATCH",
-        "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/sources?id=eq.{{$json.id}}",
+        "url": "={{$('A2 \u00b7 Config').first().json.SUPABASE_URL}}/rest/v1/sources?id=eq.{{$json.id}}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ status: $json.success ? 'scraped' : 'scrape_failed', scraped_text: $json.scraped_text, fetch_error: $json.fetch_error, fetched_at: new Date().toISOString() }) }}",
@@ -490,7 +484,7 @@
         "nodeCredentialType": "supabaseApi"
       },
       "id": "a2-write-scrape-result",
-      "name": "A2 · Write Scrape Result",
+      "name": "A2 \u00b7 Write Scrape Result",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -506,12 +500,12 @@
     },
     {
       "parameters": {
-        "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/sources?request_id=eq.{{$('A2 · Fetch Request Row').first().json.id}}&status=eq.scraped&select=id,url,title,scraped_text",
+        "url": "={{$('A2 \u00b7 Config').first().json.SUPABASE_URL}}/rest/v1/sources?request_id=eq.{{$('A2 \u00b7 Fetch Request Row').first().json.id}}&status=eq.scraped&select=id,url,title,scraped_text",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "supabaseApi"
       },
       "id": "a2-fetch-scraped-sources",
-      "name": "A2 · Fetch Scraped Sources",
+      "name": "A2 \u00b7 Fetch Scraped Sources",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -525,7 +519,7 @@
         }
       },
       "executeOnce": true,
-      "notes": "executeOnce=true: an HTTP Request node runs once per INPUT item by default — with >1 item arriving (e.g. from a loop's 'done' output), it would re-run the identical query that many times, duplicating every row in its array response. Caught live: 2 scraped sources became 4 identical (paired-duplicate) items downstream.",
+      "notes": "executeOnce=true: an HTTP Request node runs once per INPUT item by default \u2014 with >1 item arriving (e.g. from a loop's 'done' output), it would re-run the identical query that many times, duplicating every row in its array response. Caught live: 2 scraped sources became 4 identical (paired-duplicate) items downstream.",
       "alwaysOutputData": true
     },
     {
@@ -551,19 +545,19 @@
         "options": {}
       },
       "id": "a2-if-zero-scraped",
-      "name": "A2 · IF Zero Scraped",
+      "name": "A2 \u00b7 IF Zero Scraped",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
         1280,
         60
       ],
-      "notes": "Stage 2 hard block: every selected source failed to scrape. Stop before spending any AI tokens — do not generate from nothing."
+      "notes": "Stage 2 hard block: every selected source failed to scrape. Stop before spending any AI tokens \u2014 do not generate from nothing."
     },
     {
       "parameters": {
         "method": "PATCH",
-        "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('A2 · Fetch Request Row').first().json.id}}",
+        "url": "={{$('A2 \u00b7 Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('A2 \u00b7 Fetch Request Row').first().json.id}}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ status: 'needs_human_attention' }) }}",
@@ -580,7 +574,7 @@
         "nodeCredentialType": "supabaseApi"
       },
       "id": "a2-mark-research-failed",
-      "name": "A2 · Mark Research Failed",
+      "name": "A2 \u00b7 Mark Research Failed",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -597,10 +591,10 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+        "url": "={{$('A2 \u00b7 Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ request_id: $('A2 · Fetch Request Row').first().json.id, stage: 'research_scrape', status: 'failed', detail: 'All selected sources failed to scrape.' }) }}",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('A2 \u00b7 Fetch Request Row').first().json.id, stage: 'research_scrape', status: 'failed', detail: 'All selected sources failed to scrape.' }) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -614,7 +608,7 @@
         "nodeCredentialType": "supabaseApi"
       },
       "id": "a2-log-research-failed",
-      "name": "A2 · Log Event (failed)",
+      "name": "A2 \u00b7 Log Event (failed)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -629,14 +623,11 @@
       }
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'all_sources_failed' }) }}"
-      },
+      "parameters": {},
       "id": "a2-respond-scrape-failed",
-      "name": "A2 · Respond (scrape failed)",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
+      "name": "A2 \u00b7 Respond (scrape failed)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [
         1760,
         -80
@@ -644,12 +635,12 @@
     },
     {
       "parameters": {
-        "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/audience_profiles?select=*",
+        "url": "={{$('A2 \u00b7 Config').first().json.SUPABASE_URL}}/rest/v1/audience_profiles?select=*",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "supabaseApi"
       },
       "id": "a2-fetch-audience-profiles",
-      "name": "A2 · Fetch Audience Profiles",
+      "name": "A2 \u00b7 Fetch Audience Profiles",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -683,12 +674,12 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\n  model: 'claude-sonnet-5',\n  max_tokens: 2000,\n  tools: [{\n    name: 'propose_angle',\n    description: 'Judge audience resonance and source support, then propose one or more content angles.',\n    input_schema: {\n      type: 'object',\n      required: ['resonance_score', 'resonance_reasoning', 'sources_support_idea', 'angles'],\n      properties: {\n        resonance_score: { type: 'integer', minimum: 0, maximum: 15 },\n        resonance_reasoning: { type: 'string' },\n        matched_audience_profile_id: { type: ['string', 'null'] },\n        sources_support_idea: { type: 'boolean' },\n        alternative_direction_if_unsupported: { type: ['string', 'null'] },\n        angles: {\n          type: 'array',\n          items: {\n            type: 'object',\n            required: ['working_title', 'thesis', 'section_shape'],\n            properties: {\n              working_title: { type: 'string' },\n              thesis: { type: 'string' },\n              section_shape: { type: 'array', items: { type: 'string' } }\n            }\n          }\n        }\n      }\n    }\n  }],\n  tool_choice: { type: 'tool', name: 'propose_angle' },\n  messages: [{\n    role: 'user',\n    content: `You are planning content for a marketing team.\\n\\nContent idea / primary keyword: ${$('A2 · Fetch Request Row').first().json.raw_idea || $('A2 · Fetch Request Row').first().json.primary_keyword}\\nOptional context: ${$('A2 · Fetch Request Row').first().json.context || 'none'}\\n\\nAudience profile(s) to check resonance against:\\n${JSON.stringify($('A2 · Fetch Audience Profiles').all().map(item => ({ id: item.json.id, name: item.json.name, description: item.json.description })))}\\n\\nResolved audience profile id (if the human picked one explicitly, check only this one; otherwise check all and take the best match): ${$('A2 · Fetch Request Row').first().json.audience_profile_id || 'none - check all and take best match'}\\n\\nSources (light read only - judge relevance and support, do not extract passage-by-passage):\\n${$('A2 · Count Scraped Sources').first().json.sources.map(s => `URL: ${s.url}\\nTITLE: ${s.title}\\n${s.scraped_text.slice(0, 4000)}`).join('\\n\\n---\\n\\n')}\\n\\nScore audience resonance 0-15. If the sources genuinely do not support the stated idea, set sources_support_idea to false and suggest a real alternative direction the sources DO support, and return an empty angles array. Otherwise propose 1 angle if a clear idea was stated, or 2-3 candidate angles if this came from a URL with no clear stated idea - each with a working title, one-sentence thesis, and a rough section shape (array of H2-level headings).`\n  }]\n}) }}",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'claude-sonnet-5',\n  max_tokens: 2000,\n  tools: [{\n    name: 'propose_angle',\n    description: 'Judge audience resonance and source support, then propose one or more content angles.',\n    input_schema: {\n      type: 'object',\n      required: ['resonance_score', 'resonance_reasoning', 'sources_support_idea', 'angles'],\n      properties: {\n        resonance_score: { type: 'integer', minimum: 0, maximum: 15 },\n        resonance_reasoning: { type: 'string' },\n        matched_audience_profile_id: { type: ['string', 'null'] },\n        sources_support_idea: { type: 'boolean' },\n        alternative_direction_if_unsupported: { type: ['string', 'null'] },\n        angles: {\n          type: 'array',\n          items: {\n            type: 'object',\n            required: ['working_title', 'thesis', 'section_shape'],\n            properties: {\n              working_title: { type: 'string' },\n              thesis: { type: 'string' },\n              section_shape: { type: 'array', items: { type: 'string' } }\n            }\n          }\n        }\n      }\n    }\n  }],\n  tool_choice: { type: 'tool', name: 'propose_angle' },\n  messages: [{\n    role: 'user',\n    content: `You are planning content for a marketing team.\\n\\nContent idea / primary keyword: ${$('A2 \u00b7 Fetch Request Row').first().json.raw_idea || $('A2 \u00b7 Fetch Request Row').first().json.primary_keyword}\\nOptional context: ${$('A2 \u00b7 Fetch Request Row').first().json.context || 'none'}\\n\\nAudience profile(s) to check resonance against:\\n${JSON.stringify($('A2 \u00b7 Fetch Audience Profiles').all().map(item => ({ id: item.json.id, name: item.json.name, description: item.json.description })))}\\n\\nResolved audience profile id (if the human picked one explicitly, check only this one; otherwise check all and take the best match): ${$('A2 \u00b7 Fetch Request Row').first().json.audience_profile_id || 'none - check all and take best match'}\\n\\nSources (light read only - judge relevance and support, do not extract passage-by-passage):\\n${$('A2 \u00b7 Count Scraped Sources').first().json.sources.map(s => `URL: ${s.url}\\nTITLE: ${s.title}\\n${s.scraped_text.slice(0, 4000)}`).join('\\n\\n---\\n\\n')}\\n\\nScore audience resonance 0-15. If the sources genuinely do not support the stated idea, set sources_support_idea to false and suggest a real alternative direction the sources DO support, and return an empty angles array. Otherwise propose 1 angle if a clear idea was stated, or 2-3 candidate angles if this came from a URL with no clear stated idea - each with a working title, one-sentence thesis, and a rough section shape (array of H2-level headings).`\n  }]\n}) }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "anthropicApi"
       },
       "id": "a2-claude-angle-proposal",
-      "name": "A2 · Claude: Angle Proposal",
+      "name": "A2 \u00b7 Claude: Angle Proposal",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -705,10 +696,10 @@
     },
     {
       "parameters": {
-        "jsCode": "const toolUse = $json.content.find(c => c.type === 'tool_use');\nconst result = toolUse.input;\nconst requestId = $('A2 · Fetch Request Row').first().json.id;\n\n// Claude intermittently returns a nested tool-input value as a JSON string rather\n// than nesting it - confirmed live on Workflow B's excerpts ('excerpts.map is not\n// a function') and three times on Workflow D's per_channel/channels. `angles` is\n// consumed downstream by A2 - Insert Angle(s) as $json.angles.map(...) inside an\n// n8n expression, where the same failure would be far harder to read, so it gets\n// normalised to a real array of objects here at the boundary instead.\nlet angles = result.angles;\nif (typeof angles === 'string') { try { angles = JSON.parse(angles); } catch { angles = []; } }\nif (!Array.isArray(angles)) angles = [];\nangles = angles.filter(a => a && typeof a === 'object');\n\nreturn [{ json: { requestId, ...result, angles } }];"
+        "jsCode": "const toolUse = $json.content.find(c => c.type === 'tool_use');\nconst result = toolUse.input;\nconst requestId = $('A2 \u00b7 Fetch Request Row').first().json.id;\n\n// Claude intermittently returns a nested tool-input value as a JSON string rather\n// than nesting it - confirmed live on Workflow B's excerpts ('excerpts.map is not\n// a function') and three times on Workflow D's per_channel/channels. `angles` is\n// consumed downstream by A2 - Insert Angle(s) as $json.angles.map(...) inside an\n// n8n expression, where the same failure would be far harder to read, so it gets\n// normalised to a real array of objects here at the boundary instead.\nlet angles = result.angles;\nif (typeof angles === 'string') { try { angles = JSON.parse(angles); } catch { angles = []; } }\nif (!Array.isArray(angles)) angles = [];\nangles = angles.filter(a => a && typeof a === 'object');\n\nreturn [{ json: { requestId, ...result, angles } }];"
       },
       "id": "a2-parse-claude-response",
-      "name": "A2 · Parse Claude Response",
+      "name": "A2 \u00b7 Parse Claude Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -747,7 +738,7 @@
         "options": {}
       },
       "id": "a2-if-hard-block",
-      "name": "A2 · IF Resonance/Support Hard Block",
+      "name": "A2 \u00b7 IF Resonance/Support Hard Block",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
@@ -759,7 +750,7 @@
     {
       "parameters": {
         "method": "PATCH",
-        "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.requestId}}",
+        "url": "={{$('A2 \u00b7 Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.requestId}}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ status: 'needs_human_attention' }) }}",
@@ -776,7 +767,7 @@
         "nodeCredentialType": "supabaseApi"
       },
       "id": "a2-mark-blocked",
-      "name": "A2 · Mark Needs Attention",
+      "name": "A2 \u00b7 Mark Needs Attention",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -793,10 +784,10 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+        "url": "={{$('A2 \u00b7 Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ request_id: $('A2 · Parse Claude Response').first().json.requestId, stage: 'angle_proposal', status: 'failed', detail: $('A2 · Parse Claude Response').first().json.resonance_score <= 6 ? `Audience resonance too low: ${$('A2 · Parse Claude Response').first().json.resonance_score}/15, below the floor of 7. ${$('A2 · Parse Claude Response').first().json.resonance_reasoning}` : `The sources do not support this idea (audience resonance scored ${$('A2 · Parse Claude Response').first().json.resonance_score}/15). ${$('A2 · Parse Claude Response').first().json.resonance_reasoning} Suggested alternative direction: ${$('A2 · Parse Claude Response').first().json.alternative_direction_if_unsupported}` }) }}",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('A2 \u00b7 Parse Claude Response').first().json.requestId, stage: 'angle_proposal', status: 'failed', detail: $('A2 \u00b7 Parse Claude Response').first().json.resonance_score <= 6 ? `Audience resonance too low: ${$('A2 \u00b7 Parse Claude Response').first().json.resonance_score}/15, below the floor of 7. ${$('A2 \u00b7 Parse Claude Response').first().json.resonance_reasoning}` : `The sources do not support this idea (audience resonance scored ${$('A2 \u00b7 Parse Claude Response').first().json.resonance_score}/15). ${$('A2 \u00b7 Parse Claude Response').first().json.resonance_reasoning} Suggested alternative direction: ${$('A2 \u00b7 Parse Claude Response').first().json.alternative_direction_if_unsupported}` }) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -810,7 +801,7 @@
         "nodeCredentialType": "supabaseApi"
       },
       "id": "a2-log-blocked",
-      "name": "A2 · Log Event (blocked)",
+      "name": "A2 \u00b7 Log Event (blocked)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -825,14 +816,11 @@
       }
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'hard_block', resonance_score: $('A2 · Parse Claude Response').first().json.resonance_score, sources_support_idea: $('A2 · Parse Claude Response').first().json.sources_support_idea, alternative: $('A2 · Parse Claude Response').first().json.alternative_direction_if_unsupported }) }}"
-      },
+      "parameters": {},
       "id": "a2-respond-blocked",
-      "name": "A2 · Respond (blocked)",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
+      "name": "A2 \u00b7 Respond (blocked)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [
         2720,
         -60
@@ -841,7 +829,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/angles",
+        "url": "={{$('A2 \u00b7 Config').first().json.SUPABASE_URL}}/rest/v1/angles",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json.angles.map(a => ({ request_id: $json.requestId, working_title: a.working_title, thesis: a.thesis, section_shape: a.section_shape, resonance_score: $json.resonance_score, resonance_reasoning: $json.resonance_reasoning }))) }}",
@@ -858,7 +846,7 @@
         "nodeCredentialType": "supabaseApi"
       },
       "id": "a2-insert-angles",
-      "name": "A2 · Insert Angle(s)",
+      "name": "A2 \u00b7 Insert Angle(s)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -875,10 +863,10 @@
     {
       "parameters": {
         "method": "PATCH",
-        "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('A2 · Parse Claude Response').first().json.requestId}}",
+        "url": "={{$('A2 \u00b7 Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('A2 \u00b7 Parse Claude Response').first().json.requestId}}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ status: 'awaiting_angle_selection', resolved_audience_profile_id: $('A2 · Parse Claude Response').first().json.matched_audience_profile_id }) }}",
+        "jsonBody": "={{ JSON.stringify({ status: 'awaiting_angle_selection', resolved_audience_profile_id: $('A2 \u00b7 Parse Claude Response').first().json.matched_audience_profile_id }) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -892,7 +880,7 @@
         "nodeCredentialType": "supabaseApi"
       },
       "id": "a2-mark-awaiting-angle",
-      "name": "A2 · Mark Awaiting Angle Selection",
+      "name": "A2 \u00b7 Mark Awaiting Angle Selection",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -909,10 +897,10 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+        "url": "={{$('A2 \u00b7 Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ request_id: $('A2 · Parse Claude Response').first().json.requestId, stage: 'angle_proposal', status: 'success', detail: `Resonance ${$('A2 · Parse Claude Response').first().json.resonance_score}/15. ${$('A2 · Parse Claude Response').first().json.angles.length} angle(s) proposed.` }) }}",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('A2 \u00b7 Parse Claude Response').first().json.requestId, stage: 'angle_proposal', status: 'success', detail: `Resonance ${$('A2 \u00b7 Parse Claude Response').first().json.resonance_score}/15. ${$('A2 \u00b7 Parse Claude Response').first().json.angles.length} angle(s) proposed.` }) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -926,7 +914,7 @@
         "nodeCredentialType": "supabaseApi"
       },
       "id": "a2-log-success",
-      "name": "A2 · Log Event (success)",
+      "name": "A2 \u00b7 Log Event (success)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -941,14 +929,11 @@
       }
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: true }) }}"
-      },
+      "parameters": {},
       "id": "a2-respond-ok",
-      "name": "A2 · Respond (ok)",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
+      "name": "A2 \u00b7 Respond (ok)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [
         2960,
         180
@@ -959,7 +944,7 @@
         "jsCode": "return [{ json: {\n  request_id: $json.body.request_id,\n  SUPABASE_URL: 'https://klblroceyiirhaxaqflq.supabase.co'\n} }];"
       },
       "id": "a1-config",
-      "name": "A1 · Config",
+      "name": "A1 \u00b7 Config",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -973,7 +958,7 @@
         "jsCode": "return [{ json: {\n  request_id: $json.body.request_id,\n  SUPABASE_URL: 'https://klblroceyiirhaxaqflq.supabase.co'\n} }];"
       },
       "id": "a2-config",
-      "name": "A2 · Config",
+      "name": "A2 \u00b7 Config",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -987,21 +972,21 @@
         "jsCode": "// alwaysOutputData on the upstream fetch forces a fake placeholder item ({}) when the\n// real result is genuinely empty (zero rows) - filter that out before counting, or a\n// zero-row case gets miscounted as count:1 and a fake empty 'source' flows downstream.\nconst items = $input.all().filter(i => i.json && i.json.id);\nreturn [{ json: { count: items.length, sources: items.map(i => i.json) } }];"
       },
       "id": "a2-count-selected",
-      "name": "A2 · Count Selected Sources",
+      "name": "A2 \u00b7 Count Selected Sources",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         560,
         360
       ],
-      "notes": "HTTP Request auto-splits a JSON array response into N items — with zero rows that means zero items, and a downstream IF node never fires on zero input items (neither branch runs, hard block silently skipped). This node always emits exactly one item so the zero-sources hard block actually fires."
+      "notes": "HTTP Request auto-splits a JSON array response into N items \u2014 with zero rows that means zero items, and a downstream IF node never fires on zero input items (neither branch runs, hard block silently skipped). This node always emits exactly one item so the zero-sources hard block actually fires."
     },
     {
       "parameters": {
         "jsCode": "const needingScrape = ($json.sources || []).filter(s => s.status !== 'scraped');\nif (needingScrape.length === 0) return [{ json: { skip: true } }];\nreturn needingScrape.map(s => ({ json: s }));"
       },
       "id": "a2-expand-selected",
-      "name": "A2 · Expand Selected Sources",
+      "name": "A2 \u00b7 Expand Selected Sources",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -1015,33 +1000,33 @@
         "jsCode": "// alwaysOutputData on the upstream fetch forces a fake placeholder item ({}) when the\n// real result is genuinely empty (zero rows) - filter that out before counting, or a\n// zero-row case gets miscounted as count:1 and a fake empty 'source' flows downstream.\nconst items = $input.all().filter(i => i.json && i.json.id);\nreturn [{ json: { count: items.length, sources: items.map(i => i.json) } }];"
       },
       "id": "a2-count-scraped",
-      "name": "A2 · Count Scraped Sources",
+      "name": "A2 \u00b7 Count Scraped Sources",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         1040,
         60
       ],
-      "notes": "Same zero-item gap as A2 · Count Selected Sources — a GET returning zero scraped rows produces zero items, which would silently skip the 'all sources failed to scrape' hard block without this wrapper."
+      "notes": "Same zero-item gap as A2 \u00b7 Count Selected Sources \u2014 a GET returning zero scraped rows produces zero items, which would silently skip the 'all sources failed to scrape' hard block without this wrapper."
     },
     {
       "parameters": {
-        "jsCode": "const requestId = $('A2 · Fetch Request Row').first().json.id;\nconst err = $json.error || {};\nconst message = (err.message || JSON.stringify(err) || 'Unknown Claude API error').slice(0, 500);\nreturn [{ json: { requestId, message } }];"
+        "jsCode": "const requestId = $('A2 \u00b7 Fetch Request Row').first().json.id;\nconst err = $json.error || {};\nconst message = (err.message || JSON.stringify(err) || 'Unknown Claude API error').slice(0, 500);\nreturn [{ json: { requestId, message } }];"
       },
       "id": "a2-claude-error",
-      "name": "A2 · Claude Error: Extract Message",
+      "name": "A2 \u00b7 Claude Error: Extract Message",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         1520,
         260
       ],
-      "notes": "Claude call failed (rate limit, timeout, bad response, etc). Per the no-partial-progress rule: request status is never advanced this far in the chain, so it's already left exactly where it was before this call — no rollback needed, just a clear log entry and a clean failed response so the human can retry from here."
+      "notes": "Claude call failed (rate limit, timeout, bad response, etc). Per the no-partial-progress rule: request status is never advanced this far in the chain, so it's already left exactly where it was before this call \u2014 no rollback needed, just a clear log entry and a clean failed response so the human can retry from here."
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$('A2 · Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
+        "url": "={{$('A2 \u00b7 Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ request_id: $json.requestId, stage: 'angle_proposal', status: 'failed', detail: `Claude generation failed: ${$json.message}` }) }}",
@@ -1058,7 +1043,7 @@
         "nodeCredentialType": "supabaseApi"
       },
       "id": "a2-log-claude-failed",
-      "name": "A2 · Log Event (Claude failed)",
+      "name": "A2 \u00b7 Log Event (Claude failed)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -1073,14 +1058,11 @@
       }
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'claude_failed', detail: $('A2 · Claude Error: Extract Message').first().json.message }) }}"
-      },
+      "parameters": {},
       "id": "a2-respond-claude-failed",
-      "name": "A2 · Respond (Claude failed)",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
+      "name": "A2 \u00b7 Respond (Claude failed)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [
         2000,
         260
@@ -1109,7 +1091,7 @@
         "options": {}
       },
       "id": "a2-if-skip-scraping",
-      "name": "A2 · IF Nothing Needs Scraping",
+      "name": "A2 \u00b7 IF Nothing Needs Scraping",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
@@ -1119,478 +1101,478 @@
     }
   ],
   "connections": {
-    "A1 · Webhook: Search Sources": {
+    "A1 \u00b7 Webhook: Search Sources": {
       "main": [
         [
           {
-            "node": "A1 · Config",
+            "node": "A1 \u00b7 Config",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A1 · Fetch Request Row": {
+    "A1 \u00b7 Fetch Request Row": {
       "main": [
         [
           {
-            "node": "A1 · Search (Tavily)",
+            "node": "A1 \u00b7 Search (Tavily)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A1 · Search (Tavily)": {
+    "A1 \u00b7 Search (Tavily)": {
       "main": [
         [
           {
-            "node": "A1 · Map Results",
+            "node": "A1 \u00b7 Map Results",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A1 · Map Results": {
+    "A1 \u00b7 Map Results": {
       "main": [
         [
           {
-            "node": "A1 · IF No Results",
+            "node": "A1 \u00b7 IF No Results",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A1 · IF No Results": {
+    "A1 \u00b7 IF No Results": {
       "main": [
         [
           {
-            "node": "A1 · Mark No Results",
+            "node": "A1 \u00b7 Mark No Results",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "A1 · Insert Candidate Sources",
+            "node": "A1 \u00b7 Insert Candidate Sources",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A1 · Mark No Results": {
+    "A1 \u00b7 Mark No Results": {
       "main": [
         [
           {
-            "node": "A1 · Log Event (failed)",
+            "node": "A1 \u00b7 Log Event (failed)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A1 · Log Event (failed)": {
+    "A1 \u00b7 Log Event (failed)": {
       "main": [
         [
           {
-            "node": "A1 · Respond (no results)",
+            "node": "A1 \u00b7 Respond (no results)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A1 · Insert Candidate Sources": {
+    "A1 \u00b7 Insert Candidate Sources": {
       "main": [
         [
           {
-            "node": "A1 · Mark Awaiting Selection",
+            "node": "A1 \u00b7 Mark Awaiting Selection",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A1 · Mark Awaiting Selection": {
+    "A1 \u00b7 Mark Awaiting Selection": {
       "main": [
         [
           {
-            "node": "A1 · Respond (ok)",
+            "node": "A1 \u00b7 Respond (ok)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · Webhook: Scrape & Propose Angle": {
+    "A2 \u00b7 Webhook: Scrape & Propose Angle": {
       "main": [
         [
           {
-            "node": "A2 · Config",
+            "node": "A2 \u00b7 Config",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · Fetch Request Row": {
+    "A2 \u00b7 Fetch Request Row": {
       "main": [
         [
           {
-            "node": "A2 · Auto-select Sources (URL path)",
+            "node": "A2 \u00b7 Auto-select Sources (URL path)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · Auto-select Sources (URL path)": {
+    "A2 \u00b7 Auto-select Sources (URL path)": {
       "main": [
         [
           {
-            "node": "A2 · Fetch Selected Sources",
+            "node": "A2 \u00b7 Fetch Selected Sources",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · Fetch Selected Sources": {
+    "A2 \u00b7 Fetch Selected Sources": {
       "main": [
         [
           {
-            "node": "A2 · Count Selected Sources",
+            "node": "A2 \u00b7 Count Selected Sources",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · IF Zero Selected": {
+    "A2 \u00b7 IF Zero Selected": {
       "main": [
         [
           {
-            "node": "A2 · Mark Research Failed",
+            "node": "A2 \u00b7 Mark Research Failed",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "A2 · Expand Selected Sources",
+            "node": "A2 \u00b7 Expand Selected Sources",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · Loop Over Selected Sources": {
+    "A2 \u00b7 Loop Over Selected Sources": {
       "main": [
         [
           {
-            "node": "A2 · Fetch Scraped Sources",
+            "node": "A2 \u00b7 Fetch Scraped Sources",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "A2 · Scrape (Firecrawl)",
+            "node": "A2 \u00b7 Scrape (Firecrawl)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · Evaluate Scrape Result": {
+    "A2 \u00b7 Evaluate Scrape Result": {
       "main": [
         [
           {
-            "node": "A2 · Write Scrape Result",
+            "node": "A2 \u00b7 Write Scrape Result",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · Write Scrape Result": {
+    "A2 \u00b7 Write Scrape Result": {
       "main": [
         [
           {
-            "node": "A2 · Loop Over Selected Sources",
+            "node": "A2 \u00b7 Loop Over Selected Sources",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · Fetch Scraped Sources": {
+    "A2 \u00b7 Fetch Scraped Sources": {
       "main": [
         [
           {
-            "node": "A2 · Count Scraped Sources",
+            "node": "A2 \u00b7 Count Scraped Sources",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · IF Zero Scraped": {
+    "A2 \u00b7 IF Zero Scraped": {
       "main": [
         [
           {
-            "node": "A2 · Mark Research Failed",
+            "node": "A2 \u00b7 Mark Research Failed",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "A2 · Fetch Audience Profiles",
+            "node": "A2 \u00b7 Fetch Audience Profiles",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · Mark Research Failed": {
+    "A2 \u00b7 Mark Research Failed": {
       "main": [
         [
           {
-            "node": "A2 · Log Event (failed)",
+            "node": "A2 \u00b7 Log Event (failed)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · Log Event (failed)": {
+    "A2 \u00b7 Log Event (failed)": {
       "main": [
         [
           {
-            "node": "A2 · Respond (scrape failed)",
+            "node": "A2 \u00b7 Respond (scrape failed)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · Fetch Audience Profiles": {
+    "A2 \u00b7 Fetch Audience Profiles": {
       "main": [
         [
           {
-            "node": "A2 · Claude: Angle Proposal",
+            "node": "A2 \u00b7 Claude: Angle Proposal",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · Claude: Angle Proposal": {
+    "A2 \u00b7 Claude: Angle Proposal": {
       "main": [
         [
           {
-            "node": "A2 · Parse Claude Response",
+            "node": "A2 \u00b7 Parse Claude Response",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "A2 · Claude Error: Extract Message",
+            "node": "A2 \u00b7 Claude Error: Extract Message",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · Parse Claude Response": {
+    "A2 \u00b7 Parse Claude Response": {
       "main": [
         [
           {
-            "node": "A2 · IF Resonance/Support Hard Block",
+            "node": "A2 \u00b7 IF Resonance/Support Hard Block",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · IF Resonance/Support Hard Block": {
+    "A2 \u00b7 IF Resonance/Support Hard Block": {
       "main": [
         [
           {
-            "node": "A2 · Mark Needs Attention",
+            "node": "A2 \u00b7 Mark Needs Attention",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "A2 · Insert Angle(s)",
+            "node": "A2 \u00b7 Insert Angle(s)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · Mark Needs Attention": {
+    "A2 \u00b7 Mark Needs Attention": {
       "main": [
         [
           {
-            "node": "A2 · Log Event (blocked)",
+            "node": "A2 \u00b7 Log Event (blocked)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · Log Event (blocked)": {
+    "A2 \u00b7 Log Event (blocked)": {
       "main": [
         [
           {
-            "node": "A2 · Respond (blocked)",
+            "node": "A2 \u00b7 Respond (blocked)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · Insert Angle(s)": {
+    "A2 \u00b7 Insert Angle(s)": {
       "main": [
         [
           {
-            "node": "A2 · Mark Awaiting Angle Selection",
+            "node": "A2 \u00b7 Mark Awaiting Angle Selection",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · Mark Awaiting Angle Selection": {
+    "A2 \u00b7 Mark Awaiting Angle Selection": {
       "main": [
         [
           {
-            "node": "A2 · Log Event (success)",
+            "node": "A2 \u00b7 Log Event (success)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · Log Event (success)": {
+    "A2 \u00b7 Log Event (success)": {
       "main": [
         [
           {
-            "node": "A2 · Respond (ok)",
+            "node": "A2 \u00b7 Respond (ok)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A1 · Config": {
+    "A1 \u00b7 Config": {
       "main": [
         [
           {
-            "node": "A1 · Fetch Request Row",
+            "node": "A1 \u00b7 Fetch Request Row",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · Config": {
+    "A2 \u00b7 Config": {
       "main": [
         [
           {
-            "node": "A2 · Fetch Request Row",
+            "node": "A2 \u00b7 Fetch Request Row",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · Count Selected Sources": {
+    "A2 \u00b7 Count Selected Sources": {
       "main": [
         [
           {
-            "node": "A2 · IF Zero Selected",
+            "node": "A2 \u00b7 IF Zero Selected",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · Expand Selected Sources": {
+    "A2 \u00b7 Expand Selected Sources": {
       "main": [
         [
           {
-            "node": "A2 · IF Nothing Needs Scraping",
+            "node": "A2 \u00b7 IF Nothing Needs Scraping",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · Count Scraped Sources": {
+    "A2 \u00b7 Count Scraped Sources": {
       "main": [
         [
           {
-            "node": "A2 · IF Zero Scraped",
+            "node": "A2 \u00b7 IF Zero Scraped",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · Scrape (Firecrawl)": {
+    "A2 \u00b7 Scrape (Firecrawl)": {
       "main": [
         [
           {
-            "node": "A2 · Evaluate Scrape Result",
+            "node": "A2 \u00b7 Evaluate Scrape Result",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · Claude Error: Extract Message": {
+    "A2 \u00b7 Claude Error: Extract Message": {
       "main": [
         [
           {
-            "node": "A2 · Log Event (Claude failed)",
+            "node": "A2 \u00b7 Log Event (Claude failed)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · Log Event (Claude failed)": {
+    "A2 \u00b7 Log Event (Claude failed)": {
       "main": [
         [
           {
-            "node": "A2 · Respond (Claude failed)",
+            "node": "A2 \u00b7 Respond (Claude failed)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "A2 · IF Nothing Needs Scraping": {
+    "A2 \u00b7 IF Nothing Needs Scraping": {
       "main": [
         [
           {
-            "node": "A2 · Fetch Scraped Sources",
+            "node": "A2 \u00b7 Fetch Scraped Sources",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "A2 · Loop Over Selected Sources",
+            "node": "A2 \u00b7 Loop Over Selected Sources",
             "type": "main",
             "index": 0
           }

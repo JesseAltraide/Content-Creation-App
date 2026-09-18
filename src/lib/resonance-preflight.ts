@@ -22,7 +22,7 @@ const RESONANCE_TOOL: Anthropic.Tool = {
   description: "Judge how well a content idea would resonate with the given audience.",
   input_schema: {
     type: "object",
-    required: ["resonance_score", "reason", "best_profile_name"],
+    required: ["resonance_score", "reason", "best_profile_name", "keyword_matches_idea", "distinct_topics"],
     properties: {
       resonance_score: { type: "integer", minimum: 0, maximum: 15 },
       reason: {
@@ -34,15 +34,40 @@ const RESONANCE_TOOL: Anthropic.Tool = {
         type: "string",
         description: "The audience profile this idea fits best, by name.",
       },
+      keyword_matches_idea: {
+        type: "boolean",
+        description:
+          "True if an article written on this idea would naturally and repeatedly use the primary keyword. False if the keyword points at a different subject from the idea.",
+      },
+      keyword_note: {
+        type: "string",
+        description:
+          "Only when keyword_matches_idea is false: one sentence naming the subject the keyword points at versus the subject of the idea.",
+      },
+      distinct_topics: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          "Each genuinely separate subject the idea asks for, as a short phrase. One entry for a focused idea. Aspects of a single subject are not separate topics; unrelated subjects joined by 'and' or 'plus' are.",
+      },
     },
   },
 };
+
+/**
+ * Advisory findings from the same call. Warnings, never blocks: both are judgements
+ * about what the author probably meant, and a wrong guess that refuses the work is
+ * worse than a wrong guess that mentions it (week4-data-quality.md's own rule that
+ * over-blocking is its own failure).
+ */
+export type IntakeWarning = { kind: "keyword_mismatch" | "multiple_topics"; message: string };
 
 export type ResonanceVerdict = {
   blocked: boolean;
   score: number;
   reason: string;
   profileName: string;
+  warnings: IntakeWarning[];
 };
 
 export async function preflightResonance(input: {
@@ -73,6 +98,12 @@ ${candidates.map((p) => `- ${p.name}: ${p.description}`).join("\n")}
 
 Judge the idea as written, not a charitable interpretation of it: if a topic could plausibly connect to this audience but the author has not said how, score it low, because that missing connection is the whole problem.
 
+Two separate judgements alongside the score, which do not affect it:
+
+keyword_matches_idea. The primary keyword is the SEO spine: the article has to use it naturally and often. Set this false only when the keyword points at a genuinely different subject from the idea (idea about team culture, keyword "fintech compliance"). A keyword that is a narrower or broader phrasing of the same subject still matches.
+
+distinct_topics. Name each genuinely separate subject the idea asks for. "Database indexing strategies, plus why our hiring process changed, and also remote work policy" is three. "How indexing affects query performance at scale, including write amplification" is one subject with an aspect, not two. Err towards one: a focused idea split into pieces would nag the author about nothing.
+
 Calibrate against this scale: a topic squarely in this audience's domain, stated clearly, should land around 11-13. A relevant topic stated vaguely lands around 7-9. A topic with no stated connection to this audience lands at 4 or below.`;
 
   const claude = getClaude();
@@ -86,14 +117,52 @@ Calibrate against this scale: a topic squarely in this audience's domain, stated
 
   const toolUse = response.content.find((c) => c.type === "tool_use");
   if (!toolUse || toolUse.type !== "tool_use") return null;
-  const result = toolUse.input as { resonance_score?: number; reason?: string; best_profile_name?: string };
+  const result = toolUse.input as {
+    resonance_score?: number;
+    reason?: string;
+    best_profile_name?: string;
+    keyword_matches_idea?: boolean;
+    keyword_note?: string;
+    distinct_topics?: unknown;
+  };
 
   if (typeof result.resonance_score !== "number") return null;
+
+  // Same defensive normalisation every other tool parse in this codebase needs:
+  // Claude returns a nested array as a JSON string often enough that assuming the
+  // declared shape has broken four separate nodes already.
+  let topics = result.distinct_topics;
+  if (typeof topics === "string") {
+    try {
+      topics = JSON.parse(topics);
+    } catch {
+      topics = [topics];
+    }
+  }
+  if (!Array.isArray(topics) && topics && typeof topics === "object") topics = Object.values(topics);
+  const topicList = (Array.isArray(topics) ? topics : []).map((t) => String(t)).filter(Boolean);
+
+  const warnings: IntakeWarning[] = [];
+  if (result.keyword_matches_idea === false) {
+    warnings.push({
+      kind: "keyword_mismatch",
+      message:
+        result.keyword_note?.trim() ||
+        `The primary keyword "${input.primaryKeyword}" points somewhere the idea does not go, so the article would be optimised for a search it never answers.`,
+    });
+  }
+  if (topicList.length > 1) {
+    warnings.push({
+      kind: "multiple_topics",
+      message: `This reads as ${topicList.length} separate ideas: ${topicList.join("; ")}. One article covering all of them tends to fail Topic Relevance, and each would be stronger on its own.`,
+    });
+  }
 
   return {
     blocked: result.resonance_score <= BLOCK_AT_OR_BELOW,
     score: result.resonance_score,
     reason: result.reason ?? "No reason given.",
     profileName: result.best_profile_name ?? candidates[0].name,
+    warnings,
   };
 }

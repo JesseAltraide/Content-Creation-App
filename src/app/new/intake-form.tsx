@@ -60,6 +60,7 @@ export default function IntakeForm({
   const [describingChannel, setDescribingChannel] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  const [warnings, setWarnings] = useState<{ kind: string; message: string }[]>([]);
   const [resonanceBlock, setResonanceBlock] = useState<{
     score: number;
     reason: string;
@@ -77,11 +78,12 @@ export default function IntakeForm({
     (c) => confirmedGenericTone.includes(c) || (describedTone[c]?.trim().length ?? 0) >= 20
   );
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent, acknowledgedWarnings = false) {
     e.preventDefault();
     setSubmitting(true);
     setErrors([]);
     setResonanceBlock(null);
+    if (acknowledgedWarnings) setWarnings([]);
 
     const urls = urlsText
       .split("\n")
@@ -103,6 +105,7 @@ export default function IntakeForm({
         xThreadLength,
         confirmedGenericToneChannels: confirmedGenericTone,
         describedToneByChannel: describedTone,
+        acknowledgedWarnings,
       }),
     });
 
@@ -115,6 +118,14 @@ export default function IntakeForm({
       // it was judged against and the reason all have to be visible.
       if (body.error === "low_resonance" && body.resonance) {
         setResonanceBlock(body.resonance);
+        setErrors([]);
+        return;
+      }
+      // Warnings, not a refusal: shown once, then the same submit goes through with
+      // the acknowledgement set. Nothing has been created at this point, so going
+      // back to fix the keyword or split the idea costs nothing.
+      if (body.error === "intake_warnings" && Array.isArray(body.warnings)) {
+        setWarnings(body.warnings);
         setErrors([]);
         return;
       }
@@ -327,6 +338,34 @@ export default function IntakeForm({
               audience, say what it is in the idea or context field above and submit again. Checked
               against the idea as written, not a charitable reading of it.
             </p>
+          </div>
+        )}
+
+        {warnings.length > 0 && (
+          <div className="rounded-lg border border-warning/30 bg-warning-soft px-3.5 py-3 text-sm text-warning">
+            <p className="font-medium">
+              {warnings.length === 1 ? "One thing worth checking" : "A couple of things worth checking"}{" "}
+              before this goes off to research.
+            </p>
+            <ul className="mt-1.5 flex list-disc flex-col gap-1 pl-4 text-warning/90">
+              {warnings.map((w) => (
+                <li key={w.kind}>{w.message}</li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-warning/80">
+              Nothing has been created yet, so fixing it above costs nothing. These are judgement
+              calls, so if you meant it, carry on.
+            </p>
+            <div className="mt-3">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={submitting}
+                onClick={(e) => handleSubmit(e as unknown as React.FormEvent, true)}
+              >
+                {submitting ? "Submitting…" : "Submit anyway"}
+              </Button>
+            </div>
           </div>
         )}
 
