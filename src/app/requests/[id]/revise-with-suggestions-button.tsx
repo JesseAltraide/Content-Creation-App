@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
 // The evaluator already says exactly what would close the gap. Making the human
@@ -14,8 +13,8 @@ export default function ReviseWithSuggestionsButton({
   requestId: string;
   channel: "linkedin" | "x" | "newsletter";
 }) {
-  const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [note, setNote] = useState("");
   const [showNote, setShowNote] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +39,7 @@ export default function ReviseWithSuggestionsButton({
       }
       if (!res.ok) {
         setError(payload.error ?? `Revision failed (${res.status}).`);
+        setConfirming(false);
         return;
       }
       setResult({
@@ -47,7 +47,8 @@ export default function ReviseWithSuggestionsButton({
         score: payload.score ?? 0,
         status: payload.status ?? "revise",
       });
-      router.refresh();
+      setConfirming(false);
+      window.location.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
@@ -55,10 +56,46 @@ export default function ReviseWithSuggestionsButton({
     }
   }
 
+  // Asked before the call, not explained after it. A rewrite acts on every suggestion
+  // at once and criteria trade against each other, so the score can legitimately fall;
+  // the guard keeps the better version, but someone who expected a guaranteed
+  // improvement has still spent a minute waiting to be told no. Editing by hand
+  // against the same list is often the faster route, and this says so while the choice
+  // is still open.
+  if (confirming && !submitting) {
+    return (
+      <div className="mt-3 rounded-lg border border-warning/30 bg-warning-soft p-3">
+        <p className="text-sm font-medium text-warning">
+          A rewrite is not guaranteed to score higher.
+        </p>
+        <p className="mt-1 text-xs text-warning/90">
+          It acts on every suggestion at once, and the criteria pull against each other: adding
+          line breaks for Channel Fit can cost you on Tone. The evaluator also scores
+          independently each time, so a few points either way is normal variance. If the
+          rewrite comes back lower, your current version is kept and nothing is lost except the
+          wait.
+        </p>
+        <p className="mt-1.5 text-xs text-warning/90">
+          For a specific fix, editing the post yourself against the list above is usually faster
+          and lands exactly what you meant. Use &ldquo;Add your own steer&rdquo; if you want the
+          rewrite pointed at one thing in particular.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button onClick={handleRevise} disabled={submitting}>
+            Rewrite it anyway
+          </Button>
+          <Button variant="ghost" onClick={() => setConfirming(false)}>
+            Cancel
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Button onClick={handleRevise} disabled={submitting}>
+        <Button onClick={() => setConfirming(true)} disabled={submitting}>
           {submitting ? "Revising and re-scoring…" : "Apply these suggestions"}
         </Button>
         {!showNote && !submitting && (
