@@ -5,6 +5,8 @@ import SettingsAnnouncementPopup from "./settings-announcement-popup";
 import WelcomePopup from "./welcome-popup";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUnreadAnnouncements, getManagerState } from "@/lib/content-manager";
+import NotificationBell from "./notification-bell";
+import { getNotices } from "@/lib/notices";
 
 export default async function SiteHeader() {
   const supabase = await createClient();
@@ -16,9 +18,12 @@ export default async function SiteHeader() {
 
   // Rendered from the header so it reaches every authenticated page, not just the
   // one place someone happens to land after a settings change.
-  const [announcements, manager] = await Promise.all([
+  const [announcements, manager, notices] = await Promise.all([
     getUnreadAnnouncements(user.id),
     getManagerState(user.id),
+    // Server-rendered so the count is right on first paint; the component keeps it
+    // current from there.
+    getNotices(user.id),
   ]);
 
   // Only for someone who has never dismissed it. Fetched here rather than on the
@@ -53,6 +58,7 @@ export default async function SiteHeader() {
           <span className="text-sm font-semibold tracking-tight">Content Agent</span>
         </Link>
         <div className="flex items-center gap-4">
+          <NotificationBell initial={notices} />
           <Link
             href="/settings/audience-profiles"
             className="text-sm font-medium text-muted hover:text-foreground"
