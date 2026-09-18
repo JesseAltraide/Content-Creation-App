@@ -60,6 +60,11 @@ export default function IntakeForm({
   const [describingChannel, setDescribingChannel] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  const [resonanceBlock, setResonanceBlock] = useState<{
+    score: number;
+    reason: string;
+    profileName: string;
+  } | null>(null);
 
   function toggleChannel(value: string) {
     setChannels((prev) =>
@@ -76,6 +81,7 @@ export default function IntakeForm({
     e.preventDefault();
     setSubmitting(true);
     setErrors([]);
+    setResonanceBlock(null);
 
     const urls = urlsText
       .split("\n")
@@ -104,6 +110,15 @@ export default function IntakeForm({
     setSubmitting(false);
 
     if (!res.ok) {
+      // The resonance block gets its own panel rather than a generic error line:
+      // its whole job is to tell the author what to add, so the score, the profile
+      // it was judged against and the reason all have to be visible.
+      if (body.error === "low_resonance" && body.resonance) {
+        setResonanceBlock(body.resonance);
+        setErrors([]);
+        return;
+      }
+      setResonanceBlock(null);
       setErrors(
         body.issues?.map((i: { message: string }) => i.message) ?? [body.error ?? "Something went wrong."]
       );
@@ -298,6 +313,21 @@ export default function IntakeForm({
               <li key={i}>{err}</li>
             ))}
           </ul>
+        )}
+
+        {resonanceBlock && (
+          <div className="rounded-lg border border-danger/20 bg-danger-soft px-3.5 py-3 text-sm text-danger">
+            <p className="font-medium">
+              This idea scores {resonanceBlock.score}/15 against {resonanceBlock.profileName}, so it
+              hasn&apos;t been submitted.
+            </p>
+            <p className="mt-1.5 text-danger/90">{resonanceBlock.reason}</p>
+            <p className="mt-2 text-xs text-danger/80">
+              Nothing has been researched or scraped yet. If there is an angle here for this
+              audience, say what it is in the idea or context field above and submit again. Checked
+              against the idea as written, not a charitable reading of it.
+            </p>
+          </div>
         )}
 
         <Button type="submit" disabled={submitting || !canSubmit}>

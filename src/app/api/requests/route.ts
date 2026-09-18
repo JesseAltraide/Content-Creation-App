@@ -5,6 +5,7 @@ import { intakeSchema, dedupeUrls } from "@/lib/intake-validation";
 import { logEvent } from "@/lib/events";
 import { triggerSearchSources, triggerScrapeAndProposeAngle } from "@/lib/n8n";
 import { getOnboardingStatus } from "@/lib/onboarding";
+import { preflightResonance } from "@/lib/resonance-preflight";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -38,6 +39,41 @@ export async function POST(request: Request) {
 
   const input = parsed.data;
   const urls = dedupeUrls(input.urls ?? []);
+
+  // Pre-flight audience resonance (Decision #104). Runs before anything is created
+  // or triggered, so a mismatched idea costs one small Claude call instead of a
+  // search, the human's source-picking time, and a scrape of every result.
+  //
+  // Raw-idea path only: the whole argument for this gate is that we waste effort
+  // searching and scraping on the human's behalf. On the URL path they supplied the
+  // sources themselves, so there is no speculative spend to protect, and the gate
+  // would be judging on a keyword alone.
+  if (input.inputPath === "raw_idea") {
+    let verdict = null;
+    try {
+      verdict = await preflightResonance({
+        rawIdea: input.rawIdea,
+        context: input.context,
+        primaryKeyword: input.primaryKeyword,
+        audienceProfileId: input.audienceProfileId,
+      });
+    } catch {
+      // Fails open on purpose: a gate that takes intake down whenever the Anthropic
+      // API hiccups is worse than the waste it exists to prevent, and the
+      // authoritative ≤6 block still runs downstream with the sources in hand.
+      verdict = null;
+    }
+
+    if (verdict?.blocked) {
+      return NextResponse.json(
+        {
+          error: "low_resonance",
+          resonance: verdict,
+        },
+        { status: 422 }
+      );
+    }
+  }
 
   const admin = createAdminClient();
 
