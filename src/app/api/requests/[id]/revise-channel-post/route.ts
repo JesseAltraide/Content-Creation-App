@@ -211,7 +211,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const [{ data: section }, { data: toneSamples }, { data: excerpts }, { data: sources }, { data: req }] =
     await Promise.all([
-      admin.from("sections").select("title, body_markdown").eq("request_id", requestId).order("version", { ascending: false }).limit(1).maybeSingle(),
+      admin.from("sections").select("title, body_markdown").eq("request_id", requestId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       admin.from("tone_samples").select("content, source").eq("channel", channel),
       admin.from("excerpts").select("id, text, source_id").eq("request_id", requestId),
       admin.from("sources").select("id, url").eq("request_id", requestId),

@@ -21,6 +21,7 @@ function floorFor(name: string): number | undefined {
 
 type Section = {
   id: string;
+  created_at?: string;
   version: number;
   title: string | null;
   body_markdown: string | null;
@@ -29,6 +30,8 @@ type Section = {
 
 type EvalResult = {
   id: string;
+  /** The exact draft this scored. content_version is ambiguous once a re-pick reuses a number. */
+  section_id: string | null;
   content_version: number;
   overall_score: number;
   status: string;
@@ -77,7 +80,16 @@ export default function ArticleReview({
   // markers and one reference list, because the same 90-character URL four times in a
   // paragraph is noise rather than provenance.
   const { body, citations } = extractCitations(stripped);
-  const latestEval = evaluations.find((e) => e.content_version === latest.version);
+  // Matched on section_id, not content_version. Two sections can share a version
+  // number once a re-picked angle restarts numbering at 1, and matching on the number
+  // then shows one draft's text beside another draft's score.
+  const latestEval =
+    evaluations.find((e) => e.section_id === latest.id) ??
+    // Only for rows written before section_id was populated, and only when the number
+    // is unambiguous within this request.
+    (evaluations.filter((e) => e.content_version === latest.version).length === 1
+      ? evaluations.find((e) => e.content_version === latest.version)
+      : undefined);
   // Regenerate/Reject are available on any draft awaiting review, whether it just
   // passed or is stuck at needs_human_attention (the internal auto-revision loop's
   // own cap having been reached doesn't remove the human's ability to try again with

@@ -32,7 +32,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     .from("sections")
     .select("id, version")
     .eq("request_id", requestId)
-    .order("version", { ascending: false })
+    .order("created_at", { ascending: false })
     .limit(1)
     .single();
 

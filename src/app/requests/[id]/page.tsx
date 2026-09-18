@@ -82,11 +82,16 @@ export default async function RequestDetailPage({
     .eq("request_id", id)
     .order("created_at");
 
+// Ordered by created_at, not version. A re-picked angle starts a fresh generation in
+// Workflow B, which numbers its first section v1 regardless of what already exists, so
+// a newer draft can carry a LOWER version than an older one. Caught live: a re-pick
+// wrote a v1 that scored 85 while the page kept showing the v3 from an hour earlier at
+// 80, and the human reasonably concluded the regeneration had done nothing.
   const { data: sections } = await supabase
     .from("sections")
     .select("*")
     .eq("request_id", id)
-    .order("version");
+    .order("created_at");
 
   const { data: evaluations } = await supabase
     .from("evaluation_results")

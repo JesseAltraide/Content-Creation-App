@@ -668,13 +668,26 @@ codeNode(
 );
 connect("Claude: Generate Article", "Parse Generated Article", 0);
 
+// Sections are numbered from what already exists, not from 1. A re-picked angle runs
+// this same generation path again, and hardcoding version 1 produced a second v1
+// alongside the original: a newer draft with a lower version number than the draft it
+// replaced. Anything ordering by version then showed the older one, which is exactly
+// what happened live (a v1 scoring 85 hidden behind a v3 scoring 80).
+supabaseGet(
+  "fetch-latest-section-version",
+  "Fetch Latest Section Version",
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/sections?request_id=eq.{{$('Config').first().json.request_id}}&select=version&order=version.desc&limit=1",
+  { alwaysOutputData: true, executeOnce: true }
+);
+connect("Parse Generated Article", "Fetch Latest Section Version");
+
 supabaseWrite(
   "insert-section-v1", "Insert Section v1", "POST",
   "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/sections",
-  "={{ JSON.stringify({ request_id: $('Config').first().json.request_id, angle_id: $('Config').first().json.angle_id, version: 1, title: $json.title, body_markdown: $json.body_markdown, primary_keyword: $('Fetch Request Row').first().json.primary_keyword, secondary_keywords: $json.secondary_keywords, generation_status: 'generated' }) }}",
+  "={{ JSON.stringify({ request_id: $('Config').first().json.request_id, angle_id: $('Config').first().json.angle_id, version: ($('Fetch Latest Section Version').all().filter(i => i.json && typeof i.json.version === 'number').map(i => i.json.version).sort((a, b) => b - a)[0] || 0) + 1, title: $('Parse Generated Article').first().json.title, body_markdown: $('Parse Generated Article').first().json.body_markdown, primary_keyword: $('Fetch Request Row').first().json.primary_keyword, secondary_keywords: $('Parse Generated Article').first().json.secondary_keywords, generation_status: 'generated' }) }}",
   { returnMinimal: false }
 );
-connect("Parse Generated Article", "Insert Section v1");
+connect("Fetch Latest Section Version", "Insert Section v1");
 
 // ---------------------------------------------------------------------------
 // Stage 6 — Pass 1 evaluation, and Stage 7 — bounded revision loop (cap 2)
