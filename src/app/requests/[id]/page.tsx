@@ -113,6 +113,13 @@ export default async function RequestDetailPage({
     .order("content_version");
 
   const channelPostIds = (channelPosts ?? []).map((p) => p.id);
+  // Only needed for the newsletter email preview, and only a count, so this stays a
+  // head-only query rather than pulling every subscriber row into the page.
+  const { count: subscriberCount } = await supabase
+    .from("newsletter_subscribers")
+    .select("id", { count: "exact", head: true })
+    .is("unsubscribed_at", null);
+
   const { data: scheduledContent } = channelPostIds.length
     ? await supabase.from("scheduled_content").select("*").in("channel_post_id", channelPostIds)
     : { data: [] };
@@ -471,6 +478,7 @@ export default async function RequestDetailPage({
             channelPosts={channelPosts ?? []}
             evaluations={pass2Evaluations ?? []}
             scheduledContent={scheduledContent ?? []}
+            subscriberCount={subscriberCount ?? 0}
             brandChangedAt={brandChangedAt}
             isOwner={canAct}
           />

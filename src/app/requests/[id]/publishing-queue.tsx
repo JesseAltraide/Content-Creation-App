@@ -1,6 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { CHANNEL_LABELS, findLengthViolations } from "@/lib/channel-post-format";
 import ScheduleChannelForm from "./schedule-channel-form";
+import NewsletterEmailPreview from "./newsletter-email-preview";
 
 // Newsletter shares this same table/cron job but gets real delivery to every
 // active subscriber instead of a reminder email (Decision #22/#48) - see
@@ -47,11 +48,14 @@ export default function PublishingQueue({
   scheduledContent,
   brandChangedAt,
   isOwner,
+  subscriberCount,
 }: {
   requestId: string;
   channelPosts: ChannelPost[];
   evaluations: EvalResult[];
   scheduledContent: ScheduledItem[];
+  /** Active newsletter subscribers, so the email preview can say who it reaches. */
+  subscriberCount: number;
   /** When the audience or tone last changed, if ever. */
   brandChangedAt: string | null;
   /** Only the author schedules; reviewers see the queue state read-only. */
@@ -170,6 +174,17 @@ export default function PublishingQueue({
               {/* "It didn't pass" on its own is a dead end: it states a fact and
                   leaves the human with no idea what to do next. The evaluator already
                   knows the gap and what would close it, so show that instead. */}
+              {/* Newsletter is the only channel this app actually sends, so it is the
+                  only one where "what will they receive" is a real question rather
+                  than a copy-paste reminder to the author. */}
+              {post && channel === "newsletter" && (
+                <NewsletterEmailPreview
+                  body={post.body}
+                  subscriberCount={subscriberCount}
+                  scheduledFor={latestForChannel?.scheduled_for ?? null}
+                />
+              )}
+
               {post && evalForPost?.status !== "pass" && (
                 <div className="mt-2 rounded-lg bg-warning-soft p-3">
                   <p className="text-xs font-semibold text-warning">
