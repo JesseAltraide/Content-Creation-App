@@ -6,6 +6,11 @@ import { StatusBadge } from "@/components/ui/badge";
 import { REVIEWABLE_STATUSES } from "@/lib/request-access";
 import RequestListTabs from "./request-list-tabs";
 
+// The statuses where n8n is mid-run and the badge on this page will change without
+// anything the human does. Kept next to the only consumer rather than in a shared
+// module: the request detail page derives its own from the banner it renders.
+const WORKING_STATUSES = new Set(["researching", "generating", "adapting", "revising"]);
+
 export default async function HomePage() {
   const supabase = await createClient();
   const {
@@ -48,6 +53,9 @@ export default async function HomePage() {
 
       <RequestListTabs
         reviewCount={(toReview ?? []).length}
+        hasWorkInFlight={[...(requests ?? []), ...(toReview ?? [])].some((r) =>
+          WORKING_STATUSES.has(r.status)
+        )}
         mine={
           <>
             {(!requests || requests.length === 0) && (

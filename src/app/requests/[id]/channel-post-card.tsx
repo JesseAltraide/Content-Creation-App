@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ScoreBar } from "@/components/ui/score-bar";
 import { parseXPosts, parseNewsletter, CHANNEL_LABELS, floorForPass2Criterion } from "@/lib/channel-post-format";
 import EditChannelPostForm from "./edit-channel-post-form";
+import ReviseWithSuggestionsButton from "./revise-with-suggestions-button";
 import GenerateAlternateToneButton from "./generate-alternate-tone-button";
 import SelectToneVariantButton from "./select-tone-variant-button";
 
@@ -139,6 +140,7 @@ export default function ChannelPostCard({
                   <li key={i}>{s}</li>
                 ))}
               </ul>
+              {isOwner && !editing && <ReviseWithSuggestionsButton requestId={requestId} channel={channel} />}
             </div>
           )}
         </div>
