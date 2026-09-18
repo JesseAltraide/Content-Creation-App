@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanModifyRequest } from "@/lib/request-access";
 import { logEvent } from "@/lib/events";
+import { firedRecently } from "@/lib/debounce-trigger";
 import type Anthropic from "@anthropic-ai/sdk";
 import { getClaude, GENERATION_MODEL, EVALUATION_MODEL } from "@/lib/claude";
 
@@ -156,6 +157,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json(
       { error: "An alternate tone already exists for this channel. Pick one before generating another." },
       { status: 409 }
+    );
+  }
+
+  // The pending-alternate check above is check-then-act: two quick clicks can both
+  // pass it and both run a Sonnet generation plus an Opus evaluation before either
+  // inserts. Debounced on the event log, which is written on every outcome.
+  if (await firedRecently(requestId, ["alternate_tone"], 60_000)) {
+    return NextResponse.json(
+      { error: "An alternate tone was just generated for this request. Give it a moment." },
+      { status: 429 }
     );
   }
 

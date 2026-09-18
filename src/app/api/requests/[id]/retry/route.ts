@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanModifyRequest } from "@/lib/request-access";
 import { triggerSearchSources, triggerScrapeAndProposeAngle } from "@/lib/n8n";
 import { logEvent } from "@/lib/events";
+import { firedRecently } from "@/lib/debounce-trigger";
 
 // Re-triggers whichever stage the request was last attempting, without re-running
 // anything that already succeeded (already-scraped sources stay scraped). Per the
@@ -36,6 +37,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json(
       { error: `Cannot retry from status "${req.status}".` },
       { status: 409 }
+    );
+  }
+
+  // Retry deliberately leaves the status alone, so the conditional write that
+  // protects every other action cannot protect this one. Each extra click is a
+  // whole extra pipeline run, so a repeat within the window is treated as a double
+  // click rather than a second intent.
+  if (await firedRecently(requestId, ["research_search_trigger", "scrape_and_propose_trigger"], 30_000)) {
+    return NextResponse.json(
+      { error: "That retry is already running. Give it a moment before trying again." },
+      { status: 429 }
     );
   }
 
