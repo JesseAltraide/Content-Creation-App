@@ -8,7 +8,12 @@ import ScheduleChannelForm from "./schedule-channel-form";
 const QUEUE_CHANNELS = ["linkedin", "x", "newsletter"] as const;
 
 type ChannelPost = { id: string; channel: string; version: number; chosen: boolean; body: string };
-type EvalResult = { channel: string | null; content_version: number; status: string };
+type EvalResult = {
+  channel: string | null;
+  content_version: number;
+  status: string;
+  created_at?: string;
+};
 type ScheduledItem = {
   id: string;
   channel_post_id: string;
@@ -31,11 +36,14 @@ export default function PublishingQueue({
   channelPosts,
   evaluations,
   scheduledContent,
+  brandChangedAt,
 }: {
   requestId: string;
   channelPosts: ChannelPost[];
   evaluations: EvalResult[];
   scheduledContent: ScheduledItem[];
+  /** When the audience or tone last changed, if ever. */
+  brandChangedAt: string | null;
 }) {
   // Only shows once there's at least one eligible (passing) channel post to
   // schedule, or an existing queue entry to display - nothing to show before
@@ -68,6 +76,15 @@ export default function PublishingQueue({
           // the schedule route enforces with, so the two can't drift.
           const lengthViolations = post ? findLengthViolations(channel, post.body ?? "") : [];
           const eligible = evalForPost?.status === "pass" && lengthViolations.length === 0;
+          // Changing the audience or tone does not re-score anything already
+          // evaluated, and re-scoring automatically would be worse: it could
+          // invalidate something already scheduled to send, and cost a full
+          // evaluation for every queued post on every settings tweak. Flagged
+          // instead, so the author decides whether it still reads right.
+          const evaluatedBeforeBrandChange =
+            !!brandChangedAt &&
+            !!evalForPost?.created_at &&
+            new Date(evalForPost.created_at) < new Date(brandChangedAt);
           const pending = scheduledContent.find(
             (s) => s.channel === channel && (!post || s.channel_post_id === post.id) && s.status === "scheduled"
           );
@@ -106,6 +123,14 @@ export default function PublishingQueue({
                 <div className="mt-3">
                   <ScheduleChannelForm requestId={requestId} channel={channel} hasPendingSchedule={!!pending} />
                 </div>
+              )}
+
+              {post && eligible && evaluatedBeforeBrandChange && (
+                <p className="mt-2 text-xs text-warning">
+                  The audience or tone changed after this was scored, so its evaluation was
+                  measured against the old brief. It can still be scheduled. Edit it to trigger a
+                  fresh evaluation if you want it re-checked.
+                </p>
               )}
 
               {post && lengthViolations.length > 0 && (

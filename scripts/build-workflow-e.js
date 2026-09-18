@@ -309,6 +309,25 @@ supabaseGet(
 );
 connect("Fetch Anchor Post", "Fetch Excerpts");
 
+// Decision #17: tone profiles and the audience description go to the EVALUATOR,
+// not just the generator, because "without it, Tone and Audience Fit are graded
+// against nothing". This workflow re-scores an edited post against the same Pass 2
+// rubric (Tone 25/floor 10, Audience Fit 15/floor 6) and had neither in context,
+// so 40 of 100 points with blocking floors were being judged with no reference.
+supabaseGet(
+  "fetch-tone-samples", "Fetch Tone Samples",
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/tone_samples?channel=eq.{{$('Config').first().json.channel}}&select=content,source"
+);
+connect("Fetch Excerpts", "Fetch Tone Samples");
+
+// Nil-UUID fallback: resolved_audience_profile_id can legitimately be null, and
+// id=eq.null is an invalid UUID that Postgres rejects outright (Error #5).
+supabaseGet(
+  "fetch-audience-profile", "Fetch Audience Profile",
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/audience_profiles?id=eq.{{$('Fetch Request Row').first().json.resolved_audience_profile_id || '00000000-0000-0000-0000-000000000000'}}&select=description"
+);
+connect("Fetch Tone Samples", "Fetch Audience Profile");
+
 // ---------------------------------------------------------------------------
 // Step 1-2: deterministic word-diff + mechanical pre-filters (Decisions #45-46)
 // ---------------------------------------------------------------------------
@@ -353,7 +372,10 @@ codeNode(
       "Word-diff ratio uses the same 1 - 2*LCS/(lenA+lenB) metric as Python's difflib.SequenceMatcher.ratio. Mechanical pre-filters (numeral change, a removed excerpt-cited sentence, any whole sentence added/removed, or >15% edit distance) force full re-evaluation regardless of what Haiku would say - these are the project's own judgment calls on what 'numerals changed' / 'excerpt-cited sentence changed' / 'whole sentence added or removed' concretely mean, since the source docs describe the categories but not exact detection logic.",
   }
 );
-connect("Fetch Excerpts", "Compute Diff");
+// Inline in the main chain, not a fork off Fetch Excerpts: a parallel branch would
+// leave the ordering between the fetches and the eval build up to n8n rather than
+// guaranteed, and the eval prompt reads both by name.
+connect("Fetch Audience Profile", "Compute Diff");
 
 ifNode("if-mechanical-escalate", "IF Mechanical Escalate", "={{$json.mechanicalEscalate}}", true, { type: "boolean", operation: "equals" });
 connect("Compute Diff", "IF Mechanical Escalate");
@@ -481,6 +503,8 @@ const evalPrompt =
   PASS2_RUBRIC_TEXT +
   "\\n\\nChannel: ${$('Config').first().json.channel}\\n\\nEdited post:\\n${$('Compute Diff').first().json.editedText}\\n\\n" +
   X_LENGTH_NOTE +
+  "\\n\\nAudience this must fit (score Audience Fit against this, not a general reader):\\n${$('Fetch Audience Profile').first().json.description || 'No audience profile on file, judge for a general professional audience.'}" +
+  "\\n\\nBrand voice for this channel (score Tone against these real samples, not a generic idea of good writing):\\n${$('Fetch Tone Samples').all().filter(i => i.json && i.json.content).map(i => `[${i.json.source}] ${i.json.content}`).join('" + BSN + BSN + "---" + BSN + BSN + "') || 'No tone samples on file for this channel, judge against a neutral professional default.'}" +
   "\\n\\nGrounded excerpts it should stay consistent with:\\n${$('Fetch Excerpts').all().filter(i => i.json && i.json.id).map((i, idx) => `[${idx}] Source: ${(i.json.sources && i.json.sources.url) || i.json.source_id}" + BSN + "${i.json.text}`).join('" + BSN + BSN + "')}`";
 
 claudeNode("claude-eval-edit", "Claude: Evaluate Edited Post", "claude-opus-5", EVAL_TOOL, evalPrompt, 3000);

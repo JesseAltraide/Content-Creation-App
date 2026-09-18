@@ -660,7 +660,19 @@ function pass2EvalCachedContext() {
     "`Rubric: " +
     PASS2_RUBRIC_TEXT +
     "\\n\\nOriginal article (for factual comparison):\\n${$('Fetch Approved Section').first().json.body_markdown}\\n\\n" +
-    "Grounded excerpts:\\n${$('Build Adaptation Context').first().json.excerptsTextPlain}`"
+    "Grounded excerpts:\\n${$('Build Adaptation Context').first().json.excerptsTextPlain}\\n\\n" +
+    // Decision #17 says tone profiles and the audience description go to the
+    // EVALUATOR, not just the generator, precisely because "without it, Tone and
+    // Audience Fit are graded against nothing". That was never implemented: Pass 2
+    // scores Tone (25, floor 10) and Audience Fit (15, floor 6), 40 of 100 points
+    // with blocking floors, and had neither in context. Found while asking whether
+    // a tone change re-evaluates queued posts - re-evaluating against a tone the
+    // evaluator cannot see would have been meaningless.
+    "Audience this must fit (score Audience Fit against this, not a general reader):\\n${$('Build Adaptation Context').first().json.audienceText}\\n\\n" +
+    "Brand voice per channel (score Tone against these real samples, not a generic idea of good writing). Judge each channel's post against its own channel's samples:\\n" +
+    "LinkedIn:\\n${$('Build Adaptation Context').first().json.toneByChannel.linkedin || 'not requested'}\\n\\n" +
+    "X:\\n${$('Build Adaptation Context').first().json.toneByChannel.x || 'not requested'}\\n\\n" +
+    "Newsletter:\\n${$('Build Adaptation Context').first().json.toneByChannel.newsletter || 'not requested'}`"
   );
 }
 

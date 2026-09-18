@@ -115,6 +115,17 @@ export default async function RequestDetailPage({
     ? await supabase.from("scheduled_content").select("*").in("channel_post_id", channelPostIds)
     : { data: [] };
 
+  // A tone or audience change does not re-score anything, so the publishing queue
+  // flags evaluations that predate the most recent one rather than letting a stale
+  // pass look current.
+  const { data: brandChanges } = await supabase
+    .from("settings_announcements")
+    .select("created_at")
+    .in("kind", ["tone", "audience"])
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const brandChangedAt = brandChanges?.[0]?.created_at ?? null;
+
   const sourceUrlsById = Object.fromEntries((sources ?? []).map((s) => [s.id, s.url]));
 
   const latestEvent = events?.[0];
@@ -395,6 +406,7 @@ export default async function RequestDetailPage({
             channelPosts={channelPosts ?? []}
             evaluations={pass2Evaluations ?? []}
             scheduledContent={scheduledContent ?? []}
+            brandChangedAt={brandChangedAt}
           />
           ),
           sources: (
