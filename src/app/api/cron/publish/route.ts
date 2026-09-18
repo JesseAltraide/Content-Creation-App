@@ -4,6 +4,7 @@ import { logEvent } from "@/lib/events";
 import { sendMail } from "@/lib/mailer";
 import { parseXPosts, parseNewsletter } from "@/lib/channel-post-format";
 import { newsletterHtml, markdownToPlainText } from "@/lib/newsletter-html";
+import { appBaseUrl } from "@/lib/app-url";
 
 // This route either calls a model, triggers an n8n workflow, or keeps working in
 // after() once the response has gone out. Serverless kills the function at its
@@ -161,7 +162,7 @@ export async function GET(request: Request) {
           .select("id, email")
           .is("unsubscribed_at", null);
 
-        const baseUrl = new URL(request.url).origin;
+        const baseUrl = appBaseUrl(request);
         let sent = 0;
         let failed = 0;
         for (const sub of subscribers ?? []) {

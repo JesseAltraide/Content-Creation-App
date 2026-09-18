@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logEvent } from "@/lib/events";
 import { sendMail } from "@/lib/mailer";
 import { SAFE_STATE, STALLED_SWEEP_MS } from "@/lib/stalled-runs";
+import { appBaseUrl } from "@/lib/app-url";
 
 // This route either calls a model, triggers an n8n workflow, or keeps working in
 // after() once the response has gone out. Serverless kills the function at its
@@ -54,7 +55,7 @@ export async function GET(request: Request) {
   }
 
   const admin = createAdminClient();
-  const baseUrl = new URL(request.url).origin;
+  const baseUrl = appBaseUrl(request);
 
   // Reclaim runs that stopped without reporting back, BEFORE the notification pass, so
   // a reclaimed request can be emailed about in the same sweep.
