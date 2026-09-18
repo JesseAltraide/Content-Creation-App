@@ -483,12 +483,18 @@ codeNode(
     "const requestId = $('Config').first().json.request_id;" + NL +
     // excerpts.source_id is NOT NULL, so an excerpt whose cited URL cannot be
     // matched back to a scraped source has to be dropped. Exact string equality
-    // was doing that silently and far too often: Claude echoes the URL from the
-    // prompt, and any difference at all (trailing slash, http vs https, a www
-    // prefix, percent-encoding, a stored URL that arrived truncated from search)
-    // meant every excerpt was discarded and the run reported "no relevant
-    // passages" for sources that plainly were relevant. Confirmed live on a
-    // Champions League request whose UEFA source URL was stored truncated.
+    // was doing that silently: Claude echoes a URL from the prompt, and any
+    // difference at all discarded the excerpt, so a run could report "no relevant
+    // passages" for sources that plainly were relevant.
+    //
+    // Caught on a Champions League request. The stored UEFA URL LOOKS truncated
+    // (it ends "...everything-you-ne") but returns HTTP 200: that is UEFA's own
+    // slug, not a storage fault. What it does do is redirect to a trailing-slash
+    // form, which is the likeliest mismatch here, since the canonical URL in the
+    // scraped page differs from the one we stored by exactly one character.
+    // Normalising scheme, www, case and trailing slash covers that; the
+    // prefix-tolerance below is insurance for genuinely truncated URLs rather
+    // than the fix for this case.
     // Plain string ops rather than regex: this is assembled into a JS string, and
     // the backslash escaping a regex needs does not survive that cleanly.
     "const norm = (u) => {" + NL +
