@@ -552,7 +552,11 @@ function adaptPrompt(feedbackExpr, lengthExpr) {
     // suggested saying "Bayern Munich 2nd, 9 points behind", the revision complied,
     // and the NEXT Pass 2 scored that exact sentence as a factual distortion, taking
     // Factual Consistency from 18/20 to the 15 floor.
-    ? "`The previous attempt needs these specific changes: ${" + feedbackExpr + "}\n\nThe requested changes are the evaluator's wording, not fact. They are advisory on style and structure, and are NOT authoritative on any figure, unit, name or date. If following one would state something the article or the excerpts do not support, ignore that part and fix the underlying point another way. Accuracy outranks every suggestion here.\n\n${" + (lengthExpr || "\'\'") + "}`"
+    // Each channel's verdict is in the feedback, so the instruction can be specific:
+    // only the ones marked 'revise' are being asked for. Whatever comes back for a
+    // channel already marked 'pass' is discarded downstream and its existing text
+    // reused, so rewriting it wastes tokens and risks nothing but noise.
+    ? "`The previous attempt needs these specific changes: ${" + feedbackExpr + "}\n\nOnly revise the channels whose decision is 'revise'. A channel whose decision is 'pass' has already cleared the gate: return it exactly as it was, unchanged, and spend your effort on the ones that failed. A passing channel that comes back reworded is discarded anyway.\n\nThe requested changes are the evaluator's wording, not fact. They are advisory on style and structure, and are NOT authoritative on any figure, unit, name or date. If following one would state something the article or the excerpts do not support, ignore that part and fix the underlying point another way. Accuracy outranks every suggestion here.\n\n${" + (lengthExpr || "\'\'") + "}`"
     : "`Write the first version now.`";
 }
 
@@ -869,8 +873,63 @@ function buildPass2EvalRound(roundLabel, channelPostsSourceName, isFinalRound) {
   );
   connect(`Gate (${roundLabel})`, `Insert Evaluations (${roundLabel})`);
 
+  // Which version of each channel is the one in use, decided by score rather than by
+  // recency. The loop's last word is not its best word: live runs have gone 62, 87,
+  // 62 and 84, 47, 82 and 88, 90, 88, 91, 77, and in every case the final round was
+  // the one left chosen, so work that had already cleared the gate became
+  // unschedulable. Decision #126 already says a lower-scoring automated rewrite is
+  // discarded; this is that rule applied where the rewrites actually happen.
+  //
+  // Runs after every round, not just the last, so the state is correct even if a run
+  // dies partway.
+  supabaseGet(
+    `fetch-all-evals-${idBase}`, `Fetch All Channel Evaluations (${roundLabel})`,
+    "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/evaluation_results?request_id=eq.{{$('Config').first().json.request_id}}&pass=eq.pass_2_channel&select=channel,content_version,overall_score"
+  );
+  connect(`Insert Evaluations (${roundLabel})`, `Fetch All Channel Evaluations (${roundLabel})`);
+
+  codeNode(
+    `pick-best-${idBase}`,
+    `Pick Best Version Per Channel (${roundLabel})`,
+    "const evals = $input.all().map(i => i.json).filter(e => e && e.channel && typeof e.overall_score === 'number');" + NL +
+      "const best = {};" + NL +
+      // Ties keep the EARLIER version: if a rewrite only matched what it replaced, it
+      // changed the text for nothing, and the version already reviewed is the safer one.
+      "for (const e of evals) {" + NL +
+      "  const cur = best[e.channel];" + NL +
+      "  if (!cur || e.overall_score > cur.score) best[e.channel] = { score: e.overall_score, version: e.content_version };" + NL +
+      "}" + NL +
+      "const chans = Object.keys(best);" + NL +
+      "const parts = chans.map(ch => 'and(channel.eq.' + ch + ',version.eq.' + best[ch].version + ')');" + NL +
+      "const summary = chans.map(ch => ch + ' v' + best[ch].version + ' (' + best[ch].score + ')').join(', ');" + NL +
+      // An empty filter would make the PATCH that follows match EVERY row and mark
+      // every version of every channel chosen at once, which is the one outcome worse
+      // than choosing the wrong version. A filter that matches nothing is the safe
+      // reading of "no scores to go on": version 0 does not exist.
+      "return [{ json: { hasBest: parts.length > 0, orFilter: parts.length ? 'or=(' + parts.join(',') + ')' : 'version=eq.0', summary } }];",
+    {
+      notes:
+        "Highest score wins, ties going to the earlier version. Produces a PostgREST or=(...) filter so the choice is applied in one write.",
+    }
+  );
+  connect(`Fetch All Channel Evaluations (${roundLabel})`, `Pick Best Version Per Channel (${roundLabel})`);
+
+  supabaseWrite(
+    `unchoose-all-${idBase}`, `Unchoose All Versions (${roundLabel})`, "PATCH",
+    "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/channel_posts?request_id=eq.{{$('Config').first().json.request_id}}",
+    "={{ JSON.stringify({ chosen: false }) }}"
+  );
+  connect(`Pick Best Version Per Channel (${roundLabel})`, `Unchoose All Versions (${roundLabel})`);
+
+  supabaseWrite(
+    `choose-best-${idBase}`, `Choose Best Versions (${roundLabel})`, "PATCH",
+    "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/channel_posts?request_id=eq.{{$('Config').first().json.request_id}}&{{$('Pick Best Version Per Channel (" + roundLabel + ")').first().json.orFilter}}",
+    "={{ JSON.stringify({ chosen: true }) }}"
+  );
+  connect(`Unchoose All Versions (${roundLabel})`, `Choose Best Versions (${roundLabel})`);
+
   ifNode(`if-pass-${idBase}`, `IF All Pass (${roundLabel})`, "={{$('Gate (" + roundLabel + ")').first().json.allPass}}", true, { type: "boolean", operation: "equals" });
-  connect(`Insert Evaluations (${roundLabel})`, `IF All Pass (${roundLabel})`);
+  connect(`Choose Best Versions (${roundLabel})`, `IF All Pass (${roundLabel})`);
 
   withLane(-260, () => {
     supabaseWrite(
@@ -946,6 +1005,43 @@ function buildPass2RevisionRound(roundNum, prevGateIfName, prevChannelPostsSourc
   );
   connect(`Claude: Revise Channels (${label})`, `Parse Revised Channels (${label})`, 0);
 
+  // A channel that already passed is not rewritten. The revision call asks for the
+  // whole set because the tool shape is all-or-nothing, but whatever comes back for a
+  // passing channel is discarded and the version it already had is carried forward
+  // byte for byte.
+  //
+  // This is the fix for the worst behaviour in the pipeline. The loop continues while
+  // ANY channel is short of the mark, and it used to rewrite every channel each time,
+  // so a channel that had already cleared the gate got redrafted because a different
+  // one was two points down. Caught live: X scored 62, then 87 (a pass), then 62
+  // again, and the 62 is what the run ended with, purely because the newsletter was
+  // still at 84 when round 3 fired.
+  codeNode(
+    `carry-${idBase}`,
+    `Carry Forward Passing Channels (${label})`,
+    "const revised = $json;" + NL +
+      "const perChannel = $('Gate (" + prevRoundLabel + ")').first().json.perChannel || {};" + NL +
+      "const prevRows = $('" + prevChannelPostsSourceName + "').all().map(i => i.json).filter(r => r && r.channel);" + NL +
+      "const out = { ...revised };" + NL +
+      "const kept = [];" + NL +
+      "for (const row of prevRows) {" + NL +
+      "  const verdict = perChannel[row.channel] && perChannel[row.channel].decision;" + NL +
+      "  if (verdict !== 'pass') continue;" + NL +
+      // Rebuilt into the shape the row builder expects, from how each channel is stored.
+      "  if (row.channel === 'linkedin') out.linkedin = { body_markdown: row.body };" + NL +
+      "  else if (row.channel === 'x') { let posts = []; try { posts = JSON.parse(row.body); } catch { posts = []; } out.x = { posts: Array.isArray(posts) ? posts : [] }; }" + NL +
+      "  else if (row.channel === 'newsletter') { let n = {}; try { n = JSON.parse(row.body); } catch { n = {}; } out.newsletter = { subject_line: n.subject_line || '', body_markdown: n.body_markdown || '' }; }" + NL +
+      "  else continue;" + NL +
+      "  kept.push(row.channel);" + NL +
+      "}" + NL +
+      "return [{ json: { ...out, carried_forward: kept } }];",
+    {
+      notes:
+        "Discards the revision for any channel whose previous verdict was 'pass' and reuses the text it already had. Without this, one failing channel drags every passing channel through another rewrite, and the rewrite is not compared against what it replaces.",
+    }
+  );
+  connect(`Parse Revised Channels (${label})`, `Carry Forward Passing Channels (${label})`);
+
   codeNode(
     `validate-x-${idBase}`, `Validate X Length (${label})`,
     "const channels = $json;" + NL +
@@ -959,7 +1055,7 @@ function buildPass2RevisionRound(roundNum, prevGateIfName, prevChannelPostsSourc
       "  : '';" + NL +
       "return [{ json: { ...channels, x_length_violation: overLimit.length > 0, x_over_limit_count: overLimit.length, x_length_instruction: instruction } }];"
   );
-  connect(`Parse Revised Channels (${label})`, `Validate X Length (${label})`);
+  connect(`Carry Forward Passing Channels (${label})`, `Validate X Length (${label})`);
 
   // Un-chooses every prior version before inserting this round's - without this,
   // both the old and new versions stay chosen:true simultaneously, breaking the

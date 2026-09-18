@@ -738,6 +738,115 @@
     },
     {
       "parameters": {
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/evaluation_results?request_id=eq.{{$('Config').first().json.request_id}}&pass=eq.pass_2_channel&select=channel,content_version,overall_score",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "fetch-all-evals-round-0",
+      "name": "Fetch All Channel Evaluations (Round 0)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput",
+      "position": [
+        8340,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const evals = $input.all().map(i => i.json).filter(e => e && e.channel && typeof e.overall_score === 'number');\nconst best = {};\nfor (const e of evals) {\n  const cur = best[e.channel];\n  if (!cur || e.overall_score > cur.score) best[e.channel] = { score: e.overall_score, version: e.content_version };\n}\nconst chans = Object.keys(best);\nconst parts = chans.map(ch => 'and(channel.eq.' + ch + ',version.eq.' + best[ch].version + ')');\nconst summary = chans.map(ch => ch + ' v' + best[ch].version + ' (' + best[ch].score + ')').join(', ');\nreturn [{ json: { hasBest: parts.length > 0, orFilter: parts.length ? 'or=(' + parts.join(',') + ')' : 'version=eq.0', summary } }];"
+      },
+      "id": "pick-best-round-0",
+      "name": "Pick Best Version Per Channel (Round 0)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "onError": "continueErrorOutput",
+      "notes": "Highest score wins, ties going to the earlier version. Produces a PostgREST or=(...) filter so the choice is applied in one write.",
+      "position": [
+        8600,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/channel_posts?request_id=eq.{{$('Config').first().json.request_id}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chosen: false }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "unchoose-all-round-0",
+      "name": "Unchoose All Versions (Round 0)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        8860,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/channel_posts?request_id=eq.{{$('Config').first().json.request_id}}&{{$('Pick Best Version Per Channel (Round 0)').first().json.orFilter}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chosen: true }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "choose-best-round-0",
+      "name": "Choose Best Versions (Round 0)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        9120,
+        0
+      ]
+    },
+    {
+      "parameters": {
         "conditions": {
           "options": {
             "caseSensitive": true,
@@ -763,7 +872,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        8340,
+        9380,
         0
       ]
     },
@@ -798,7 +907,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        8600,
+        9640,
         -260
       ]
     },
@@ -833,7 +942,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        8860,
+        9900,
         -260
       ]
     },
@@ -844,13 +953,13 @@
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        9120,
+        10160,
         -260
       ]
     },
     {
       "parameters": {
-        "jsCode": "const tool = {\"name\":\"adapt_to_channels\",\"description\":\"Adapt the approved article into platform-native posts for each requested channel.\",\"input_schema\":{\"type\":\"object\",\"required\":[\"channels\"],\"properties\":{\"channels\":{\"type\":\"object\",\"properties\":{\"linkedin\":{\"type\":\"object\",\"properties\":{\"body_markdown\":{\"type\":\"string\"}}},\"x\":{\"type\":\"object\",\"properties\":{\"posts\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"1 post for a single post, 3+ for a thread\"}}},\"newsletter\":{\"type\":\"object\",\"properties\":{\"subject_line\":{\"type\":\"string\"},\"body_markdown\":{\"type\":\"string\"}}}}}}}};\nconst content = [\n  { type: 'text', text: `Adapt this approved article into platform-native posts for these channels: ${$('Build Adaptation Context').first().json.channels.join(', ')}.\\n\\nArticle title: ${$('Fetch Approved Section').first().json.title}\\nArticle body:\\n${$('Fetch Approved Section').first().json.body_markdown}\\n\\nAudience: ${$('Build Adaptation Context').first().json.audienceText}\\n\\nOnly produce a 'linkedin' key if linkedin is in the requested channels, only 'x' if x is requested, only 'newsletter' if newsletter is requested. For each requested channel, write in that channel's own real voice and format, grounded only in the article and its underlying excerpts below - no unsupported claims, and every claim must stay traceable to the same source material as the article itself:\\n${$('Build Adaptation Context').first().json.excerptsTextPlain}\\n\\nLinkedIn: PAS structure (Problem-Agitate-Solution), short paragraphs, sparing emoji, a clear CTA. Write it as plain text, NOT markdown: LinkedIn renders markdown literally, so never use '#' headings or '**' bold. The first line must be a plain sentence that works as the hook above the 'see more' fold. Tone reference (real previous posts or a described target, follow this voice):\\n${$('Build Adaptation Context').first().json.toneByChannel.linkedin || 'not requested'}\\n\\nX: hook-first, one core idea per post, line breaks over hashtags, at most 1-2 hashtags and only on the final post if threaded. The human requested '${$('Build Adaptation Context').first().json.x_thread_length}' - 'single' means exactly one post, 'mini' means roughly 3 posts, 'expansive' means roughly 5 posts. Never pad to hit a target count - if the idea genuinely doesn't need that many posts, write fewer and say nothing about it. Each individual post is HARD capped at 280 characters including spaces, and this is counted programmatically after you write it. Aim for 240-270 characters per post so there is margin: going over forces a whole revision round and caps the Channel Fit score. Count each post before you return it. Tone reference:\\n${$('Build Adaptation Context').first().json.toneByChannel.x || 'not requested'}\\n\\nNewsletter: a subject line, a 1-3 sentence intro, a skimmable body, and a closing CTA, 250-600 words total in body_markdown. Tone reference:\\n${$('Build Adaptation Context').first().json.toneByChannel.newsletter || 'not requested'}\\n\\nQuoting: when you quote someone, use single quotes around the quoted words, never double quotes. Double quotes inside these values have produced invalid JSON and lost a whole adaptation. Return channels as a real object, not as a string containing JSON.\n\nCitations: these are published posts, not the article, so never put inline [Source: ...] tags in the body. Stay just as strictly grounded in the excerpts, but carry provenance the way each platform actually does it: LinkedIn and X get at most one short closing line naming the sources in plain words (for example 'Sources: Microsoft Learn docs and indexing benchmarks, links in comments'), and the newsletter may link naturally inside the body.\\n\\nFidelity of figures, applies to every channel: carry every number, unit, percentage, date and conditional across EXACTLY as the article states it. Never compress a unit into a shorter one ('nine percentage points' is not 'nine points', and on a football post that reads as league points, which is a different claim). Never drop a qualifier or conditional to save space ('if they get there', 'according to the model', 'as of this week'). If a figure will not fit with its unit and its qualifier intact, leave the figure out entirely rather than shortening it. House style, applies to every channel: never use em dashes (the character U+2014). Use a full stop, a comma, a colon or parentheses instead. Do not state anything the excerpts do not support, and do not soften an unsupported claim with hedging language to sneak it in.`, cache_control: { type: 'ephemeral' } },\n  { type: 'text', text: `The previous attempt needs these specific changes: ${JSON.stringify($('Gate (Round 0)').first().json.perChannel)}\n\nThe requested changes are the evaluator's wording, not fact. They are advisory on style and structure, and are NOT authoritative on any figure, unit, name or date. If following one would state something the article or the excerpts do not support, ignore that part and fix the underlying point another way. Accuracy outranks every suggestion here.\n\n${$('Validate X Length').first().json.x_length_instruction || ''}` }\n];\nconst requestBody = JSON.stringify({\n  model: 'claude-sonnet-5',\n  max_tokens: 4000,\n  tools: [tool],\n  tool_choice: { type: 'tool', name: 'adapt_to_channels' },\n  messages: [{ role: 'user', content }]\n});\nreturn [{ json: { requestBody } }];"
+        "jsCode": "const tool = {\"name\":\"adapt_to_channels\",\"description\":\"Adapt the approved article into platform-native posts for each requested channel.\",\"input_schema\":{\"type\":\"object\",\"required\":[\"channels\"],\"properties\":{\"channels\":{\"type\":\"object\",\"properties\":{\"linkedin\":{\"type\":\"object\",\"properties\":{\"body_markdown\":{\"type\":\"string\"}}},\"x\":{\"type\":\"object\",\"properties\":{\"posts\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"1 post for a single post, 3+ for a thread\"}}},\"newsletter\":{\"type\":\"object\",\"properties\":{\"subject_line\":{\"type\":\"string\"},\"body_markdown\":{\"type\":\"string\"}}}}}}}};\nconst content = [\n  { type: 'text', text: `Adapt this approved article into platform-native posts for these channels: ${$('Build Adaptation Context').first().json.channels.join(', ')}.\\n\\nArticle title: ${$('Fetch Approved Section').first().json.title}\\nArticle body:\\n${$('Fetch Approved Section').first().json.body_markdown}\\n\\nAudience: ${$('Build Adaptation Context').first().json.audienceText}\\n\\nOnly produce a 'linkedin' key if linkedin is in the requested channels, only 'x' if x is requested, only 'newsletter' if newsletter is requested. For each requested channel, write in that channel's own real voice and format, grounded only in the article and its underlying excerpts below - no unsupported claims, and every claim must stay traceable to the same source material as the article itself:\\n${$('Build Adaptation Context').first().json.excerptsTextPlain}\\n\\nLinkedIn: PAS structure (Problem-Agitate-Solution), short paragraphs, sparing emoji, a clear CTA. Write it as plain text, NOT markdown: LinkedIn renders markdown literally, so never use '#' headings or '**' bold. The first line must be a plain sentence that works as the hook above the 'see more' fold. Tone reference (real previous posts or a described target, follow this voice):\\n${$('Build Adaptation Context').first().json.toneByChannel.linkedin || 'not requested'}\\n\\nX: hook-first, one core idea per post, line breaks over hashtags, at most 1-2 hashtags and only on the final post if threaded. The human requested '${$('Build Adaptation Context').first().json.x_thread_length}' - 'single' means exactly one post, 'mini' means roughly 3 posts, 'expansive' means roughly 5 posts. Never pad to hit a target count - if the idea genuinely doesn't need that many posts, write fewer and say nothing about it. Each individual post is HARD capped at 280 characters including spaces, and this is counted programmatically after you write it. Aim for 240-270 characters per post so there is margin: going over forces a whole revision round and caps the Channel Fit score. Count each post before you return it. Tone reference:\\n${$('Build Adaptation Context').first().json.toneByChannel.x || 'not requested'}\\n\\nNewsletter: a subject line, a 1-3 sentence intro, a skimmable body, and a closing CTA, 250-600 words total in body_markdown. Tone reference:\\n${$('Build Adaptation Context').first().json.toneByChannel.newsletter || 'not requested'}\\n\\nQuoting: when you quote someone, use single quotes around the quoted words, never double quotes. Double quotes inside these values have produced invalid JSON and lost a whole adaptation. Return channels as a real object, not as a string containing JSON.\n\nCitations: these are published posts, not the article, so never put inline [Source: ...] tags in the body. Stay just as strictly grounded in the excerpts, but carry provenance the way each platform actually does it: LinkedIn and X get at most one short closing line naming the sources in plain words (for example 'Sources: Microsoft Learn docs and indexing benchmarks, links in comments'), and the newsletter may link naturally inside the body.\\n\\nFidelity of figures, applies to every channel: carry every number, unit, percentage, date and conditional across EXACTLY as the article states it. Never compress a unit into a shorter one ('nine percentage points' is not 'nine points', and on a football post that reads as league points, which is a different claim). Never drop a qualifier or conditional to save space ('if they get there', 'according to the model', 'as of this week'). If a figure will not fit with its unit and its qualifier intact, leave the figure out entirely rather than shortening it. House style, applies to every channel: never use em dashes (the character U+2014). Use a full stop, a comma, a colon or parentheses instead. Do not state anything the excerpts do not support, and do not soften an unsupported claim with hedging language to sneak it in.`, cache_control: { type: 'ephemeral' } },\n  { type: 'text', text: `The previous attempt needs these specific changes: ${JSON.stringify($('Gate (Round 0)').first().json.perChannel)}\n\nOnly revise the channels whose decision is 'revise'. A channel whose decision is 'pass' has already cleared the gate: return it exactly as it was, unchanged, and spend your effort on the ones that failed. A passing channel that comes back reworded is discarded anyway.\n\nThe requested changes are the evaluator's wording, not fact. They are advisory on style and structure, and are NOT authoritative on any figure, unit, name or date. If following one would state something the article or the excerpts do not support, ignore that part and fix the underlying point another way. Accuracy outranks every suggestion here.\n\n${$('Validate X Length').first().json.x_length_instruction || ''}` }\n];\nconst requestBody = JSON.stringify({\n  model: 'claude-sonnet-5',\n  max_tokens: 4000,\n  tools: [tool],\n  tool_choice: { type: 'tool', name: 'adapt_to_channels' },\n  messages: [{ role: 'user', content }]\n});\nreturn [{ json: { requestBody } }];"
       },
       "id": "claude-revise-1-build-request",
       "name": "Claude: Revise Channels (Round 1): Build Request",
@@ -859,7 +968,7 @@
       "onError": "continueErrorOutput",
       "notes": "Full Claude request body built in real Code-node JS - n8n's {{ }} expression engine chokes on large inlined JSON tool schemas (Workflow B Error #9).",
       "position": [
-        9380,
+        10420,
         0
       ]
     },
@@ -898,7 +1007,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        9640,
+        10680,
         0
       ]
     },
@@ -912,7 +1021,7 @@
       "typeVersion": 2,
       "onError": "continueErrorOutput",
       "position": [
-        9900,
+        10940,
         -320
       ]
     },
@@ -946,7 +1055,7 @@
         }
       },
       "position": [
-        10160,
+        11200,
         -320
       ]
     },
@@ -980,7 +1089,7 @@
         }
       },
       "position": [
-        10420,
+        11460,
         -320
       ]
     },
@@ -991,7 +1100,7 @@
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        10680,
+        11720,
         -320
       ]
     },
@@ -1005,7 +1114,22 @@
       "typeVersion": 2,
       "onError": "continueErrorOutput",
       "position": [
-        10940,
+        11980,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const revised = $json;\nconst perChannel = $('Gate (Round 0)').first().json.perChannel || {};\nconst prevRows = $('Fetch Channel Posts v1').all().map(i => i.json).filter(r => r && r.channel);\nconst out = { ...revised };\nconst kept = [];\nfor (const row of prevRows) {\n  const verdict = perChannel[row.channel] && perChannel[row.channel].decision;\n  if (verdict !== 'pass') continue;\n  if (row.channel === 'linkedin') out.linkedin = { body_markdown: row.body };\n  else if (row.channel === 'x') { let posts = []; try { posts = JSON.parse(row.body); } catch { posts = []; } out.x = { posts: Array.isArray(posts) ? posts : [] }; }\n  else if (row.channel === 'newsletter') { let n = {}; try { n = JSON.parse(row.body); } catch { n = {}; } out.newsletter = { subject_line: n.subject_line || '', body_markdown: n.body_markdown || '' }; }\n  else continue;\n  kept.push(row.channel);\n}\nreturn [{ json: { ...out, carried_forward: kept } }];"
+      },
+      "id": "carry-revise-1",
+      "name": "Carry Forward Passing Channels (Round 1)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "onError": "continueErrorOutput",
+      "notes": "Discards the revision for any channel whose previous verdict was 'pass' and reuses the text it already had. Without this, one failing channel drags every passing channel through another rewrite, and the rewrite is not compared against what it replaces.",
+      "position": [
+        12240,
         0
       ]
     },
@@ -1019,7 +1143,7 @@
       "typeVersion": 2,
       "onError": "continueErrorOutput",
       "position": [
-        11200,
+        12500,
         0
       ]
     },
@@ -1054,7 +1178,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        11460,
+        12760,
         0
       ]
     },
@@ -1069,7 +1193,7 @@
       "onError": "continueErrorOutput",
       "notes": "X posts and the newsletter's subject/body pair don't fit a single plain-text `body` column cleanly, so both are stored as JSON-stringified structures in that column; the UI parses them back out by channel.",
       "position": [
-        11720,
+        13020,
         0
       ]
     },
@@ -1104,7 +1228,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        11980,
+        13280,
         0
       ]
     },
@@ -1128,7 +1252,7 @@
       "alwaysOutputData": true,
       "onError": "continueErrorOutput",
       "position": [
-        12240,
+        13540,
         0
       ]
     },
@@ -1142,7 +1266,7 @@
       "typeVersion": 2,
       "onError": "continueErrorOutput",
       "position": [
-        12500,
+        13800,
         0
       ]
     },
@@ -1157,7 +1281,7 @@
       "onError": "continueErrorOutput",
       "notes": "Full Claude request body built in real Code-node JS - n8n's {{ }} expression engine chokes on large inlined JSON tool schemas (Workflow B Error #9).",
       "position": [
-        12760,
+        14060,
         0
       ]
     },
@@ -1196,7 +1320,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        13020,
+        14320,
         0
       ]
     },
@@ -1210,7 +1334,7 @@
       "typeVersion": 2,
       "onError": "continueErrorOutput",
       "position": [
-        13280,
+        14580,
         -320
       ]
     },
@@ -1244,7 +1368,7 @@
         }
       },
       "position": [
-        13540,
+        14840,
         -320
       ]
     },
@@ -1278,7 +1402,7 @@
         }
       },
       "position": [
-        13800,
+        15100,
         -320
       ]
     },
@@ -1289,7 +1413,7 @@
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        14060,
+        15360,
         -320
       ]
     },
@@ -1303,7 +1427,7 @@
       "typeVersion": 2,
       "onError": "continueErrorOutput",
       "position": [
-        14320,
+        15620,
         0
       ]
     },
@@ -1317,7 +1441,7 @@
       "typeVersion": 2,
       "onError": "continueErrorOutput",
       "position": [
-        14580,
+        15880,
         0
       ]
     },
@@ -1352,7 +1476,116 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        14840,
+        16140,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/evaluation_results?request_id=eq.{{$('Config').first().json.request_id}}&pass=eq.pass_2_channel&select=channel,content_version,overall_score",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "fetch-all-evals-round-1",
+      "name": "Fetch All Channel Evaluations (Round 1)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput",
+      "position": [
+        16400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const evals = $input.all().map(i => i.json).filter(e => e && e.channel && typeof e.overall_score === 'number');\nconst best = {};\nfor (const e of evals) {\n  const cur = best[e.channel];\n  if (!cur || e.overall_score > cur.score) best[e.channel] = { score: e.overall_score, version: e.content_version };\n}\nconst chans = Object.keys(best);\nconst parts = chans.map(ch => 'and(channel.eq.' + ch + ',version.eq.' + best[ch].version + ')');\nconst summary = chans.map(ch => ch + ' v' + best[ch].version + ' (' + best[ch].score + ')').join(', ');\nreturn [{ json: { hasBest: parts.length > 0, orFilter: parts.length ? 'or=(' + parts.join(',') + ')' : 'version=eq.0', summary } }];"
+      },
+      "id": "pick-best-round-1",
+      "name": "Pick Best Version Per Channel (Round 1)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "onError": "continueErrorOutput",
+      "notes": "Highest score wins, ties going to the earlier version. Produces a PostgREST or=(...) filter so the choice is applied in one write.",
+      "position": [
+        16660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/channel_posts?request_id=eq.{{$('Config').first().json.request_id}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chosen: false }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "unchoose-all-round-1",
+      "name": "Unchoose All Versions (Round 1)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        16920,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/channel_posts?request_id=eq.{{$('Config').first().json.request_id}}&{{$('Pick Best Version Per Channel (Round 1)').first().json.orFilter}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chosen: true }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "choose-best-round-1",
+      "name": "Choose Best Versions (Round 1)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        17180,
         0
       ]
     },
@@ -1383,7 +1616,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        15100,
+        17440,
         0
       ]
     },
@@ -1418,7 +1651,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        15360,
+        17700,
         -260
       ]
     },
@@ -1453,7 +1686,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        15620,
+        17960,
         -260
       ]
     },
@@ -1464,13 +1697,13 @@
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        15880,
+        18220,
         -260
       ]
     },
     {
       "parameters": {
-        "jsCode": "const tool = {\"name\":\"adapt_to_channels\",\"description\":\"Adapt the approved article into platform-native posts for each requested channel.\",\"input_schema\":{\"type\":\"object\",\"required\":[\"channels\"],\"properties\":{\"channels\":{\"type\":\"object\",\"properties\":{\"linkedin\":{\"type\":\"object\",\"properties\":{\"body_markdown\":{\"type\":\"string\"}}},\"x\":{\"type\":\"object\",\"properties\":{\"posts\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"1 post for a single post, 3+ for a thread\"}}},\"newsletter\":{\"type\":\"object\",\"properties\":{\"subject_line\":{\"type\":\"string\"},\"body_markdown\":{\"type\":\"string\"}}}}}}}};\nconst content = [\n  { type: 'text', text: `Adapt this approved article into platform-native posts for these channels: ${$('Build Adaptation Context').first().json.channels.join(', ')}.\\n\\nArticle title: ${$('Fetch Approved Section').first().json.title}\\nArticle body:\\n${$('Fetch Approved Section').first().json.body_markdown}\\n\\nAudience: ${$('Build Adaptation Context').first().json.audienceText}\\n\\nOnly produce a 'linkedin' key if linkedin is in the requested channels, only 'x' if x is requested, only 'newsletter' if newsletter is requested. For each requested channel, write in that channel's own real voice and format, grounded only in the article and its underlying excerpts below - no unsupported claims, and every claim must stay traceable to the same source material as the article itself:\\n${$('Build Adaptation Context').first().json.excerptsTextPlain}\\n\\nLinkedIn: PAS structure (Problem-Agitate-Solution), short paragraphs, sparing emoji, a clear CTA. Write it as plain text, NOT markdown: LinkedIn renders markdown literally, so never use '#' headings or '**' bold. The first line must be a plain sentence that works as the hook above the 'see more' fold. Tone reference (real previous posts or a described target, follow this voice):\\n${$('Build Adaptation Context').first().json.toneByChannel.linkedin || 'not requested'}\\n\\nX: hook-first, one core idea per post, line breaks over hashtags, at most 1-2 hashtags and only on the final post if threaded. The human requested '${$('Build Adaptation Context').first().json.x_thread_length}' - 'single' means exactly one post, 'mini' means roughly 3 posts, 'expansive' means roughly 5 posts. Never pad to hit a target count - if the idea genuinely doesn't need that many posts, write fewer and say nothing about it. Each individual post is HARD capped at 280 characters including spaces, and this is counted programmatically after you write it. Aim for 240-270 characters per post so there is margin: going over forces a whole revision round and caps the Channel Fit score. Count each post before you return it. Tone reference:\\n${$('Build Adaptation Context').first().json.toneByChannel.x || 'not requested'}\\n\\nNewsletter: a subject line, a 1-3 sentence intro, a skimmable body, and a closing CTA, 250-600 words total in body_markdown. Tone reference:\\n${$('Build Adaptation Context').first().json.toneByChannel.newsletter || 'not requested'}\\n\\nQuoting: when you quote someone, use single quotes around the quoted words, never double quotes. Double quotes inside these values have produced invalid JSON and lost a whole adaptation. Return channels as a real object, not as a string containing JSON.\n\nCitations: these are published posts, not the article, so never put inline [Source: ...] tags in the body. Stay just as strictly grounded in the excerpts, but carry provenance the way each platform actually does it: LinkedIn and X get at most one short closing line naming the sources in plain words (for example 'Sources: Microsoft Learn docs and indexing benchmarks, links in comments'), and the newsletter may link naturally inside the body.\\n\\nFidelity of figures, applies to every channel: carry every number, unit, percentage, date and conditional across EXACTLY as the article states it. Never compress a unit into a shorter one ('nine percentage points' is not 'nine points', and on a football post that reads as league points, which is a different claim). Never drop a qualifier or conditional to save space ('if they get there', 'according to the model', 'as of this week'). If a figure will not fit with its unit and its qualifier intact, leave the figure out entirely rather than shortening it. House style, applies to every channel: never use em dashes (the character U+2014). Use a full stop, a comma, a colon or parentheses instead. Do not state anything the excerpts do not support, and do not soften an unsupported claim with hedging language to sneak it in.`, cache_control: { type: 'ephemeral' } },\n  { type: 'text', text: `The previous attempt needs these specific changes: ${JSON.stringify($('Gate (Round 1)').first().json.perChannel)}\n\nThe requested changes are the evaluator's wording, not fact. They are advisory on style and structure, and are NOT authoritative on any figure, unit, name or date. If following one would state something the article or the excerpts do not support, ignore that part and fix the underlying point another way. Accuracy outranks every suggestion here.\n\n${$('Validate X Length (Round 1)').first().json.x_length_instruction || ''}` }\n];\nconst requestBody = JSON.stringify({\n  model: 'claude-sonnet-5',\n  max_tokens: 4000,\n  tools: [tool],\n  tool_choice: { type: 'tool', name: 'adapt_to_channels' },\n  messages: [{ role: 'user', content }]\n});\nreturn [{ json: { requestBody } }];"
+        "jsCode": "const tool = {\"name\":\"adapt_to_channels\",\"description\":\"Adapt the approved article into platform-native posts for each requested channel.\",\"input_schema\":{\"type\":\"object\",\"required\":[\"channels\"],\"properties\":{\"channels\":{\"type\":\"object\",\"properties\":{\"linkedin\":{\"type\":\"object\",\"properties\":{\"body_markdown\":{\"type\":\"string\"}}},\"x\":{\"type\":\"object\",\"properties\":{\"posts\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"1 post for a single post, 3+ for a thread\"}}},\"newsletter\":{\"type\":\"object\",\"properties\":{\"subject_line\":{\"type\":\"string\"},\"body_markdown\":{\"type\":\"string\"}}}}}}}};\nconst content = [\n  { type: 'text', text: `Adapt this approved article into platform-native posts for these channels: ${$('Build Adaptation Context').first().json.channels.join(', ')}.\\n\\nArticle title: ${$('Fetch Approved Section').first().json.title}\\nArticle body:\\n${$('Fetch Approved Section').first().json.body_markdown}\\n\\nAudience: ${$('Build Adaptation Context').first().json.audienceText}\\n\\nOnly produce a 'linkedin' key if linkedin is in the requested channels, only 'x' if x is requested, only 'newsletter' if newsletter is requested. For each requested channel, write in that channel's own real voice and format, grounded only in the article and its underlying excerpts below - no unsupported claims, and every claim must stay traceable to the same source material as the article itself:\\n${$('Build Adaptation Context').first().json.excerptsTextPlain}\\n\\nLinkedIn: PAS structure (Problem-Agitate-Solution), short paragraphs, sparing emoji, a clear CTA. Write it as plain text, NOT markdown: LinkedIn renders markdown literally, so never use '#' headings or '**' bold. The first line must be a plain sentence that works as the hook above the 'see more' fold. Tone reference (real previous posts or a described target, follow this voice):\\n${$('Build Adaptation Context').first().json.toneByChannel.linkedin || 'not requested'}\\n\\nX: hook-first, one core idea per post, line breaks over hashtags, at most 1-2 hashtags and only on the final post if threaded. The human requested '${$('Build Adaptation Context').first().json.x_thread_length}' - 'single' means exactly one post, 'mini' means roughly 3 posts, 'expansive' means roughly 5 posts. Never pad to hit a target count - if the idea genuinely doesn't need that many posts, write fewer and say nothing about it. Each individual post is HARD capped at 280 characters including spaces, and this is counted programmatically after you write it. Aim for 240-270 characters per post so there is margin: going over forces a whole revision round and caps the Channel Fit score. Count each post before you return it. Tone reference:\\n${$('Build Adaptation Context').first().json.toneByChannel.x || 'not requested'}\\n\\nNewsletter: a subject line, a 1-3 sentence intro, a skimmable body, and a closing CTA, 250-600 words total in body_markdown. Tone reference:\\n${$('Build Adaptation Context').first().json.toneByChannel.newsletter || 'not requested'}\\n\\nQuoting: when you quote someone, use single quotes around the quoted words, never double quotes. Double quotes inside these values have produced invalid JSON and lost a whole adaptation. Return channels as a real object, not as a string containing JSON.\n\nCitations: these are published posts, not the article, so never put inline [Source: ...] tags in the body. Stay just as strictly grounded in the excerpts, but carry provenance the way each platform actually does it: LinkedIn and X get at most one short closing line naming the sources in plain words (for example 'Sources: Microsoft Learn docs and indexing benchmarks, links in comments'), and the newsletter may link naturally inside the body.\\n\\nFidelity of figures, applies to every channel: carry every number, unit, percentage, date and conditional across EXACTLY as the article states it. Never compress a unit into a shorter one ('nine percentage points' is not 'nine points', and on a football post that reads as league points, which is a different claim). Never drop a qualifier or conditional to save space ('if they get there', 'according to the model', 'as of this week'). If a figure will not fit with its unit and its qualifier intact, leave the figure out entirely rather than shortening it. House style, applies to every channel: never use em dashes (the character U+2014). Use a full stop, a comma, a colon or parentheses instead. Do not state anything the excerpts do not support, and do not soften an unsupported claim with hedging language to sneak it in.`, cache_control: { type: 'ephemeral' } },\n  { type: 'text', text: `The previous attempt needs these specific changes: ${JSON.stringify($('Gate (Round 1)').first().json.perChannel)}\n\nOnly revise the channels whose decision is 'revise'. A channel whose decision is 'pass' has already cleared the gate: return it exactly as it was, unchanged, and spend your effort on the ones that failed. A passing channel that comes back reworded is discarded anyway.\n\nThe requested changes are the evaluator's wording, not fact. They are advisory on style and structure, and are NOT authoritative on any figure, unit, name or date. If following one would state something the article or the excerpts do not support, ignore that part and fix the underlying point another way. Accuracy outranks every suggestion here.\n\n${$('Validate X Length (Round 1)').first().json.x_length_instruction || ''}` }\n];\nconst requestBody = JSON.stringify({\n  model: 'claude-sonnet-5',\n  max_tokens: 4000,\n  tools: [tool],\n  tool_choice: { type: 'tool', name: 'adapt_to_channels' },\n  messages: [{ role: 'user', content }]\n});\nreturn [{ json: { requestBody } }];"
       },
       "id": "claude-revise-2-build-request",
       "name": "Claude: Revise Channels (Round 2): Build Request",
@@ -1479,7 +1712,7 @@
       "onError": "continueErrorOutput",
       "notes": "Full Claude request body built in real Code-node JS - n8n's {{ }} expression engine chokes on large inlined JSON tool schemas (Workflow B Error #9).",
       "position": [
-        16140,
+        18480,
         0
       ]
     },
@@ -1518,7 +1751,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        16400,
+        18740,
         0
       ]
     },
@@ -1532,7 +1765,7 @@
       "typeVersion": 2,
       "onError": "continueErrorOutput",
       "position": [
-        16660,
+        19000,
         -320
       ]
     },
@@ -1566,7 +1799,7 @@
         }
       },
       "position": [
-        16920,
+        19260,
         -320
       ]
     },
@@ -1600,7 +1833,7 @@
         }
       },
       "position": [
-        17180,
+        19520,
         -320
       ]
     },
@@ -1611,7 +1844,7 @@
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        17440,
+        19780,
         -320
       ]
     },
@@ -1625,7 +1858,22 @@
       "typeVersion": 2,
       "onError": "continueErrorOutput",
       "position": [
-        17700,
+        20040,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const revised = $json;\nconst perChannel = $('Gate (Round 1)').first().json.perChannel || {};\nconst prevRows = $('Fetch Channel Posts v2').all().map(i => i.json).filter(r => r && r.channel);\nconst out = { ...revised };\nconst kept = [];\nfor (const row of prevRows) {\n  const verdict = perChannel[row.channel] && perChannel[row.channel].decision;\n  if (verdict !== 'pass') continue;\n  if (row.channel === 'linkedin') out.linkedin = { body_markdown: row.body };\n  else if (row.channel === 'x') { let posts = []; try { posts = JSON.parse(row.body); } catch { posts = []; } out.x = { posts: Array.isArray(posts) ? posts : [] }; }\n  else if (row.channel === 'newsletter') { let n = {}; try { n = JSON.parse(row.body); } catch { n = {}; } out.newsletter = { subject_line: n.subject_line || '', body_markdown: n.body_markdown || '' }; }\n  else continue;\n  kept.push(row.channel);\n}\nreturn [{ json: { ...out, carried_forward: kept } }];"
+      },
+      "id": "carry-revise-2",
+      "name": "Carry Forward Passing Channels (Round 2)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "onError": "continueErrorOutput",
+      "notes": "Discards the revision for any channel whose previous verdict was 'pass' and reuses the text it already had. Without this, one failing channel drags every passing channel through another rewrite, and the rewrite is not compared against what it replaces.",
+      "position": [
+        20300,
         0
       ]
     },
@@ -1639,7 +1887,7 @@
       "typeVersion": 2,
       "onError": "continueErrorOutput",
       "position": [
-        17960,
+        20560,
         0
       ]
     },
@@ -1674,7 +1922,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        18220,
+        20820,
         0
       ]
     },
@@ -1689,7 +1937,7 @@
       "onError": "continueErrorOutput",
       "notes": "X posts and the newsletter's subject/body pair don't fit a single plain-text `body` column cleanly, so both are stored as JSON-stringified structures in that column; the UI parses them back out by channel.",
       "position": [
-        18480,
+        21080,
         0
       ]
     },
@@ -1724,7 +1972,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        18740,
+        21340,
         0
       ]
     },
@@ -1748,7 +1996,7 @@
       "alwaysOutputData": true,
       "onError": "continueErrorOutput",
       "position": [
-        19000,
+        21600,
         0
       ]
     },
@@ -1762,7 +2010,7 @@
       "typeVersion": 2,
       "onError": "continueErrorOutput",
       "position": [
-        19260,
+        21860,
         0
       ]
     },
@@ -1777,7 +2025,7 @@
       "onError": "continueErrorOutput",
       "notes": "Full Claude request body built in real Code-node JS - n8n's {{ }} expression engine chokes on large inlined JSON tool schemas (Workflow B Error #9).",
       "position": [
-        19520,
+        22120,
         0
       ]
     },
@@ -1816,7 +2064,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        19780,
+        22380,
         0
       ]
     },
@@ -1830,7 +2078,7 @@
       "typeVersion": 2,
       "onError": "continueErrorOutput",
       "position": [
-        20040,
+        22640,
         -320
       ]
     },
@@ -1864,7 +2112,7 @@
         }
       },
       "position": [
-        20300,
+        22900,
         -320
       ]
     },
@@ -1898,7 +2146,7 @@
         }
       },
       "position": [
-        20560,
+        23160,
         -320
       ]
     },
@@ -1909,7 +2157,7 @@
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        20820,
+        23420,
         -320
       ]
     },
@@ -1923,7 +2171,7 @@
       "typeVersion": 2,
       "onError": "continueErrorOutput",
       "position": [
-        21080,
+        23680,
         0
       ]
     },
@@ -1937,7 +2185,7 @@
       "typeVersion": 2,
       "onError": "continueErrorOutput",
       "position": [
-        21340,
+        23940,
         0
       ]
     },
@@ -1972,7 +2220,116 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        21600,
+        24200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/evaluation_results?request_id=eq.{{$('Config').first().json.request_id}}&pass=eq.pass_2_channel&select=channel,content_version,overall_score",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "fetch-all-evals-round-2",
+      "name": "Fetch All Channel Evaluations (Round 2)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput",
+      "position": [
+        24460,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const evals = $input.all().map(i => i.json).filter(e => e && e.channel && typeof e.overall_score === 'number');\nconst best = {};\nfor (const e of evals) {\n  const cur = best[e.channel];\n  if (!cur || e.overall_score > cur.score) best[e.channel] = { score: e.overall_score, version: e.content_version };\n}\nconst chans = Object.keys(best);\nconst parts = chans.map(ch => 'and(channel.eq.' + ch + ',version.eq.' + best[ch].version + ')');\nconst summary = chans.map(ch => ch + ' v' + best[ch].version + ' (' + best[ch].score + ')').join(', ');\nreturn [{ json: { hasBest: parts.length > 0, orFilter: parts.length ? 'or=(' + parts.join(',') + ')' : 'version=eq.0', summary } }];"
+      },
+      "id": "pick-best-round-2",
+      "name": "Pick Best Version Per Channel (Round 2)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "onError": "continueErrorOutput",
+      "notes": "Highest score wins, ties going to the earlier version. Produces a PostgREST or=(...) filter so the choice is applied in one write.",
+      "position": [
+        24720,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/channel_posts?request_id=eq.{{$('Config').first().json.request_id}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chosen: false }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "unchoose-all-round-2",
+      "name": "Unchoose All Versions (Round 2)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        24980,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/channel_posts?request_id=eq.{{$('Config').first().json.request_id}}&{{$('Pick Best Version Per Channel (Round 2)').first().json.orFilter}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chosen: true }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "choose-best-round-2",
+      "name": "Choose Best Versions (Round 2)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        25240,
         0
       ]
     },
@@ -2003,7 +2360,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        21860,
+        25500,
         0
       ]
     },
@@ -2038,7 +2395,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        22120,
+        25760,
         -260
       ]
     },
@@ -2073,7 +2430,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        22380,
+        26020,
         -260
       ]
     },
@@ -2084,7 +2441,7 @@
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        22640,
+        26280,
         -260
       ]
     },
@@ -2119,7 +2476,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        22900,
+        26540,
         260
       ]
     },
@@ -2154,7 +2511,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        23160,
+        26800,
         260
       ]
     },
@@ -2165,7 +2522,7 @@
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        23420,
+        27060,
         260
       ]
     }
@@ -2641,6 +2998,78 @@
       "main": [
         [
           {
+            "node": "Fetch All Channel Evaluations (Round 0)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch All Channel Evaluations (Round 0)": {
+      "main": [
+        [
+          {
+            "node": "Pick Best Version Per Channel (Round 0)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick Best Version Per Channel (Round 0)": {
+      "main": [
+        [
+          {
+            "node": "Unchoose All Versions (Round 0)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unchoose All Versions (Round 0)": {
+      "main": [
+        [
+          {
+            "node": "Choose Best Versions (Round 0)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Choose Best Versions (Round 0)": {
+      "main": [
+        [
+          {
             "node": "IF All Pass (Round 0)",
             "type": "main",
             "index": 0
@@ -2786,6 +3215,24 @@
       ]
     },
     "Parse Revised Channels (Round 1)": {
+      "main": [
+        [
+          {
+            "node": "Carry Forward Passing Channels (Round 1)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Carry Forward Passing Channels (Round 1)": {
       "main": [
         [
           {
@@ -3027,6 +3474,78 @@
       "main": [
         [
           {
+            "node": "Fetch All Channel Evaluations (Round 1)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch All Channel Evaluations (Round 1)": {
+      "main": [
+        [
+          {
+            "node": "Pick Best Version Per Channel (Round 1)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick Best Version Per Channel (Round 1)": {
+      "main": [
+        [
+          {
+            "node": "Unchoose All Versions (Round 1)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unchoose All Versions (Round 1)": {
+      "main": [
+        [
+          {
+            "node": "Choose Best Versions (Round 1)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Choose Best Versions (Round 1)": {
+      "main": [
+        [
+          {
             "node": "IF All Pass (Round 1)",
             "type": "main",
             "index": 0
@@ -3172,6 +3691,24 @@
       ]
     },
     "Parse Revised Channels (Round 2)": {
+      "main": [
+        [
+          {
+            "node": "Carry Forward Passing Channels (Round 2)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Carry Forward Passing Channels (Round 2)": {
       "main": [
         [
           {
@@ -3410,6 +3947,78 @@
       ]
     },
     "Insert Evaluations (Round 2)": {
+      "main": [
+        [
+          {
+            "node": "Fetch All Channel Evaluations (Round 2)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch All Channel Evaluations (Round 2)": {
+      "main": [
+        [
+          {
+            "node": "Pick Best Version Per Channel (Round 2)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick Best Version Per Channel (Round 2)": {
+      "main": [
+        [
+          {
+            "node": "Unchoose All Versions (Round 2)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unchoose All Versions (Round 2)": {
+      "main": [
+        [
+          {
+            "node": "Choose Best Versions (Round 2)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Choose Best Versions (Round 2)": {
       "main": [
         [
           {
