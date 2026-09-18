@@ -8,8 +8,6 @@ import { parseXPosts, parseNewsletter, CHANNEL_LABELS, floorForPass2Criterion } 
 import EditChannelPostForm from "./edit-channel-post-form";
 import ReviseWithSuggestionsButton from "./revise-with-suggestions-button";
 import ImageSuggestion, { type StoredImageSuggestion } from "./image-suggestion";
-import GenerateAlternateToneButton from "./generate-alternate-tone-button";
-import SelectToneVariantButton from "./select-tone-variant-button";
 
 type EvalResult = {
   overall_score: number;
@@ -65,18 +63,12 @@ function ChannelPreview({ channel, body }: { channel: string; body: string }) {
   return <LinkedInPreview body={body} />;
 }
 
-type AlternateVariant = {
-  version: number;
-  body: string;
-  evaluation: EvalResult | undefined;
-};
 
 export default function ChannelPostCard({
   requestId,
   channel,
   body,
   evaluation,
-  alternate,
   isOwner,
   imageSuggestion,
 }: {
@@ -86,7 +78,6 @@ export default function ChannelPostCard({
   /** Null until someone asks. Newsletter never has one: it is sent as plain text. */
   imageSuggestion?: StoredImageSuggestion;
   evaluation: EvalResult | undefined;
-  alternate?: AlternateVariant;
   /** Reviewers see the post and its scores, never the controls. */
   isOwner: boolean;
 }) {
@@ -159,40 +150,6 @@ export default function ChannelPostCard({
         />
       )}
 
-      {isOwner && !editing && (
-        <div className="mt-4 border-t border-border pt-4">
-          {alternate ? (
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-                Alternate tone (pending)
-              </p>
-              <div className="mt-2">
-                <ChannelPreview channel={channel} body={alternate.body} />
-              </div>
-              {alternate.evaluation && (
-                <div className="mt-3 flex items-center gap-3">
-                  <span className="text-sm font-semibold">{alternate.evaluation.overall_score}/100</span>
-                  {alternate.evaluation.hard_block_triggered && (
-                    <span className="text-sm text-danger">
-                      Hard block: {alternate.evaluation.hard_block_reason ?? "a critical criterion failed."}
-                    </span>
-                  )}
-                </div>
-              )}
-              <div className="mt-3">
-                <SelectToneVariantButton
-                  requestId={requestId}
-                  channel={channel}
-                  version={alternate.version}
-                  label="Use this instead"
-                />
-              </div>
-            </div>
-          ) : (
-            <GenerateAlternateToneButton requestId={requestId} channel={channel} />
-          )}
-        </div>
-      )}
     </Card>
   );
 }

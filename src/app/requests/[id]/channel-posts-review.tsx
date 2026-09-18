@@ -80,22 +80,6 @@ export default function ChannelPostsReview({
     if (post && ev.content_version === post.version) evalByChannel.set(ev.channel, ev);
   }
 
-  // A not-yet-chosen row at a higher version than the current chosen one is a
-  // pending alternate tone awaiting a human pick (see generate-alternate-tone/
-  // select-tone-variant routes) - at most one per channel by construction.
-  const alternateByChannel = new Map<string, ChannelPost>();
-  for (const post of channelPosts) {
-    if (post.chosen) continue;
-    const chosen = latestByChannel.get(post.channel);
-    if (chosen && post.version > chosen.version) alternateByChannel.set(post.channel, post);
-  }
-  const alternateEvalByChannel = new Map<string, EvalResult>();
-  for (const ev of evaluations) {
-    if (!ev.channel) continue;
-    const alt = alternateByChannel.get(ev.channel);
-    if (alt && ev.content_version === alt.version) alternateEvalByChannel.set(ev.channel, ev);
-  }
-
   // The generic needs_human_attention banner (with the why/action explanation) is
   // already rendered by page.tsx for every stage, including this one - only the
   // Reject action itself lives here, scoped to the channel-review section.
@@ -114,7 +98,6 @@ export default function ChannelPostsReview({
   if (channelOnly) {
     const post = latestByChannel.get(channelOnly);
     if (!post) return null;
-    const alt = alternateByChannel.get(channelOnly);
     return (
       <ChannelPostCard
         requestId={requestId}
@@ -123,11 +106,6 @@ export default function ChannelPostsReview({
         evaluation={evalByChannel.get(post.channel)}
         isOwner={isOwner}
         imageSuggestion={post.image_suggestion ?? null}
-        alternate={
-          alt
-            ? { version: alt.version, body: alt.body, evaluation: alternateEvalByChannel.get(post.channel) }
-            : undefined
-        }
       />
     );
   }

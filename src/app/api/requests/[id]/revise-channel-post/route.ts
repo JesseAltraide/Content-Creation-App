@@ -16,9 +16,8 @@ import { getClaude, GENERATION_MODEL, EVALUATION_MODEL } from "@/lib/claude";
 // Fit score. The suggestions are already specific and already stored; this applies
 // them automatically instead.
 //
-// Called directly from Next.js rather than as another n8n workflow, for the same
-// reason as generate-alternate-tone: one generation plus one evaluation, no
-// orchestration, and no reimport cycle.
+// Called directly from Next.js rather than as another n8n workflow: one generation
+// plus one evaluation, no orchestration, and no reimport cycle.
 const bodySchema = z.object({
   channel: z.enum(["linkedin", "x", "newsletter"]),
   /** Optional extra steer from the human, on top of the evaluator's suggestions. */
@@ -201,7 +200,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   // Check-then-act above: two quick clicks can both pass it and both run a full
   // generation plus evaluation before either inserts. Same event-log debounce the
-  // alternate-tone route uses, since there is no status change to guard on here.
+  // debounce used elsewhere, since there is no status change to guard on here.
   if (await firedRecently(requestId, ["channel_revision"], 60_000)) {
     return NextResponse.json(
       { error: "A revision for this request was just run. Give it a moment." },
@@ -352,7 +351,7 @@ Fidelity of figures: carry every number, unit, percentage, date and conditional 
   const hardBlock = !!evalInput.hard_block_triggered || (!!factualCriterion && factualCriterion.score < 15);
 
   // A revision that contradicts the sources is worse than the failing draft it would
-  // replace, so it is never saved. Same rule the alternate-tone route applies.
+  // replace, so it is never saved.
   if (hardBlock) {
     await logEvent({
       requestId,
