@@ -18,19 +18,28 @@ export default function ReviseWithSuggestionsButton({
   const [note, setNote] = useState("");
   const [showNote, setShowNote] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** The route discarded a lower-scoring rewrite, as opposed to genuinely failing. */
+  const [keptExisting, setKeptExisting] = useState(false);
   const [result, setResult] = useState<{ previousScore: number | null; score: number; status: string } | null>(null);
 
   async function handleRevise() {
     setSubmitting(true);
     setError(null);
     setResult(null);
+    setKeptExisting(false);
     try {
       const res = await fetch(`/api/requests/${requestId}/revise-channel-post`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ channel, ...(note.trim() ? { note: note.trim() } : {}) }),
       });
-      let payload: { error?: string; previousScore?: number | null; score?: number; status?: string } = {};
+      let payload: {
+        error?: string;
+        previousScore?: number | null;
+        score?: number;
+        status?: string;
+        keptExisting?: boolean;
+      } = {};
       try {
         payload = await res.json();
       } catch {
@@ -39,6 +48,7 @@ export default function ReviseWithSuggestionsButton({
       }
       if (!res.ok) {
         setError(payload.error ?? `Revision failed (${res.status}).`);
+        setKeptExisting(payload.keptExisting === true);
         setConfirming(false);
         return;
       }
@@ -48,7 +58,6 @@ export default function ReviseWithSuggestionsButton({
         status: payload.status ?? "revise",
       });
       setConfirming(false);
-      window.location.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
@@ -121,14 +130,39 @@ export default function ReviseWithSuggestionsButton({
         minute. Your current version is kept if the rewrite contradicts the sources.
       </p>
 
+      {/* The outcome stays on screen rather than the page reloading straight past it:
+          the number on its own does not answer the question people actually have,
+          which is which version will be the one that goes out. */}
       {result && (
-        <p className="mt-2 text-xs font-medium text-foreground">
-          {result.previousScore !== null
-            ? `Rescored ${result.previousScore}/100 to ${result.score}/100 (${result.status}).`
-            : `Rescored ${result.score}/100 (${result.status}).`}
-        </p>
+        <div className="mt-3 rounded-lg bg-success-soft p-3">
+          <p className="text-sm font-medium text-success">
+            {result.previousScore !== null
+              ? `Rescored ${result.previousScore}/100 to ${result.score}/100 (${result.status}).`
+              : `Scored ${result.score}/100 (${result.status}).`}
+          </p>
+          <p className="mt-1 text-xs text-success/90">
+            This rewrite scored at least as well as the version it replaced, so it is now the
+            one up for scheduling. The highest-scoring version is always the one that goes out:
+            had it come back lower, your previous post would have been kept instead.
+          </p>
+          <div className="mt-2">
+            <Button variant="secondary" onClick={() => window.location.reload()}>
+              Show the updated post
+            </Button>
+          </div>
+        </div>
       )}
-      {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+      {error && (
+        <div className="mt-3 rounded-lg bg-warning-soft p-3">
+          <p className="text-sm text-warning">{error}</p>
+          {keptExisting && (
+            <p className="mt-1 text-xs text-warning/90">
+              Nothing changed: the higher-scoring version you already had is still the one up for
+              scheduling.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

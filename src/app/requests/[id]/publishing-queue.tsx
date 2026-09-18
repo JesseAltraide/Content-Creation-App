@@ -124,6 +124,18 @@ export default function PublishingQueue({
             .filter((c) => c && typeof c.score === "number" && typeof c.max === "number" && c.max > 0)
             .sort((a, b) => a.score / a.max - b.score / b.max)
             .slice(0, 2);
+          // A manual edit is the author's own intent, so it is never overridden the way a
+          // lower-scoring automated rewrite is: Workflow E saves what they wrote and
+          // re-scores it. But it can still end up shipping a post that scores worse than
+          // one they already had, without anyone mentioning it. So the fact is surfaced
+          // here, at the point of scheduling, and the decision stays theirs.
+          const bestForChannel = evaluations
+            .filter((e) => e.channel === channel && typeof e.overall_score === "number")
+            .reduce<number | null>((best, e) => (best === null || e.overall_score! > best ? e.overall_score! : best), null);
+          const currentScore = evalForPost?.overall_score ?? null;
+          const betterExisted =
+            currentScore !== null && bestForChannel !== null && bestForChannel > currentScore;
+
           const suggestions = asList<string>(evalForPost?.weakest_criteria_suggestions).filter(
             (s): s is string => typeof s === "string" && s.trim().length > 0
           );
@@ -192,6 +204,15 @@ export default function PublishingQueue({
                   subscriberCount={subscriberCount}
                   scheduledFor={latestForChannel?.scheduled_for ?? null}
                 />
+              )}
+
+              {post && betterExisted && (
+                <p className="mt-2 rounded-lg bg-warning-soft px-3 py-2 text-xs text-warning">
+                  An earlier version of this post scored {bestForChannel}/100, higher than the{" "}
+                  {currentScore}/100 you are about to schedule. That is expected after a manual
+                  edit, which is kept as written rather than being judged against the old score.
+                  Worth a look if the edit was not deliberate.
+                </p>
               )}
 
               {post && evalForPost?.status !== "pass" && (
