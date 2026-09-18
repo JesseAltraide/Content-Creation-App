@@ -3,8 +3,16 @@ import { Card } from "@/components/ui/card";
 import NewProfileForm from "./new-profile-form";
 import DeleteProfileButton from "./delete-profile-button";
 import SettingsNav from "../settings-nav";
+import { getManagerState } from "@/lib/content-manager";
+import { createClient as createUserClient } from "@/lib/supabase/server";
 
 export default async function AudienceProfilesPage() {
+
+  const userClient = await createUserClient();
+  const {
+    data: { user },
+  } = await userClient.auth.getUser();
+  const manager = await getManagerState(user!.id);
   const supabase = await createClient();
   const { data: profiles } = await supabase
     .from("audience_profiles")
@@ -22,7 +30,16 @@ export default async function AudienceProfilesPage() {
         them.
       </p>
 
-      <NewProfileForm />
+      {manager.canEditSettings && (<NewProfileForm />)}
+      {!manager.canEditSettings && (
+        <Card className="mt-4 p-4">
+          <p className="text-sm text-muted">
+            Read only. These settings define what every draft is written and graded against,
+            so only the content manager can change them.
+          </p>
+        </Card>
+      )}
+
 
       <section className="mt-8">
         <h2 className="text-sm font-semibold text-muted">

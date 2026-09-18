@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getManagerState, announceSettingsChange } from "@/lib/content-manager";
 
 // Newsletter delivery assumes an existing subscriber base this project doesn't
 // have (week4-full-flow.md line 293) - this import mechanism exists specifically
@@ -18,6 +19,16 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+  }
+
+  // Settings belong to the content manager (migration 009). Enforced here, not just
+  // hidden in the UI: these define what the evaluator grades every draft against.
+  const manager = await getManagerState(user.id);
+  if (!manager.canEditSettings) {
+    return NextResponse.json(
+      { error: "Only the content manager can change workspace settings." },
+      { status: 403 }
+    );
   }
 
   const body = await request.json();
@@ -47,6 +58,13 @@ export async function POST(request: Request) {
   if (error) {
     return NextResponse.json({ error: "Couldn't import subscribers. Try again." }, { status: 500 });
   }
+
+  await announceSettingsChange({
+    kind: "subscribers",
+    summary: `${uniqueEmails.length} newsletter subscriber(s) were imported.`,
+    authorUserId: user.id,
+    authorEmail: user.email,
+  });
 
   return NextResponse.json({ ok: true, imported: uniqueEmails.length });
 }

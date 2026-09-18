@@ -1,10 +1,18 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/card";
 import SettingsNav from "../settings-nav";
+import { getManagerState } from "@/lib/content-manager";
+import { createClient as createUserClient } from "@/lib/supabase/server";
 import ImportSubscribersForm from "./import-subscribers-form";
 import RemoveSubscriberButton from "./remove-subscriber-button";
 
 export default async function NewsletterSubscribersPage() {
+
+  const userClient = await createUserClient();
+  const {
+    data: { user },
+  } = await userClient.auth.getUser();
+  const manager = await getManagerState(user!.id);
   const supabase = await createClient();
   const { data: subscribers } = await supabase
     .from("newsletter_subscribers")
@@ -24,7 +32,16 @@ export default async function NewsletterSubscribersPage() {
         real newsletter delivery against them, same as a production deployment would already have.
       </p>
 
-      <ImportSubscribersForm />
+      {manager.canEditSettings && (<ImportSubscribersForm />)}
+      {!manager.canEditSettings && (
+        <Card className="mt-4 p-4">
+          <p className="text-sm text-muted">
+            Read only. These settings define what every draft is written and graded against,
+            so only the content manager can change them.
+          </p>
+        </Card>
+      )}
+
 
       <section className="mt-8">
         <h2 className="text-sm font-semibold text-muted">
