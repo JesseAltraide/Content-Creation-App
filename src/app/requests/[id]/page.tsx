@@ -115,16 +115,33 @@ export default async function RequestDetailPage({
     ? await supabase.from("scheduled_content").select("*").in("channel_post_id", channelPostIds)
     : { data: [] };
 
-  // A tone or audience change does not re-score anything, so the publishing queue
-  // flags evaluations that predate the most recent one rather than letting a stale
-  // pass look current.
+  // Tone ONLY, deliberately, even though audience changes are also announced.
+  // The two behave differently: tone samples are workspace-level and fetched fresh
+  // at generation time, so a queued post really can have been written against a
+  // voice that no longer exists. A request's audience is pinned on the row
+  // (resolved_audience_profile_id) and cannot change underneath it: profiles can
+  // only be created or deleted, never edited, and one that any request references
+  // cannot be deleted at all because the foreign key refuses. So flagging a queued
+  // post because some OTHER profile was added would be a false alarm. If profile
+  // editing is ever added, that stops being true and audience belongs here too.
   const { data: brandChanges } = await supabase
     .from("settings_announcements")
     .select("created_at")
-    .in("kind", ["tone", "audience"])
+    .in("kind", ["tone"])
     .order("created_at", { ascending: false })
     .limit(1);
   const brandChangedAt = brandChanges?.[0]?.created_at ?? null;
+
+  // The audience this request was written and graded against, shown so the human
+  // can judge it against current intent. More useful than a "something changed"
+  // alert, because this value is pinned and cannot drift.
+  const { data: resolvedAudience } = req.resolved_audience_profile_id
+    ? await supabase
+        .from("audience_profiles")
+        .select("name")
+        .eq("id", req.resolved_audience_profile_id)
+        .maybeSingle()
+    : { data: null };
 
   const sourceUrlsById = Object.fromEntries((sources ?? []).map((s) => [s.id, s.url]));
 
@@ -231,6 +248,8 @@ export default async function RequestDetailPage({
         <dd className="text-right">{req.input_path === "raw_idea" ? "Raw idea" : "Source URL"}</dd>
         <dt className="text-muted">Primary keyword</dt>
         <dd className="text-right">{req.primary_keyword}</dd>
+        <dt className="text-muted">Audience</dt>
+        <dd className="text-right">{resolvedAudience?.name ?? "Not resolved yet"}</dd>
         <dt className="text-muted">Channels</dt>
         <dd className="text-right">{req.channels.join(", ")}</dd>
       </Card>

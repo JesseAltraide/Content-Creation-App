@@ -130,9 +130,9 @@ export default function PublishingQueue({
 
               {post && eligible && evaluatedBeforeBrandChange && (
                 <p className="mt-2 text-xs text-warning">
-                  The audience or tone changed after this was scored, so its evaluation was
-                  measured against the old brief. It can still be scheduled. Edit it to trigger a
-                  fresh evaluation if you want it re-checked.
+                  The tone samples changed after this was scored, so its Tone score was measured
+                  against a voice the workspace no longer uses. It can still be scheduled. Edit it
+                  to trigger a fresh evaluation if you want it re-checked.
                 </p>
               )}
 
