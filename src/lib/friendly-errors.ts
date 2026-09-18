@@ -9,6 +9,11 @@ const STAGE_MESSAGES: Record<string, string> = {
   evaluation: "Evaluating the draft failed. Pick the angle again to retry.",
   revision: "Revising the draft failed. Pick the angle again to retry.",
   channel_adaptation: "Adapting to channels failed. Retry adaptation below.",
+  // Trigger-stage failures: the workflow never started, so nothing was generated and
+  // the request has already been reverted to where it was (see pingWebhook's revert).
+  generate_and_evaluate_trigger: "Couldn't start generating. Pick the angle again to retry.",
+  adapt_and_evaluate_trigger: "Couldn't start channel adaptation. Retry adaptation below.",
+  regenerate_trigger: "Couldn't start regenerating. Try again.",
 };
 
 export function friendlyStageMessage(stage: string): string {

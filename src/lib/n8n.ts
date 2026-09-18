@@ -1,8 +1,49 @@
 import { logEvent } from "@/lib/events";
+import { createAdminClient } from "@/lib/supabase/admin";
 
-async function pingWebhook(path: string, body: Record<string, unknown>, requestId: string, stage: string) {
+// Every trigger below sets a "working" status on the request first, then fires the
+// webhook from after(). Each workflow has its own failure handler that reverts that
+// status - but those only run if n8n actually receives the call. When the trigger
+// itself fails (n8n down, a 500 before the workflow starts), nothing reverted and
+// the request was stranded in a working status with no recovery UI at all. Caught
+// live: a wf-b 500 left a request at 'generating' forever with no retry offered.
+// This is the client-side mirror of each workflow's own revert.
+type Revert = {
+  /** Only revert from the exact status this trigger set - never clobber a state something else moved on to. */
+  from: string;
+  to: string;
+  /** Match Workflow B's handler, which also releases the angle so it can be re-picked. */
+  unchooseAngles?: boolean;
+};
+
+async function revertOnTriggerFailure(requestId: string, revert: Revert | undefined) {
+  if (!revert) return;
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("requests")
+    .update({ status: revert.to })
+    .eq("id", requestId)
+    .eq("status", revert.from)
+    .select()
+    .maybeSingle();
+
+  // Only touch the angle if the status revert actually applied - if it didn't, the
+  // request moved on under us and its angle is none of our business.
+  if (data && revert.unchooseAngles) {
+    await admin.from("angles").update({ chosen: false }).eq("request_id", requestId);
+  }
+}
+
+async function pingWebhook(
+  path: string,
+  body: Record<string, unknown>,
+  requestId: string,
+  stage: string,
+  revert?: Revert
+) {
   const base = process.env.N8N_BASE_URL;
   if (!base) {
+    await revertOnTriggerFailure(requestId, revert);
     await logEvent({
       requestId,
       stage,
@@ -19,14 +60,16 @@ async function pingWebhook(path: string, body: Record<string, unknown>, requestI
       body: JSON.stringify(body),
     });
     if (!res.ok) {
+      await revertOnTriggerFailure(requestId, revert);
       await logEvent({
         requestId,
         stage,
         status: "failed",
-        detail: `n8n webhook ${path} responded ${res.status}.`,
+        detail: `n8n webhook ${path} responded ${res.status}. Nothing was generated, so it's safe to try again.`,
       });
     }
   } catch (err) {
+    await revertOnTriggerFailure(requestId, revert);
     await logEvent({
       requestId,
       stage,
@@ -93,7 +136,10 @@ export function triggerGenerateAndEvaluate(requestId: string, angleId: string) {
     "wf-b-generate-evaluate",
     { request_id: requestId, angle_id: angleId },
     requestId,
-    "generate_and_evaluate_trigger"
+    "generate_and_evaluate_trigger",
+    // Mirrors Workflow B's own failure handler, so a trigger that never reached
+    // n8n leaves exactly the state a mid-run Claude failure would have.
+    { from: "generating", to: "awaiting_angle_selection", unchooseAngles: true }
   );
 }
 
@@ -101,7 +147,15 @@ export function triggerGenerateAndEvaluate(requestId: string, angleId: string) {
 // newsletter) and run the Pass 2 evaluation. Workflow D fetches everything else
 // itself from the request_id, same as every other workflow trigger here.
 export function triggerAdaptAndEvaluate(requestId: string) {
-  return pingWebhook("wf-d-adapt-evaluate", { request_id: requestId }, requestId, "adapt_and_evaluate_trigger");
+  return pingWebhook(
+    "wf-d-adapt-evaluate",
+    { request_id: requestId },
+    requestId,
+    "adapt_and_evaluate_trigger",
+    // 'approved' is what the Retry adaptation button keys off (see
+    // channel-posts-review.tsx), and what Workflow D's own handler reverts to.
+    { from: "adapting", to: "approved" }
+  );
 }
 
 // Human directly edited a channel post (never the article - it's locked once
@@ -135,6 +189,11 @@ export function triggerRegenerate(
     "wf-c-regenerate",
     { request_id: requestId, comment, is_final_attempt: isFinalAttempt, prior_status: priorStatus },
     requestId,
-    "regenerate_trigger"
+    "regenerate_trigger",
+    // priorStatus is already tracked for exactly this purpose - the workflow uses it
+    // to revert on a Claude failure, and the same value is right when the trigger
+    // never lands. (The attempt isn't consumed either: regenerate/route.ts only
+    // increments the count inside the workflow, not here.)
+    { from: "generating", to: priorStatus }
   );
 }
