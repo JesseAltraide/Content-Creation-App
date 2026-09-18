@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { userCanAccessRequest } from "@/lib/request-access";
 import { logEvent } from "@/lib/events";
 
 // Recovery action for a genuine content-level dead end (needs_human_attention) - lets
@@ -14,6 +15,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+  }
+
+  // Ownership (migration 007). 404 not 403: telling someone a request exists
+  // but is not theirs still leaks that it exists.
+  if (!(await userCanAccessRequest(requestId, user.id))) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
 
   const admin = createAdminClient();

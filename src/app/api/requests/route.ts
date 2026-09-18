@@ -120,6 +120,7 @@ export async function POST(request: Request) {
   const { data: request_, error: insertError } = await admin
     .from("requests")
     .insert({
+      user_id: user.id,
       status: "draft",
       input_path: input.inputPath,
       raw_idea: input.rawIdea?.trim() || null,

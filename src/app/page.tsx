@@ -6,9 +6,18 @@ import { StatusBadge } from "@/components/ui/badge";
 
 export default async function HomePage() {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Requests are private to their creator (migration 007). Filtered here in the
+  // query rather than left to RLS, because most reads in this app go through the
+  // service-role client, which ignores policies entirely. Rows with a null owner
+  // predate ownership and stay visible to everyone rather than vanishing.
   const { data: requests } = await supabase
     .from("requests")
     .select("id, raw_idea, primary_keyword, input_path, channels, status, created_at")
+    .or(`user_id.eq.${user!.id},user_id.is.null`)
     .order("created_at", { ascending: false });
 
   return (

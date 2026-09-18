@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { userCanAccessRequest } from "@/lib/request-access";
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -11,6 +12,12 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+  }
+
+  // Ownership (migration 007). 404 not 403: telling someone a request exists
+  // but is not theirs still leaks that it exists.
+  if (!(await userCanAccessRequest(id, user.id))) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
 
   const admin = createAdminClient();

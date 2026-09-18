@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { userCanAccessRequest } from "@/lib/request-access";
 import { logEvent } from "@/lib/events";
 
 // Mirrors the Stage 3 angle-selection pattern: two candidates exist, the human
@@ -21,6 +22,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+  }
+
+  // Ownership (migration 007). 404 not 403: telling someone a request exists
+  // but is not theirs still leaks that it exists.
+  if (!(await userCanAccessRequest(requestId, user.id))) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
 
   const body = await request.json();

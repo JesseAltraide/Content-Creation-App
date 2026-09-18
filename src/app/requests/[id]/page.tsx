@@ -43,6 +43,14 @@ export default async function RequestDetailPage({
   const { data: req } = await supabase.from("requests").select("*").eq("id", id).single();
   if (!req) notFound();
 
+  // Ownership check (migration 007). notFound() rather than a "not yours" message
+  // on purpose: confirming a request exists but belongs to someone else leaks that
+  // it exists at all. Null-owner rows predate ownership and stay open to everyone.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (req.user_id && req.user_id !== user?.id) notFound();
+
   const { data: sources } = await supabase
     .from("sources")
     .select("*")
