@@ -36,13 +36,15 @@ alter table app_config enable row level security;
 
 -- Idempotent: re-running this migration reschedules rather than duplicating, and a
 -- duplicated publish job would mean duplicated sends.
+-- The loop variable is NOT called `job`: cron.job is a table, and an unqualified
+-- `job` inside the query resolves ambiguously against it (42702).
 do $$
 declare
-  job text;
+  target_job text;
 begin
-  foreach job in array array['content-agent-publish', 'content-agent-notify'] loop
-    if exists (select 1 from cron.job where jobname = job) then
-      perform cron.unschedule(job);
+  foreach target_job in array array['content-agent-publish', 'content-agent-notify'] loop
+    if exists (select 1 from cron.job j where j.jobname = target_job) then
+      perform cron.unschedule(target_job);
     end if;
   end loop;
 end
