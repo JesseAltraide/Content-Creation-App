@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { asList } from "@/lib/eval-shape";
+import CopyTextButton from "@/components/copy-text-button";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ScoreBar } from "@/components/ui/score-bar";
@@ -20,24 +21,45 @@ type EvalResult = {
 
 function LinkedInPreview({ body }: { body: string }) {
   return (
-    <div className="whitespace-pre-wrap rounded-lg border border-border bg-background p-4 text-sm leading-relaxed text-foreground">
-      {body}
+    <div className="rounded-lg border border-border bg-background p-4">
+      <div className="flex items-start justify-between gap-3">
+        <p className="min-w-0 whitespace-pre-wrap text-sm leading-relaxed text-foreground">{body}</p>
+        <CopyTextButton text={body} label="Copy post" />
+      </div>
     </div>
   );
 }
 
 function XPreview({ body }: { body: string }) {
   const posts = parseXPosts(body);
+  // A thread is posted one box at a time, so per-post copy is the one that matches how
+  // the work is actually done. The whole-thread copy uses the same separator the edit
+  // box expects, so it round-trips: copy it out, change it elsewhere, paste it back.
+  const wholeThread = posts.join(`${"\n\n"}---${"\n\n"}`);
+
   return (
     <div className="flex flex-col gap-2">
+      {posts.length > 1 && (
+        <div className="flex items-center justify-end gap-2">
+          <span className="text-xs text-muted">
+            {posts.length} posts. Copy them one at a time to post the thread.
+          </span>
+          <CopyTextButton text={wholeThread} label="Copy whole thread" variant="outline" />
+        </div>
+      )}
       {posts.map((post, i) => (
         <div key={i} className="rounded-lg border border-border bg-background p-4 text-sm leading-relaxed text-foreground">
-          {posts.length > 1 && (
-            <p className="mb-1.5 text-xs font-semibold text-muted">
-              Post {i + 1} of {posts.length}
-            </p>
-          )}
-          <p className="whitespace-pre-wrap">{post}</p>
+          <div className="flex items-center justify-between gap-3">
+            {posts.length > 1 ? (
+              <p className="text-xs font-semibold text-muted">
+                Post {i + 1} of {posts.length}
+              </p>
+            ) : (
+              <span />
+            )}
+            <CopyTextButton text={post} label={posts.length > 1 ? `Copy post ${i + 1}` : "Copy post"} />
+          </div>
+          <p className="mt-1.5 whitespace-pre-wrap">{post}</p>
           <p className="mt-2 text-xs text-muted">{post.length}/280 characters</p>
         </div>
       ))}
@@ -47,13 +69,21 @@ function XPreview({ body }: { body: string }) {
 
 function NewsletterPreview({ body }: { body: string }) {
   const { subject_line, body_markdown } = parseNewsletter(body);
+  // Subject and body separately, because they go into two different fields wherever
+  // this ends up being sent from.
   return (
     <div className="rounded-lg border border-border bg-background p-4 text-sm leading-relaxed text-foreground">
-      <p className="mb-2 border-b border-border pb-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted">Subject </span>
-        {subject_line}
-      </p>
-      <p className="whitespace-pre-wrap">{body_markdown}</p>
+      <div className="mb-2 flex items-center justify-between gap-3 border-b border-border pb-2">
+        <p className="min-w-0">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted">Subject </span>
+          {subject_line}
+        </p>
+        <CopyTextButton text={subject_line} label="Copy subject" />
+      </div>
+      <div className="flex items-start justify-between gap-3">
+        <p className="min-w-0 whitespace-pre-wrap">{body_markdown}</p>
+        <CopyTextButton text={body_markdown} label="Copy body" />
+      </div>
     </div>
   );
 }
