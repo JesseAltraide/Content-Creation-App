@@ -45,11 +45,15 @@ export default function LoginPage() {
           </span>
           <span className="text-lg font-semibold tracking-tight">Content Agent</span>
         </div>
-        <p className="mt-4 text-sm text-muted">Sign in with your work email.</p>
+        <p className="mt-4 text-sm text-muted">
+          Sign in with your work email. New here? Enter your email and the link will
+          take you to set a password.
+        </p>
 
         {sent ? (
           <p className="mt-6 text-sm">
-            Check <span className="font-medium">{email}</span> for a sign-in link.
+            Check <span className="font-medium">{email}</span> for your link. If this is
+            your first time, it will take you to set a password.
           </p>
         ) : (
           <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-3">
