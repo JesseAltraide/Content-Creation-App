@@ -12,6 +12,7 @@ import { friendlyStageMessage, explainNeedsAttention } from "@/lib/friendly-erro
 import SelectAngleButton from "./select-angle-button";
 import { REGENERATION_CAP } from "@/lib/regeneration";
 import BackToAngleSelectionButton from "./back-to-angle-selection-button";
+import ResumeSourcesButton from "./resume-sources-button";
 import ArticleReview from "./article-review";
 import ChannelPostsReview from "./channel-posts-review";
 import PublishingQueue from "./publishing-queue";
@@ -189,6 +190,15 @@ export default async function RequestDetailPage({
     req.status === "researching" && (latestEvent?.status === "failed" || goneQuiet);
   const angleAttemptFailed =
     req.status === "awaiting_angle_selection" && latestEvent?.status === "failed";
+  // The search plainly worked (candidate sources are sitting in the table) but the
+  // request never left 'researching', because A1 marks the status in a step after the
+  // insert that has no failure handling of its own. Offering "retry the search" here
+  // would redo work that already succeeded; the honest action is to go where the data
+  // already is.
+  const strandedSources =
+    req.status === "researching"
+      ? (sources ?? []).filter((s) => s.status === "pending_selection").length
+      : 0;
   // needs_human_attention is a status, not itself a log line - it doesn't change just
   // because something else gets logged afterward (e.g. Workflow E's edit_triage
   // deliberately never touches requests.status). Using the absolute latest event to
@@ -305,7 +315,23 @@ export default async function RequestDetailPage({
           went silent has nothing in the log to explain it - saying "see the
           technical log for the exact error" there would send the human looking
           for something that was never written. */}
-      {canRetry && latestEvent?.status === "failed" && (
+      {strandedSources > 0 && (
+        <Card className="mt-8 border-warning/30 bg-warning-soft p-5">
+          <p className="text-sm font-medium text-warning">
+            The search found {strandedSources} source{strandedSources === 1 ? "" : "s"}, but the run
+            stopped before handing them over.
+          </p>
+          <p className="mt-1 text-xs text-warning/90">
+            They were saved and are ready to pick from, so nothing needs researching again. This is
+            a known gap in the research workflow rather than a problem with your idea.
+          </p>
+          {access.isOwner && (
+            <ResumeSourcesButton requestId={id} sourceCount={strandedSources} />
+          )}
+        </Card>
+      )}
+
+      {!strandedSources && canRetry && latestEvent?.status === "failed" && (
         <Card className="mt-8 border-danger/20 bg-danger-soft p-5">
           <p className="text-sm font-medium text-danger">
             {friendlyStageMessage(latestEvent!.stage)}
@@ -318,7 +344,7 @@ export default async function RequestDetailPage({
         </Card>
       )}
 
-      {canRetry && latestEvent?.status !== "failed" && (
+      {!strandedSources && canRetry && latestEvent?.status !== "failed" && (
         <Card className="mt-8 p-5">
           <p className="text-sm text-foreground">
             Nothing has progressed since the last step, and no error was ever logged, so there&apos;s
