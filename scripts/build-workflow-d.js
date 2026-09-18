@@ -453,8 +453,29 @@ const ADAPT_TOOL = {
 function normalizeChannelsCode(inputExpr) {
   return (
     `let channels = ${inputExpr} || {};` + NL +
-    "if (typeof channels === 'string') { try { channels = JSON.parse(channels); } catch { channels = {}; } }" + NL +
-    "if (!channels || typeof channels !== 'object' || Array.isArray(channels)) channels = {};" + NL +
+    // Claude keeps returning this nested value as a JSON string rather than an object
+    // (Errors #83-#85, and again on Workflow B's excerpts), so parsing it is expected.
+    // What is NOT acceptable is swallowing a parse failure: `catch { channels = {} }`
+    // turned a malformed response into an empty object and let the run continue with
+    // nothing, producing an adaptation with no channels and no explanation. Seen live
+    // when the model wrote a quoted line of commentary with unescaped double quotes
+    // inside the string, making its own JSON invalid.
+    //
+    // Throwing routes into this workflow's setup-failure handler, which reverts the
+    // request to 'approved' and logs, so the human sees a real failure and can retry
+    // rather than an empty result they have to diagnose.
+    "if (typeof channels === 'string') {" + NL +
+    "  try { channels = JSON.parse(channels); }" + NL +
+    "  catch (err) {" + NL +
+    "    throw new Error('Claude returned the channels object as a string that is not valid JSON (' + err.message + '). Usually an unescaped quote inside one of the posts. Nothing was saved; retry the adaptation.');" + NL +
+    "  }" + NL +
+    "}" + NL +
+    "if (!channels || typeof channels !== 'object' || Array.isArray(channels)) {" + NL +
+    "  throw new Error('Claude returned channels in a shape this cannot use: ' + JSON.stringify(channels).slice(0, 200));" + NL +
+    "}" + NL +
+    "if (Object.keys(channels).length === 0) {" + NL +
+    "  throw new Error('Claude returned an empty channels object, so there is nothing to adapt. Retry the adaptation.');" + NL +
+    "}" + NL +
     "return [{ json: channels }];"
   );
 }
@@ -480,6 +501,7 @@ function adaptCachedContext() {
     "LinkedIn: PAS structure (Problem-Agitate-Solution), short paragraphs, sparing emoji, a clear CTA. Write it as plain text, NOT markdown: LinkedIn renders markdown literally, so never use '#' headings or '**' bold. The first line must be a plain sentence that works as the hook above the 'see more' fold. Tone reference (real previous posts or a described target, follow this voice):\\n${$('Build Adaptation Context').first().json.toneByChannel.linkedin || 'not requested'}\\n\\n" +
     "X: hook-first, one core idea per post, line breaks over hashtags, at most 1-2 hashtags and only on the final post if threaded. The human requested '${$('Build Adaptation Context').first().json.x_thread_length}' - 'single' means exactly one post, 'mini' means roughly 3 posts, 'expansive' means roughly 5 posts. Never pad to hit a target count - if the idea genuinely doesn't need that many posts, write fewer and say nothing about it. Each individual post is HARD capped at 280 characters including spaces, and this is counted programmatically after you write it. Aim for 240-270 characters per post so there is margin: going over forces a whole revision round and caps the Channel Fit score. Count each post before you return it. Tone reference:\\n${$('Build Adaptation Context').first().json.toneByChannel.x || 'not requested'}\\n\\n" +
     "Newsletter: a subject line, a 1-3 sentence intro, a skimmable body, and a closing CTA, 250-600 words total in body_markdown. Tone reference:\\n${$('Build Adaptation Context').first().json.toneByChannel.newsletter || 'not requested'}\\n\\n" +
+    "Quoting: when you quote someone, use single quotes around the quoted words, never double quotes. Double quotes inside these values have produced invalid JSON and lost a whole adaptation. Return channels as a real object, not as a string containing JSON.\n\n" +
     "Citations: these are published posts, not the article, so never put inline [Source: ...] tags in the body. Stay just as strictly grounded in the excerpts, but carry provenance the way each platform actually does it: LinkedIn and X get at most one short closing line naming the sources in plain words (for example 'Sources: Microsoft Learn docs and indexing benchmarks, links in comments'), and the newsletter may link naturally inside the body.\\n\\n" +
     // Every adaptation so far compressed "nine percentage points" to "nine points",
     // which on a football post reads as a league-table gap: a different claim, and a
