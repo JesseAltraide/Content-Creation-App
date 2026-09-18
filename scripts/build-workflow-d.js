@@ -463,7 +463,7 @@ function adaptCachedContext() {
     // two mistakes and the human kept reading the same two notes. A rule the
     // evaluator reliably flags belongs in the generation prompt, not in feedback.
     "LinkedIn: PAS structure (Problem-Agitate-Solution), short paragraphs, sparing emoji, a clear CTA. Write it as plain text, NOT markdown: LinkedIn renders markdown literally, so never use '#' headings or '**' bold. The first line must be a plain sentence that works as the hook above the 'see more' fold. Tone reference (real previous posts or a described target, follow this voice):\\n${$('Build Adaptation Context').first().json.toneByChannel.linkedin || 'not requested'}\\n\\n" +
-    "X: hook-first, one core idea per post, line breaks over hashtags, at most 1-2 hashtags and only on the final post if threaded. The human requested '${$('Build Adaptation Context').first().json.x_thread_length}' - 'single' means exactly one post, 'mini' means roughly 3 posts, 'expansive' means roughly 5 posts. Never pad to hit a target count - if the idea genuinely doesn't need that many posts, write fewer and say nothing about it. Each individual post must fit in 280 characters - this will be checked programmatically, so respect it exactly, don't rely on being checked. Tone reference:\\n${$('Build Adaptation Context').first().json.toneByChannel.x || 'not requested'}\\n\\n" +
+    "X: hook-first, one core idea per post, line breaks over hashtags, at most 1-2 hashtags and only on the final post if threaded. The human requested '${$('Build Adaptation Context').first().json.x_thread_length}' - 'single' means exactly one post, 'mini' means roughly 3 posts, 'expansive' means roughly 5 posts. Never pad to hit a target count - if the idea genuinely doesn't need that many posts, write fewer and say nothing about it. Each individual post is HARD capped at 280 characters including spaces, and this is counted programmatically after you write it. Aim for 240-270 characters per post so there is margin: going over forces a whole revision round and caps the Channel Fit score. Count each post before you return it. Tone reference:\\n${$('Build Adaptation Context').first().json.toneByChannel.x || 'not requested'}\\n\\n" +
     "Newsletter: a subject line, a 1-3 sentence intro, a skimmable body, and a closing CTA, 250-600 words total in body_markdown. Tone reference:\\n${$('Build Adaptation Context').first().json.toneByChannel.newsletter || 'not requested'}\\n\\n" +
     "Citations: these are published posts, not the article, so never put inline [Source: ...] tags in the body. Stay just as strictly grounded in the excerpts, but carry provenance the way each platform actually does it: LinkedIn and X get at most one short closing line naming the sources in plain words (for example 'Sources: Microsoft Learn docs and indexing benchmarks, links in comments'), and the newsletter may link naturally inside the body.\\n\\n" +
     "House style, applies to every channel: never use em dashes (the character U+2014). Use a full stop, a comma, a colon or parentheses instead. Do not state anything the excerpts do not support, and do not soften an unsupported claim with hedging language to sneak it in.`"
@@ -618,7 +618,7 @@ function channelScoreSchema() {
 }
 
 const PASS2_RUBRIC_TEXT =
-  "Score each channel's post out of 100 across: Factual Consistency re-verified against the excerpts (20, floor 15 - hard block tier, re-checks the claims survived adaptation unchanged), Tone (25, floor 10), Channel Fit (25, floor 10 - does it genuinely read as native to that platform, not just the article reformatted), Audience Fit re-verified (15, floor 6), Clarity (15, floor 6). Topic Relevance, SEO Fit, and Completeness do not apply post-adaptation - do not score them. If Factual Consistency scores below its floor, hard_block_triggered must be true regardless of the total.";
+  "Score each channel's post out of 100 across: Factual Consistency re-verified against the excerpts (20, floor 15 - hard block tier, re-checks the claims survived adaptation unchanged), Tone (25, floor 10), Channel Fit (25, floor 10 - does it genuinely read as native to that platform, not just the article reformatted), Audience Fit re-verified (15, floor 6), Clarity (15, floor 6). Topic Relevance, SEO Fit, and Completeness do not apply post-adaptation - do not score them. If Factual Consistency scores below its floor, hard_block_triggered must be true regardless of the total. Character counts shown next to each X post are measured programmatically and are authoritative, do not recount them: any X post over 280 characters is a hard Channel Fit failure, so score Channel Fit no higher than 10 for that channel and name the offending post and its length in the notes.";
 
 // x and newsletter bodies are stored as JSON-stringified structures (Insert Channel
 // Posts's own note explains why - a plain `body` column can't hold a thread array or
@@ -636,7 +636,11 @@ function buildPass2EvalTextNode(id, name, sourceNodeName) {
       "const parts = posts.map(p => {" + NL +
       "  if (p.channel === 'x') {" + NL +
       "    let thread; try { thread = JSON.parse(p.body); } catch { thread = [p.body]; }" + NL +
-      "    return `--- X ---" + BSN + BSN + "${thread.map((t, i) => `Post ${i + 1}: ${t}`).join('" + BSN + BSN + "')}`;" + NL +
+      // Character counts are measured here, not left to the model to eyeball, and
+    // shown inline so an over-limit post lands on the Channel Fit score rather
+    // than only tripping the gate (Decision #35 forced a revise but never moved
+    // the score, so a 329-character post could still read as a pass).
+    "    return `--- X ---" + BSN + BSN + "${thread.map((t, i) => `Post ${i + 1} (${String(t).length} characters${String(t).length > 280 ? ', OVER the 280 limit' : ''}): ${t}`).join('" + BSN + BSN + "')}`;" + NL +
       "  }" + NL +
       "  if (p.channel === 'newsletter') {" + NL +
       "    let nl; try { nl = JSON.parse(p.body); } catch { nl = { subject_line: '', body_markdown: p.body }; }" + NL +

@@ -303,7 +303,9 @@ connect("Fetch Last Evaluation", "Fetch Anchor Post");
 
 supabaseGet(
   "fetch-excerpts", "Fetch Excerpts",
-  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/excerpts?request_id=eq.{{$('Config').first().json.request_id}}&select=id,text,reason,source_id"
+  // sources(url) embed: see build-workflow-b.js - without it the prompt only has
+  // source_id and the model cites raw UUIDs.
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/excerpts?request_id=eq.{{$('Config').first().json.request_id}}&select=id,text,reason,source_id,sources(url)"
 );
 connect("Fetch Anchor Post", "Fetch Excerpts");
 
@@ -454,10 +456,32 @@ const EVAL_TOOL = {
 const PASS2_RUBRIC_TEXT =
   "Score out of 100 across: Factual Consistency re-verified against the excerpts (20, floor 15 - hard block tier), Tone (25, floor 10), Channel Fit (25, floor 10 - does it genuinely read as native to that platform), Audience Fit re-verified (15, floor 6), Clarity (15, floor 6). Topic Relevance, SEO Fit, and Completeness do not apply post-adaptation. If Factual Consistency scores below its floor, hard_block_triggered must be true regardless of the total.";
 
+// X posts kept coming back over 280 characters and still scoring a pass, because
+// Workflow D's programmatic length check (Decision #35) only guards D's own gate -
+// an edit re-scored through E bypassed it entirely. Confirmed live: three posts at
+// 329/327/317 characters passed at 82/100. The count is measured here in real JS
+// rather than trusted to the model, and handed to the evaluator so the violation
+// lands on the score instead of being invisible.
+// Built with plain string concatenation, no nested template literals: this whole
+// expression is interpolated into an outer backtick string, and nesting backticks
+// inside it does not survive the round trip.
+const X_LENGTH_NOTE =
+  "${(() => { if ($('Config').first().json.channel !== 'x') return ''; " +
+  "let posts; const raw = $('Compute Diff').first().json.editedText; " +
+  "try { posts = JSON.parse(raw); } catch (err) { posts = String(raw).split(" + JSON.stringify("\n\n") + "); } " +
+  "if (!Array.isArray(posts)) posts = [String(posts)]; " +
+  "const lens = posts.map(function (p, i) { return 'post ' + (i + 1) + ': ' + String(p).length + ' characters'; }); " +
+  "const over = posts.filter(function (p) { return String(p).length > 280; }).length; " +
+  "let note = 'Measured character counts (counted programmatically, do not recount): ' + lens.join('; ') + '.'; " +
+  "if (over > 0) { note += ' ' + over + ' post(s) exceed the 280 character limit, which is a hard Channel Fit failure: score Channel Fit no higher than 10 and name the offending post and its length in the notes.'; } " +
+  "return note; })()}";
+
 const evalPrompt =
   "`Evaluate this edited channel post against the rubric. You have not seen the edit reasoning - judge only what's here.\\n\\nRubric: " +
   PASS2_RUBRIC_TEXT +
-  "\\n\\nChannel: ${$('Config').first().json.channel}\\n\\nEdited post:\\n${$('Compute Diff').first().json.editedText}\\n\\nGrounded excerpts it should stay consistent with:\\n${$('Fetch Excerpts').all().filter(i => i.json && i.json.id).map((i, idx) => `[${idx}] Source: ${i.json.source_id}" + BSN + "${i.json.text}`).join('" + BSN + BSN + "')}`";
+  "\\n\\nChannel: ${$('Config').first().json.channel}\\n\\nEdited post:\\n${$('Compute Diff').first().json.editedText}\\n\\n" +
+  X_LENGTH_NOTE +
+  "\\n\\nGrounded excerpts it should stay consistent with:\\n${$('Fetch Excerpts').all().filter(i => i.json && i.json.id).map((i, idx) => `[${idx}] Source: ${(i.json.sources && i.json.sources.url) || i.json.source_id}" + BSN + "${i.json.text}`).join('" + BSN + BSN + "')}`";
 
 claudeNode("claude-eval-edit", "Claude: Evaluate Edited Post", "claude-opus-5", EVAL_TOOL, evalPrompt, 3000);
 connect("IF Mechanical Escalate", "Claude: Evaluate Edited Post: Build Request", 0);
