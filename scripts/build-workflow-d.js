@@ -812,7 +812,13 @@ function pass2GateCode(channelPostsSourceName, xLengthSourceName) {
     "const sectionId = $('Fetch Approved Section').first().json.id;" + NL +
     "const evalRows = Object.entries(results).map(([channel, r]) => {" + NL +
     "  const post = posts.find(p => p.channel === channel);" + NL +
-    "  return { request_id: requestId, section_id: sectionId, channel, pass: 'pass_2_channel', content_version: post ? post.version : 1, overall_score: r.overall_score, status: r.decision, criteria: r.criteria, weakest_criteria_suggestions: r.weakest_criteria_suggestions, hard_block_triggered: r.hardBlock, hard_block_reason: r.hard_block_reason };" + NL +
+    // Every optional field is coerced to null rather than left undefined. PostgREST
+    // rejects a bulk insert whose objects do not all carry the SAME keys (PGRST102,
+    // "All object keys must match"), and JSON.stringify silently drops any key whose
+    // value is undefined. So one channel omitting hard_block_reason, which Claude does
+    // whenever there is no hard block, produced a 10-key row beside an 11-key row and
+    // lost the entire evaluation for both channels at the insert.
+    "  return { request_id: requestId, section_id: sectionId, channel, pass: 'pass_2_channel', content_version: post ? post.version : 1, overall_score: r.overall_score, status: r.decision, criteria: r.criteria || [], weakest_criteria_suggestions: r.weakest_criteria_suggestions || null, hard_block_triggered: !!r.hardBlock, hard_block_reason: r.hard_block_reason === undefined ? null : r.hard_block_reason };" + NL +
     "});" + NL +
     "return [{ json: { perChannel: results, allPass, anyReject, evalRows: JSON.stringify(evalRows) } }];"
   );
