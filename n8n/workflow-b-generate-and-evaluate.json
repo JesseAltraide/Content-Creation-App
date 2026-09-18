@@ -235,7 +235,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all().filter(i => i.json && i.json.id);\nconst sources = items.map(i => i.json);\nconst sourcesText = sources.map(s => `URL: ${s.url}\\nTITLE: ${s.title || ''}\\n${(s.scraped_text || '').slice(0, 6000)}`).join('\\n\\n---\\n\\n');\nreturn [{ json: { count: items.length, sources, sourcesText } }];"
+        "jsCode": "const items = $input.all().filter(i => i.json && i.json.id);\nconst sources = items.map(i => i.json);\nconst PAYWALL_PHRASES = ['subscribe to continue','already a subscriber','subscribers only','to continue reading','create a free account','sign in to read','this article is for subscribers','start your free trial','register to continue'];\nconst THIN_SCRAPE_CHARS = 2200;\nconst assess = (s) => {\n  const text = String(s.scraped_text || '').trim();\n  const lowered = text.toLowerCase();\n  const phrase = PAYWALL_PHRASES.find(p => lowered.includes(p)) || null;\n  return { phrase, thin: text.length < THIN_SCRAPE_CHARS, chars: text.length };\n};\nconst usable = [];\nconst unusable = [];\nfor (const s of sources) {\n  const a = assess(s);\n  if (a.phrase || a.thin) unusable.push({ url: s.url, reason: a.phrase ? 'paywall prompt in the text' : a.chars + ' characters, too short to be the full article' });\n  else usable.push(s);\n}\nconst sourcesText = usable.map(s => `URL: ${s.url}\\nTITLE: ${s.title || ''}\\n${(s.scraped_text || '').slice(0, 6000)}`).join('\\n\\n---\\n\\n');\nconst unusableNote = unusable.map(u => u.url + ' (' + u.reason + ')').join('; ');\nreturn [{ json: { count: items.length, usableCount: usable.length, unusableCount: unusable.length, unusableNote, sources, sourcesText } }];"
       },
       "id": "count-scraped-sources",
       "name": "Count Scraped Sources",
@@ -257,7 +257,7 @@
           },
           "conditions": [
             {
-              "leftValue": "={{$json.count}}",
+              "leftValue": "={{$json.usableCount}}",
               "rightValue": 0,
               "operator": {
                 "type": "number",
@@ -319,7 +319,7 @@
         "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ request_id: $('Config').first().json.request_id, stage: 'excerpt_selection', status: 'failed', detail: 'No scraped sources available for excerpt extraction.' }) }}",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('Config').first().json.request_id, stage: 'excerpt_selection', status: 'failed', detail: $('Count Scraped Sources').first().json.unusableCount > 0 ? `Every source came back as a stub rather than a full article, so there was nothing to quote: ${$('Count Scraped Sources').first().json.unusableNote}. That usually means a paywall. Add a source that can be read in full.` : 'No scraped sources available for excerpt extraction.' }) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [

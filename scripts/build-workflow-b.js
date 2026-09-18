@@ -412,8 +412,33 @@ codeNode(
   "Count Scraped Sources",
   "const items = $input.all().filter(i => i.json && i.json.id);" + NL +
     "const sources = items.map(i => i.json);" + NL +
-    "const sourcesText = sources.map(s => `URL: ${s.url}" + BSN + "TITLE: ${s.title || ''}" + BSN + "${(s.scraped_text || '').slice(0, 6000)}`).join('" + BSN + BSN + "---" + BSN + BSN + "');" + NL +
-    "return [{ json: { count: items.length, sources, sourcesText } }];",
+    // A paywalled scrape is the one failure shape that does not announce itself: the
+    // fetch returns 200, the row says 'scraped', and what came back is a headline,
+    // two paragraphs and a subscribe prompt. Quoting that as though it were the
+    // article is how an ungrounded piece gets written from a source that looks fine.
+    //
+    // Same rule the request page already shows a warning for, applied here where it
+    // can actually stop something. Kept in step with src/lib/source-quality.ts.
+    "const PAYWALL_PHRASES = ['subscribe to continue','already a subscriber','subscribers only','to continue reading','create a free account','sign in to read','this article is for subscribers','start your free trial','register to continue'];" + NL +
+    "const THIN_SCRAPE_CHARS = 2200;" + NL +
+    "const assess = (s) => {" + NL +
+    "  const text = String(s.scraped_text || '').trim();" + NL +
+    "  const lowered = text.toLowerCase();" + NL +
+    "  const phrase = PAYWALL_PHRASES.find(p => lowered.includes(p)) || null;" + NL +
+    "  return { phrase, thin: text.length < THIN_SCRAPE_CHARS, chars: text.length };" + NL +
+    "};" + NL +
+    "const usable = [];" + NL +
+    "const unusable = [];" + NL +
+    "for (const s of sources) {" + NL +
+    "  const a = assess(s);" + NL +
+    "  if (a.phrase || a.thin) unusable.push({ url: s.url, reason: a.phrase ? 'paywall prompt in the text' : a.chars + ' characters, too short to be the full article' });" + NL +
+    "  else usable.push(s);" + NL +
+    "}" + NL +
+    // Only the usable ones are quotable. A stub left in the prompt would be quoted
+    // eventually, and an excerpt drawn from a teaser is worse than no excerpt.
+    "const sourcesText = usable.map(s => `URL: ${s.url}" + BSN + "TITLE: ${s.title || ''}" + BSN + "${(s.scraped_text || '').slice(0, 6000)}`).join('" + BSN + BSN + "---" + BSN + BSN + "');" + NL +
+    "const unusableNote = unusable.map(u => u.url + ' (' + u.reason + ')').join('; ');" + NL +
+    "return [{ json: { count: items.length, usableCount: usable.length, unusableCount: unusable.length, unusableNote, sources, sourcesText } }];",
   {
     notes:
       "Filters alwaysOutputData's placeholder before counting (Error #7). sourcesText is built " +
@@ -426,7 +451,11 @@ codeNode(
 );
 connect("Fetch Scraped Sources", "Count Scraped Sources");
 
-ifNode("if-zero-sources", "IF Zero Scraped Sources", "={{$json.count}}", 0, { type: "number", operation: "equals" });
+// usableCount, not count: a source that scraped into a paywall teaser is present and
+// worthless, and proceeding on it produces a confidently written article standing on
+// two paragraphs and a subscribe prompt. Caught by deliberately feeding a 558
+// character teaser through as a request's only source.
+ifNode("if-zero-sources", "IF Zero Scraped Sources", "={{$json.usableCount}}", 0, { type: "number", operation: "equals" });
 connect("Count Scraped Sources", "IF Zero Scraped Sources");
 
 withLane(320, () => {
@@ -439,7 +468,10 @@ withLane(320, () => {
   supabaseWrite(
     "log-no-sources", "Log Event (no sources)", "POST",
     "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
-    "={{ JSON.stringify({ request_id: $('Config').first().json.request_id, stage: 'excerpt_selection', status: 'failed', detail: 'No scraped sources available for excerpt extraction.' }) }}"
+    // Two different situations, and the human's next move differs: nothing scraped at
+    // all means retry or pick other sources, whereas everything scraping into a
+    // teaser means these particular pages cannot be used however many times you try.
+    "={{ JSON.stringify({ request_id: $('Config').first().json.request_id, stage: 'excerpt_selection', status: 'failed', detail: $('Count Scraped Sources').first().json.unusableCount > 0 ? `Every source came back as a stub rather than a full article, so there was nothing to quote: ${$('Count Scraped Sources').first().json.unusableNote}. That usually means a paywall. Add a source that can be read in full.` : 'No scraped sources available for excerpt extraction.' }) }}"
   );
   connect("Mark Needs Attention (no sources)", "Log Event (no sources)");
   respondNode("respond-no-sources", "Respond (no sources)", "={{ JSON.stringify({ ok: false, reason: 'no_scraped_sources' }) }}");
