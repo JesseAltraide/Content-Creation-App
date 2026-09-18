@@ -197,7 +197,13 @@ function claudeErrorBranch(claudeNodeName, stage, requestIdExpr) {
       `${claudeNodeName}: Revert Request State`,
       "PATCH",
       "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.requestId}}",
-      "={{ JSON.stringify({ status: $('Config').first().json.prior_status }) }}"
+      // regeneration_count is restored alongside the status. Increment Regeneration
+      // Count runs immediately before the Claude call, so by the time we land here the
+      // attempt has already been charged for a call that produced nothing - an
+      // Anthropic outage or a 529 would quietly eat one of the human's five. Fetch
+      // Request Row holds the pre-increment value, so this is a restore rather than
+      // arithmetic on a number that may have moved.
+      "={{ JSON.stringify({ status: $('Config').first().json.prior_status, regeneration_count: $('Fetch Request Row').first().json.regeneration_count }) }}"
     );
     connect(`${claudeNodeName}: Extract Error`, `${claudeNodeName}: Revert Request State`);
 

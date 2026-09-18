@@ -22,7 +22,7 @@
     },
     {
       "parameters": {
-        "jsCode": "return [{ json: {\n  request_id: $json.body.request_id,\n  angle_id: $json.body.angle_id,\n  SUPABASE_URL: 'https://klblroceyiirhaxaqflq.supabase.co'\n} }];"
+        "jsCode": "return [{ json: {\n  request_id: $json.body.request_id,\n  angle_id: $json.body.angle_id,\n  spent_regeneration: $json.body.spent_regeneration === true,\n  SUPABASE_URL: 'https://klblroceyiirhaxaqflq.supabase.co'\n} }];"
       },
       "id": "config",
       "name": "Config",
@@ -806,6 +806,72 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{$('Config').first().json.spent_regeneration}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-spent-regeneration",
+      "name": "IF Spent Regeneration",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        8080,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('Config').first().json.request_id}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ regeneration_count: $('Fetch Request Row').first().json.regeneration_count + 1 }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi"
+      },
+      "id": "increment-regeneration-count",
+      "name": "Increment Regeneration Count",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-account",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "position": [
+        8340,
+        0
+      ]
+    },
+    {
+      "parameters": {
         "jsCode": "const err = $json.error || {};\nconst message = (err.message || JSON.stringify(err) || 'Unknown Claude API error').slice(0, 500);\nreturn [{ json: { requestId: $('Config').first().json.request_id, message } }];"
       },
       "id": "claude--generate-article-error-extract",
@@ -813,7 +879,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        8080,
+        8600,
         -320
       ]
     },
@@ -848,7 +914,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        8340,
+        8860,
         -320
       ]
     },
@@ -883,7 +949,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        8600,
+        9120,
         -320
       ]
     },
@@ -918,7 +984,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        8860,
+        9380,
         -320
       ]
     },
@@ -932,7 +998,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        9120,
+        9640,
         -320
       ]
     },
@@ -945,7 +1011,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        9380,
+        9900,
         0
       ]
     },
@@ -980,7 +1046,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        9640,
+        10160,
         0
       ]
     },
@@ -994,7 +1060,7 @@
       "typeVersion": 2,
       "notes": "Builds the full Claude request body in real Code-node JS - see the claudeNode() comment for why this can't live inline in the HTTP node's {{ }} expression.",
       "position": [
-        9900,
+        10420,
         0
       ]
     },
@@ -1033,7 +1099,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        10160,
+        10680,
         0
       ]
     },
@@ -1046,7 +1112,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        10420,
+        10940,
         -320
       ]
     },
@@ -1081,7 +1147,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        10680,
+        11200,
         -320
       ]
     },
@@ -1116,7 +1182,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        10940,
+        11460,
         -320
       ]
     },
@@ -1151,7 +1217,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        11200,
+        11720,
         -320
       ]
     },
@@ -1165,7 +1231,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        11460,
+        11980,
         -320
       ]
     },
@@ -1178,7 +1244,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        11720,
+        12240,
         0
       ]
     },
@@ -1213,7 +1279,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        11980,
+        12500,
         0
       ]
     },
@@ -1226,7 +1292,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        12240,
+        12760,
         0
       ]
     },
@@ -1257,7 +1323,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        12500,
+        13020,
         0
       ]
     },
@@ -1292,7 +1358,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        12760,
+        13280,
         -260
       ]
     },
@@ -1327,7 +1393,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        13020,
+        13540,
         -260
       ]
     },
@@ -1341,7 +1407,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        13280,
+        13800,
         -260
       ]
     },
@@ -1355,7 +1421,7 @@
       "typeVersion": 2,
       "notes": "Builds the full Claude request body in real Code-node JS - see the claudeNode() comment for why this can't live inline in the HTTP node's {{ }} expression.",
       "position": [
-        13540,
+        14060,
         0
       ]
     },
@@ -1394,7 +1460,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        13800,
+        14320,
         0
       ]
     },
@@ -1407,7 +1473,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        14060,
+        14580,
         -320
       ]
     },
@@ -1442,7 +1508,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        14320,
+        14840,
         -320
       ]
     },
@@ -1477,7 +1543,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        14580,
+        15100,
         -320
       ]
     },
@@ -1512,7 +1578,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        14840,
+        15360,
         -320
       ]
     },
@@ -1526,7 +1592,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        15100,
+        15620,
         -320
       ]
     },
@@ -1539,7 +1605,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        15360,
+        15880,
         0
       ]
     },
@@ -1574,7 +1640,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        15620,
+        16140,
         0
       ]
     },
@@ -1588,7 +1654,7 @@
       "typeVersion": 2,
       "notes": "Builds the full Claude request body in real Code-node JS - see the claudeNode() comment for why this can't live inline in the HTTP node's {{ }} expression.",
       "position": [
-        15880,
+        16400,
         0
       ]
     },
@@ -1627,7 +1693,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        16140,
+        16660,
         0
       ]
     },
@@ -1640,7 +1706,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        16400,
+        16920,
         -320
       ]
     },
@@ -1675,7 +1741,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        16660,
+        17180,
         -320
       ]
     },
@@ -1710,7 +1776,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        16920,
+        17440,
         -320
       ]
     },
@@ -1745,7 +1811,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        17180,
+        17700,
         -320
       ]
     },
@@ -1759,7 +1825,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        17440,
+        17960,
         -320
       ]
     },
@@ -1772,7 +1838,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        17700,
+        18220,
         0
       ]
     },
@@ -1807,7 +1873,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        17960,
+        18480,
         0
       ]
     },
@@ -1820,7 +1886,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        18220,
+        18740,
         0
       ]
     },
@@ -1851,7 +1917,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        18480,
+        19000,
         0
       ]
     },
@@ -1886,7 +1952,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        18740,
+        19260,
         -260
       ]
     },
@@ -1921,7 +1987,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        19000,
+        19520,
         -260
       ]
     },
@@ -1935,7 +2001,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        19260,
+        19780,
         -260
       ]
     },
@@ -1949,7 +2015,7 @@
       "typeVersion": 2,
       "notes": "Builds the full Claude request body in real Code-node JS - see the claudeNode() comment for why this can't live inline in the HTTP node's {{ }} expression.",
       "position": [
-        19520,
+        20040,
         0
       ]
     },
@@ -1988,7 +2054,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        19780,
+        20300,
         0
       ]
     },
@@ -2001,7 +2067,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        20040,
+        20560,
         -320
       ]
     },
@@ -2036,7 +2102,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        20300,
+        20820,
         -320
       ]
     },
@@ -2071,7 +2137,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        20560,
+        21080,
         -320
       ]
     },
@@ -2106,7 +2172,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        20820,
+        21340,
         -320
       ]
     },
@@ -2120,7 +2186,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        21080,
+        21600,
         -320
       ]
     },
@@ -2133,7 +2199,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        21340,
+        21860,
         0
       ]
     },
@@ -2168,7 +2234,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        21600,
+        22120,
         0
       ]
     },
@@ -2182,7 +2248,7 @@
       "typeVersion": 2,
       "notes": "Builds the full Claude request body in real Code-node JS - see the claudeNode() comment for why this can't live inline in the HTTP node's {{ }} expression.",
       "position": [
-        21860,
+        22380,
         0
       ]
     },
@@ -2221,7 +2287,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        22120,
+        22640,
         0
       ]
     },
@@ -2234,7 +2300,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        22380,
+        22900,
         -320
       ]
     },
@@ -2269,7 +2335,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        22640,
+        23160,
         -320
       ]
     },
@@ -2304,7 +2370,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        22900,
+        23420,
         -320
       ]
     },
@@ -2339,7 +2405,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        23160,
+        23680,
         -320
       ]
     },
@@ -2353,7 +2419,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        23420,
+        23940,
         -320
       ]
     },
@@ -2366,7 +2432,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        23680,
+        24200,
         0
       ]
     },
@@ -2401,7 +2467,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        23940,
+        24460,
         0
       ]
     },
@@ -2414,7 +2480,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        24200,
+        24720,
         0
       ]
     },
@@ -2445,7 +2511,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        24460,
+        24980,
         0
       ]
     },
@@ -2480,7 +2546,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        24720,
+        25240,
         -260
       ]
     },
@@ -2515,7 +2581,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        24980,
+        25500,
         -260
       ]
     },
@@ -2529,7 +2595,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        25240,
+        25760,
         -260
       ]
     },
@@ -2564,7 +2630,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        25500,
+        26020,
         260
       ]
     },
@@ -2599,7 +2665,7 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        25760,
+        26280,
         260
       ]
     },
@@ -2613,7 +2679,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        26020,
+        26540,
         260
       ]
     }
@@ -3012,6 +3078,42 @@
     },
     "Build Excerpts Text": {
       "main": [
+        [
+          {
+            "node": "IF Spent Regeneration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Increment Regeneration Count": {
+      "main": [
+        [
+          {
+            "node": "Claude: Generate Article: Build Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pipeline Setup Failure: Extract Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Spent Regeneration": {
+      "main": [
+        [
+          {
+            "node": "Increment Regeneration Count",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Claude: Generate Article: Build Request",

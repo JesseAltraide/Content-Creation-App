@@ -70,21 +70,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     );
   }
 
-  // Atomic conditional transition: only proceeds from awaiting_angle_selection, and
-  // on a re-pick only from the exact count we just read, so two double-clicks can't
-  // both spend an attempt (or both skip spending one).
-  const transition = admin
+  // The count is NOT written here. Same rule the regenerate route follows: an
+  // attempt is only spent once Claude is actually reached, so an outage, a dead
+  // n8n, or a run that dead-ends before generation (no scraped sources, no relevant
+  // excerpts) costs the human nothing. Workflow B increments it itself, immediately
+  // before the generate call, when spent_regeneration says this was a re-pick.
+  //
+  // The status guard below is still the concurrency control: two double-clicks
+  // cannot both transition out of awaiting_angle_selection, so only one can ever
+  // reach the workflow and therefore only one can ever charge.
+  const { data: updatedRequest, error: transitionError } = await admin
     .from("requests")
-    .update({
-      status: "generating",
-      ...(isRepick ? { regeneration_count: priorCount + 1 } : {}),
-    })
+    .update({ status: "generating" })
     .eq("id", requestId)
-    .eq("status", "awaiting_angle_selection");
-
-  const { data: updatedRequest, error: transitionError } = await (
-    isRepick ? transition.eq("regeneration_count", priorCount) : transition
-  )
+    .eq("status", "awaiting_angle_selection")
     .select()
     .single();
 
@@ -111,7 +110,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     stage: "angle_selection",
     status: "success",
     detail: isRepick
-      ? `Angle re-selected after a previous generation; generating the main block (regeneration attempt ${priorCount + 1}/${REGENERATION_CAP}).`
+      ? `Angle re-selected after a previous generation; generating the main block (would be regeneration attempt ${priorCount + 1}/${REGENERATION_CAP} if generation is reached).`
       : "Angle selected; generating the main block.",
   });
 

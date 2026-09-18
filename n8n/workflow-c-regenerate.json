@@ -346,7 +346,7 @@
         "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.requestId}}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ status: $('Config').first().json.prior_status }) }}",
+        "jsonBody": "={{ JSON.stringify({ status: $('Config').first().json.prior_status, regeneration_count: $('Fetch Request Row').first().json.regeneration_count }) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -541,7 +541,7 @@
         "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$json.requestId}}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ status: $('Config').first().json.prior_status }) }}",
+        "jsonBody": "={{ JSON.stringify({ status: $('Config').first().json.prior_status, regeneration_count: $('Fetch Request Row').first().json.regeneration_count }) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [

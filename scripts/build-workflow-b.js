@@ -358,6 +358,10 @@ codeNode(
   "return [{ json: {" + NL +
     "  request_id: $json.body.request_id," + NL +
     "  angle_id: $json.body.angle_id," + NL +
+    // Set by the select-angle route when this is a re-pick of an angle that has
+    // already been generated against, which costs a regeneration attempt. Charged
+    // here rather than by the route so an outage before generation costs nothing.
+    "  spent_regeneration: $json.body.spent_regeneration === true," + NL +
     "  SUPABASE_URL: 'https://klblroceyiirhaxaqflq.supabase.co'" + NL +
     "} }];",
   { notes: "Non-secret config only. Supabase/Anthropic secrets live in n8n Credentials." }
@@ -623,7 +627,22 @@ const generatePrompt =
   "`Write a full SEO article grounded only in the excerpts below - no unsupported claims or invented statistics. If the excerpts can't adequately support the desired length, write a shorter, fully-grounded article and say so isn't needed in the output, just write what's honestly supportable.\\n\\nWorking title: ${$('Fetch Angle Row').first().json.working_title}\\nThesis: ${$('Fetch Angle Row').first().json.thesis}\\nSection shape: ${JSON.stringify($('Fetch Angle Row').first().json.section_shape)}\\nPrimary keyword (must appear naturally, including in a heading): ${$('Fetch Request Row').first().json.primary_keyword}\\nDesired length: ${$('Fetch Request Row').first().json.desired_length || 'no specific target'}\\nContext from the manager: ${$('Fetch Request Row').first().json.context || 'none'}\\n\\nGrounded excerpts (cite the source URL inline as [Source: url] after any claim drawn from it):\\n${$('Build Excerpts Text').first().json.excerptsTextWithReason}\\n\\nWrite in markdown with proper H1/H2 heading hierarchy.\\n\\nHouse style: never use em dashes (the character U+2014) anywhere in the output. Use a full stop, a comma, a colon or parentheses instead. Do not state anything the excerpts do not support, and do not use hedging language to smuggle in a claim you cannot cite.`";
 
 claudeNode("claude-generate", "Claude: Generate Article", "claude-sonnet-5", ARTICLE_TOOL, generatePrompt, 8000);
-connect("Build Excerpts Text", "Claude: Generate Article: Build Request");
+// Charge the attempt here, and only here: everything upstream (scraping, excerpt
+// selection, both of their failure lanes) can dead-end without the human paying for
+// a draft they never got. Mirrors Workflow C's Increment Regeneration Count, which
+// sits immediately before its own Claude call for the same reason.
+ifNode("if-spent-regeneration", "IF Spent Regeneration", "={{$('Config').first().json.spent_regeneration}}", true, { type: "boolean", operation: "true" });
+connect("Build Excerpts Text", "IF Spent Regeneration");
+
+supabaseWrite(
+  "increment-regeneration-count", "Increment Regeneration Count", "PATCH",
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/requests?id=eq.{{$('Config').first().json.request_id}}",
+  "={{ JSON.stringify({ regeneration_count: $('Fetch Request Row').first().json.regeneration_count + 1 }) }}"
+);
+connect("IF Spent Regeneration", "Increment Regeneration Count", 0);
+connect("Increment Regeneration Count", "Claude: Generate Article: Build Request");
+// Not a re-pick: straight to generation, nothing charged.
+connect("IF Spent Regeneration", "Claude: Generate Article: Build Request", 1);
 claudeErrorBranch("Claude: Generate Article", "generation", "$('Config').first().json.request_id");
 
 codeNode(
