@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/badge";
 import { REVIEWABLE_STATUSES } from "@/lib/request-access";
+import RequestListTabs from "./request-list-tabs";
 
 export default async function HomePage() {
   const supabase = await createClient();
@@ -45,60 +46,75 @@ export default async function HomePage() {
         </Link>
       </div>
 
-      {(!requests || requests.length === 0) && (
-        <Card className="mt-8 flex flex-col items-center gap-2 px-6 py-16 text-center">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-soft text-accent">
-            +
-          </span>
-          <p className="text-sm font-medium">No requests yet</p>
-          <p className="text-sm text-muted">Start one from a raw idea or a source URL.</p>
-        </Card>
-      )}
-
-      <ul className="mt-8 flex flex-col gap-3">
-        {(requests ?? []).map((r) => (
-          <li key={r.id}>
-            <Link href={`/requests/${r.id}`}>
-              <Card className="flex items-center justify-between gap-4 px-5 py-4 transition-shadow hover:shadow-md">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">
-                    {r.raw_idea || r.primary_keyword}
-                  </p>
-                  <p className="mt-1 text-xs text-muted">
-                    {r.input_path === "raw_idea" ? "Raw idea" : "Source URL"} ·{" "}
-                    {r.channels.join(", ")}
-                  </p>
-                </div>
-                <StatusBadge status={r.status} />
+      <RequestListTabs
+        reviewCount={(toReview ?? []).length}
+        mine={
+          <>
+            {(!requests || requests.length === 0) && (
+              <Card className="flex flex-col items-center gap-2 px-6 py-16 text-center">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-soft text-accent">
+                  +
+                </span>
+                <p className="text-sm font-medium">No requests yet</p>
+                <p className="text-sm text-muted">Start one from a raw idea or a source URL.</p>
               </Card>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    
-      {toReview && toReview.length > 0 && (
-        <section className="mt-10">
-          <h2 className="text-sm font-semibold text-muted">Open for review, from the team</h2>
-          <p className="mt-1 text-xs text-muted">
-            Other people&apos;s work that has reached review: awaiting approval, or ready to
-            schedule. You can read it and suggest improvements. Only the author can edit or
-            schedule.
-          </p>
-          <div className="mt-3 flex flex-col gap-2">
-            {toReview.map((r) => (
-              <Link key={r.id} href={`/requests/${r.id}`}>
-                <Card className="flex items-center justify-between gap-4 p-4 hover:border-accent">
-                  <span className="min-w-0 truncate text-sm font-medium">
-                    {r.raw_idea || r.primary_keyword}
-                  </span>
-                  <StatusBadge status={r.status} />
-                </Card>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
+            )}
 
-</main>
+            <ul className="flex flex-col gap-3">
+              {(requests ?? []).map((r) => (
+                <li key={r.id}>
+                  <Link href={`/requests/${r.id}`}>
+                    <Card className="flex items-center justify-between gap-4 px-5 py-4 transition-shadow hover:shadow-md">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">
+                          {r.raw_idea || r.primary_keyword}
+                        </p>
+                        <p className="mt-1 text-xs text-muted">
+                          {r.input_path === "raw_idea" ? "Raw idea" : "Source URL"} ·{" "}
+                          {r.channels.join(", ")}
+                        </p>
+                      </div>
+                      <StatusBadge status={r.status} />
+                    </Card>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </>
+        }
+        toReview={
+          <>
+            <p className="text-xs text-muted">
+              Other people&apos;s work that has reached review: awaiting approval, or ready to
+              schedule. You can read it and suggest improvements. Only the author can edit or
+              schedule.
+            </p>
+
+            {(!toReview || toReview.length === 0) && (
+              <Card className="mt-3 flex flex-col items-center gap-2 px-6 py-16 text-center">
+                <p className="text-sm font-medium">Nothing to review right now</p>
+                <p className="text-sm text-muted">
+                  Other people&apos;s requests show up here once they reach approval or scheduling.
+                </p>
+              </Card>
+            )}
+
+            <div className="mt-3 flex flex-col gap-2">
+              {(toReview ?? []).map((r) => (
+                <Link key={r.id} href={`/requests/${r.id}`}>
+                  <Card className="flex items-center justify-between gap-4 p-4 hover:border-accent">
+                    <span className="min-w-0 truncate text-sm font-medium">
+                      {r.raw_idea || r.primary_keyword}
+                    </span>
+                    <StatusBadge status={r.status} />
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          </>
+        }
+      />
+
+    </main>
   );
 }

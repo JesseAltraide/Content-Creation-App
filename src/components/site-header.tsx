@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import SignOutButton from "./sign-out-button";
 import SettingsAnnouncementPopup from "./settings-announcement-popup";
+import ViewSwitcher from "./view-switcher";
 import { getUnreadAnnouncements, getManagerState } from "@/lib/content-manager";
 
 export default async function SiteHeader() {
@@ -38,10 +39,8 @@ export default async function SiteHeader() {
             Settings
           </Link>
           <span className="hidden text-sm text-muted sm:inline">{user.email}</span>
-          {manager.managerUserId === user.id && (
-            <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent">
-              Content manager
-            </span>
+          {manager.isManagerAccount && !manager.unclaimed && (
+            <ViewSwitcher viewingAsWriter={manager.viewingAsWriter} />
           )}
           <SignOutButton />
         </div>
