@@ -7,6 +7,7 @@ import { ScoreBar } from "@/components/ui/score-bar";
 import { parseXPosts, parseNewsletter, CHANNEL_LABELS, floorForPass2Criterion } from "@/lib/channel-post-format";
 import EditChannelPostForm from "./edit-channel-post-form";
 import ReviseWithSuggestionsButton from "./revise-with-suggestions-button";
+import ImageSuggestion, { type StoredImageSuggestion } from "./image-suggestion";
 import GenerateAlternateToneButton from "./generate-alternate-tone-button";
 import SelectToneVariantButton from "./select-tone-variant-button";
 
@@ -77,10 +78,13 @@ export default function ChannelPostCard({
   evaluation,
   alternate,
   isOwner,
+  imageSuggestion,
 }: {
   requestId: string;
   channel: "linkedin" | "x" | "newsletter";
   body: string;
+  /** Null until someone asks. Newsletter never has one: it is sent as plain text. */
+  imageSuggestion?: StoredImageSuggestion;
   evaluation: EvalResult | undefined;
   alternate?: AlternateVariant;
   /** Reviewers see the post and its scores, never the controls. */
@@ -144,6 +148,15 @@ export default function ChannelPostCard({
             </div>
           )}
         </div>
+      )}
+
+      {channel !== "newsletter" && !editing && (
+        <ImageSuggestion
+          requestId={requestId}
+          channel={channel}
+          suggestion={imageSuggestion ?? null}
+          isOwner={isOwner}
+        />
       )}
 
       {isOwner && !editing && (

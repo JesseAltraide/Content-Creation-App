@@ -3,6 +3,7 @@ import { friendlyStageMessage } from "@/lib/friendly-errors";
 import RetryAdaptationButton from "./retry-adaptation-button";
 import RejectButton from "./reject-button";
 import ChannelPostCard from "./channel-post-card";
+import type { StoredImageSuggestion } from "./image-suggestion";
 import MarkReadyButton from "./mark-ready-button";
 
 type ChannelPost = {
@@ -12,6 +13,8 @@ type ChannelPost = {
   body: string;
   tone_variant: string;
   chosen: boolean;
+  /** Written per version, so a revision does not inherit an opinion about older text. */
+  image_suggestion?: StoredImageSuggestion;
 };
 
 type EvalResult = {
@@ -115,6 +118,7 @@ export default function ChannelPostsReview({
         body={post.body}
         evaluation={evalByChannel.get(post.channel)}
         isOwner={isOwner}
+        imageSuggestion={post.image_suggestion ?? null}
         alternate={
           alt
             ? { version: alt.version, body: alt.body, evaluation: alternateEvalByChannel.get(post.channel) }
