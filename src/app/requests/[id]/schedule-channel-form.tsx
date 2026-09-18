@@ -1,8 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+
+function localInputValue(d: Date): string {
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+}
 
 export default function ScheduleChannelForm({
   requestId,
@@ -15,12 +19,32 @@ export default function ScheduleChannelForm({
 }) {
   const router = useRouter();
   const [value, setValue] = useState("");
+  // datetime-local wants local wall-clock time, not an ISO/UTC string, so the offset
+  // has to be subtracted before slicing. Without that, anyone west of UTC gets a min
+  // in the future and anyone east gets one in the past.
+  const [minValue, setMinValue] = useState(() => localInputValue(new Date()));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // A page left open drifts: a min computed at render is stale an hour later, and the
+  // picker would happily offer a slot that has since passed. Cheap enough to keep
+  // current, and it costs nothing when the form is idle.
+  useEffect(() => {
+    const id = setInterval(() => setMinValue(localInputValue(new Date())), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   async function handleSchedule() {
     if (!value) {
       setError("Pick a date and time.");
+      return;
+    }
+    // `min` is advisory: browsers vary on whether a typed (rather than picked) value
+    // is rejected, and it is trivially removed from the DOM. This is the real client
+    // guard, and the schedule route rejects a past time again server-side regardless
+    // of what arrives.
+    if (new Date(value).getTime() <= Date.now()) {
+      setError("That time has already passed. Pick a time in the future.");
       return;
     }
     setSubmitting(true);
@@ -72,7 +96,11 @@ export default function ScheduleChannelForm({
         <input
           type="datetime-local"
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          min={minValue}
+          onChange={(e) => {
+            setValue(e.target.value);
+            if (error) setError(null);
+          }}
           className="rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
         />
         <Button onClick={handleSchedule} disabled={submitting}>
@@ -84,6 +112,9 @@ export default function ScheduleChannelForm({
           </Button>
         )}
       </div>
+      <p className="text-xs text-muted">
+        Times are in your own timezone. Only times from now onwards can be chosen.
+      </p>
       {error && <p className="text-sm text-danger">{error}</p>}
     </div>
   );
