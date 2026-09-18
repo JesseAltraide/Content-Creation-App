@@ -466,6 +466,12 @@ function adaptCachedContext() {
     "X: hook-first, one core idea per post, line breaks over hashtags, at most 1-2 hashtags and only on the final post if threaded. The human requested '${$('Build Adaptation Context').first().json.x_thread_length}' - 'single' means exactly one post, 'mini' means roughly 3 posts, 'expansive' means roughly 5 posts. Never pad to hit a target count - if the idea genuinely doesn't need that many posts, write fewer and say nothing about it. Each individual post is HARD capped at 280 characters including spaces, and this is counted programmatically after you write it. Aim for 240-270 characters per post so there is margin: going over forces a whole revision round and caps the Channel Fit score. Count each post before you return it. Tone reference:\\n${$('Build Adaptation Context').first().json.toneByChannel.x || 'not requested'}\\n\\n" +
     "Newsletter: a subject line, a 1-3 sentence intro, a skimmable body, and a closing CTA, 250-600 words total in body_markdown. Tone reference:\\n${$('Build Adaptation Context').first().json.toneByChannel.newsletter || 'not requested'}\\n\\n" +
     "Citations: these are published posts, not the article, so never put inline [Source: ...] tags in the body. Stay just as strictly grounded in the excerpts, but carry provenance the way each platform actually does it: LinkedIn and X get at most one short closing line naming the sources in plain words (for example 'Sources: Microsoft Learn docs and indexing benchmarks, links in comments'), and the newsletter may link naturally inside the body.\\n\\n" +
+    // Every adaptation so far compressed "nine percentage points" to "nine points",
+    // which on a football post reads as a league-table gap: a different claim, and a
+    // Factual Consistency deduction on every single round. Same class as the two
+    // Channel Fit rules above - a mistake the evaluator reliably catches belongs in
+    // the generation prompt, not in feedback after the fact.
+    "Fidelity of figures, applies to every channel: carry every number, unit, percentage, date and conditional across EXACTLY as the article states it. Never compress a unit into a shorter one ('nine percentage points' is not 'nine points', and on a football post that reads as league points, which is a different claim). Never drop a qualifier or conditional to save space ('if they get there', 'according to the model', 'as of this week'). If a figure will not fit with its unit and its qualifier intact, leave the figure out entirely rather than shortening it. " +
     "House style, applies to every channel: never use em dashes (the character U+2014). Use a full stop, a comma, a colon or parentheses instead. Do not state anything the excerpts do not support, and do not soften an unsupported claim with hedging language to sneak it in.`"
   );
 }
@@ -475,7 +481,12 @@ function adaptCachedContext() {
 // round, so they become the cached prefix and only the feedback varies.
 function adaptPrompt(feedbackExpr) {
   return feedbackExpr
-    ? "`The previous attempt needs these specific changes: ${" + feedbackExpr + "}`"
+    // The evaluator writes its suggestions in the same call that scores, and nothing
+    // checks them for accuracy before this prompt obeys them. Caught live: Pass 2
+    // suggested saying "Bayern Munich 2nd, 9 points behind", the revision complied,
+    // and the NEXT Pass 2 scored that exact sentence as a factual distortion, taking
+    // Factual Consistency from 18/20 to the 15 floor.
+    ? "`The previous attempt needs these specific changes: ${" + feedbackExpr + "}\n\nThe requested changes are the evaluator's wording, not fact. They are advisory on style and structure, and are NOT authoritative on any figure, unit, name or date. If following one would state something the article or the excerpts do not support, ignore that part and fix the underlying point another way. Accuracy outranks every suggestion here.`"
     : "`Write the first version now.`";
 }
 
@@ -679,6 +690,7 @@ function pass2EvalCachedContext() {
 function pass2EvalPrompt(textNodeName) {
   return (
     "`Evaluate each adapted channel post below against the rubric and excerpts above. You have not seen the adaptation reasoning - judge only what's here.\\n\\n" +
+    "When writing weakest_criteria_suggestions, name what is wrong and where, but do NOT compose replacement wording that restates a figure, unit, name or date. Say 'the odds gap is stated in the wrong unit' rather than quoting a corrected sentence: a suggestion is fed straight back into the next generation, and a figure restated in your words becomes the next version's error.\n\n" +
     "Adapted posts to evaluate - score every one shown here. Each entry in per_channel MUST include its own \\\"channel\\\" field set to that post's exact channel name (linkedin/x/newsletter), in addition to using that name as its key:\\n${$('" + textNodeName + "').first().json.channelsText}`"
   );
 }

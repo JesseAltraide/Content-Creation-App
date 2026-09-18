@@ -624,7 +624,7 @@ const ARTICLE_TOOL = {
 };
 
 const generatePrompt =
-  "`Write a full SEO article grounded only in the excerpts below - no unsupported claims or invented statistics. If the excerpts can't adequately support the desired length, write a shorter, fully-grounded article and say so isn't needed in the output, just write what's honestly supportable.\\n\\nWorking title: ${$('Fetch Angle Row').first().json.working_title}\\nThesis: ${$('Fetch Angle Row').first().json.thesis}\\nSection shape: ${JSON.stringify($('Fetch Angle Row').first().json.section_shape)}\\nPrimary keyword (must appear naturally, including in a heading): ${$('Fetch Request Row').first().json.primary_keyword}\\nDesired length: ${$('Fetch Request Row').first().json.desired_length || 'no specific target'}\\nContext from the manager: ${$('Fetch Request Row').first().json.context || 'none'}\\n\\nGrounded excerpts (cite the source URL inline as [Source: url] after any claim drawn from it):\\n${$('Build Excerpts Text').first().json.excerptsTextWithReason}\\n\\nWrite in markdown with proper H1/H2 heading hierarchy.\\n\\nHouse style: never use em dashes (the character U+2014) anywhere in the output. Use a full stop, a comma, a colon or parentheses instead. Do not state anything the excerpts do not support, and do not use hedging language to smuggle in a claim you cannot cite.`";
+  "`Write a full SEO article grounded only in the excerpts below - no unsupported claims or invented statistics. Fidelity of figures: carry every number, unit, percentage, date and conditional across from the excerpts EXACTLY as they state it. Never compress a unit into a shorter one ('nine percentage points' is not 'nine points'), and never drop a qualifier to save space. If a figure will not fit with its unit and qualifier intact, leave it out rather than shortening it. If the excerpts can't adequately support the desired length, write a shorter, fully-grounded article and say so isn't needed in the output, just write what's honestly supportable.\\n\\nWorking title: ${$('Fetch Angle Row').first().json.working_title}\\nThesis: ${$('Fetch Angle Row').first().json.thesis}\\nSection shape: ${JSON.stringify($('Fetch Angle Row').first().json.section_shape)}\\nPrimary keyword (must appear naturally, including in a heading): ${$('Fetch Request Row').first().json.primary_keyword}\\nDesired length: ${$('Fetch Request Row').first().json.desired_length || 'no specific target'}\\nContext from the manager: ${$('Fetch Request Row').first().json.context || 'none'}\\n\\nGrounded excerpts (cite the source URL inline as [Source: url] after any claim drawn from it):\\n${$('Build Excerpts Text').first().json.excerptsTextWithReason}\\n\\nWrite in markdown with proper H1/H2 heading hierarchy.\\n\\nHouse style: never use em dashes (the character U+2014) anywhere in the output. Use a full stop, a comma, a colon or parentheses instead. Do not state anything the excerpts do not support, and do not use hedging language to smuggle in a claim you cannot cite.`";
 
 claudeNode("claude-generate", "Claude: Generate Article", "claude-sonnet-5", ARTICLE_TOOL, generatePrompt, 8000);
 // Charge the attempt here, and only here: everything upstream (scraping, excerpt
@@ -710,7 +710,7 @@ const EVAL_CACHED_CONTEXT =
 
 function evalPrompt(bodyExpr) {
   return (
-    "`Evaluate the article below against the rubric and excerpts above. You have not seen how it was written or planned - judge only what's here.\\n\\nArticle:\\n${" +
+    "`Evaluate the article below against the rubric and excerpts above. You have not seen how it was written or planned - judge only what's here. When writing weakest_criteria_suggestions, name what is wrong and where, but do NOT compose replacement wording that restates a figure, unit, name or date. Say 'the odds gap is stated in the wrong unit' rather than quoting a corrected sentence: a suggestion is fed straight back into the next generation, and a figure restated in your words becomes the next version's error.\\n\\nArticle:\\n${" +
     bodyExpr +
     "}`"
   );
@@ -830,7 +830,7 @@ function buildRevisionRound(roundNum, prevGateIfName, prevSectionName) {
   const idBase = `revise-${roundNum}`;
 
   const revisePrompt =
-    "`Revise this article based on the evaluation feedback below. Address the flagged sections and unsupported claims specifically - stay grounded only in the excerpts, don't invent anything new to fill gaps.\\n\\nCurrent article:\\n${$('" +
+    "`Revise this article based on the evaluation feedback below. The recommended changes are the evaluator's wording, not fact. They are advisory on structure and emphasis, and are NOT authoritative on any figure, unit, name or date. If following one would state something the excerpts do not support, ignore that part and fix the underlying point another way. Accuracy outranks every recommendation here. Address the flagged sections and unsupported claims specifically - stay grounded only in the excerpts, don't invent anything new to fill gaps.\\n\\nCurrent article:\\n${$('" +
     prevSectionName +
     "').first().json.body_markdown}\\n\\nSections needing revision: ${JSON.stringify($('Gate (" +
     (roundNum === 1 ? "Round 0" : `Round ${roundNum - 1}`) +

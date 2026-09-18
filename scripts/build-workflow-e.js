@@ -499,7 +499,7 @@ const X_LENGTH_NOTE =
   "return note; })()}";
 
 const evalPrompt =
-  "`Evaluate this edited channel post against the rubric. You have not seen the edit reasoning - judge only what's here.\\n\\nRubric: " +
+  "`Evaluate this edited channel post against the rubric. You have not seen the edit reasoning - judge only what's here. When writing weakest_criteria_suggestions, name what is wrong and where, but do NOT compose replacement wording that restates a figure, unit, name or date. Say 'the odds gap is stated in the wrong unit' rather than quoting a corrected sentence: a suggestion is fed straight back into the next generation, and a figure restated in your words becomes the next version's error.\\n\\nRubric: " +
   PASS2_RUBRIC_TEXT +
   "\\n\\nChannel: ${$('Config').first().json.channel}\\n\\nEdited post:\\n${$('Compute Diff').first().json.editedText}\\n\\n" +
   X_LENGTH_NOTE +
