@@ -34,6 +34,11 @@ async function revertOnTriggerFailure(requestId: string, revert: Revert | undefi
   }
 }
 
+// Statuses a proxy or gateway returns when it gives up on a connection it is only
+// relaying. None of them come from n8n's webhook, so none of them tell us whether
+// the workflow is running.
+const GATEWAY_TIMEOUTS = new Set([408, 502, 503, 504, 522, 523, 524]);
+
 async function pingWebhook(
   path: string,
   body: Record<string, unknown>,
@@ -59,7 +64,27 @@ async function pingWebhook(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    if (!res.ok) {
+    // A gateway timeout is not a trigger failure. n8n.cloud's gateway cuts the
+    // connection at roughly 100 seconds (limitation #93) while the workflow carries
+    // on running, so on any long workflow this fired routinely: it reverted the
+    // status out from under a run that was still going, and logged "Nothing was
+    // generated, so it's safe to try again" when something very much was being
+    // generated. Acting on that message starts a SECOND run against the same
+    // request. Seen live on a Champions League adaptation: 524 logged at 10:37, the
+    // same run completed at 10:39.
+    //
+    // These codes are emitted by something between us and n8n, never by n8n's own
+    // webhook, so they say nothing about whether the workflow started. Everything
+    // else (a 404 on a bad path, a 500 before the workflow runs) genuinely means it
+    // did not, and still reverts.
+    if (GATEWAY_TIMEOUTS.has(res.status)) {
+      await logEvent({
+        requestId,
+        stage,
+        status: "failed",
+        detail: `The connection to n8n timed out (${res.status}) waiting for ${path}. This usually means the run is still going rather than that it failed: give it a few minutes and check back before retrying, because retrying now would start a second run alongside the first.`,
+      });
+    } else if (!res.ok) {
       await revertOnTriggerFailure(requestId, revert);
       await logEvent({
         requestId,
@@ -69,13 +94,30 @@ async function pingWebhook(
       });
     }
   } catch (err) {
-    await revertOnTriggerFailure(requestId, revert);
-    await logEvent({
-      requestId,
-      stage,
-      status: "failed",
-      detail: `n8n webhook ${path} unreachable: ${err instanceof Error ? err.message : String(err)}`,
-    });
+    // Same distinction one level down. A refused or unresolvable connection never
+    // reached n8n, so reverting is right. A timeout means we stopped listening to a
+    // request that was very likely delivered, so it is not safe to assume nothing
+    // started.
+    const message = err instanceof Error ? err.message : String(err);
+    const code = (err as { cause?: { code?: string }; code?: string })?.cause?.code ?? (err as { code?: string })?.code ?? "";
+    const timedOut = /timeout|timed out|aborted/i.test(message) || /TIMEOUT|ETIMEDOUT|ABORT/i.test(code);
+
+    if (timedOut) {
+      await logEvent({
+        requestId,
+        stage,
+        status: "failed",
+        detail: `The connection to n8n timed out waiting for ${path} (${message}). The run may well still be going: check back before retrying, because retrying now would start a second run alongside the first.`,
+      });
+    } else {
+      await revertOnTriggerFailure(requestId, revert);
+      await logEvent({
+        requestId,
+        stage,
+        status: "failed",
+        detail: `n8n webhook ${path} unreachable: ${message}`,
+      });
+    }
   }
 }
 

@@ -200,13 +200,13 @@ export default async function RequestDetailPage({
   const latestFailedEvent = events?.find((e) => e.status === "failed");
   // Whether background work is dead rather than slow. A trigger-status alone can't
   // tell us (nothing resets 'researching'/'generating'/'adapting' when a run dies),
-  // so the signal is: the most recent event is a failure. The one real exception is
-  // a 524, our own outbound connection giving up while n8n kept executing. The
-  // workflows now acknowledge immediately (Decision #101) so new runs should not log
-  // one, but requests created before that change still carry those entries and would
-  // otherwise be shown as dead when their work actually completed.
-  const latestIsDeadFailure =
-    latestEvent?.status === "failed" && !latestEvent.detail?.includes("524");
+  // so the signal is: the most recent event is a failure. The exception is a timeout
+  // between us and n8n, which says nothing about whether the run is alive: the
+  // connection gave up, the workflow carries on. Matched on the wording pingWebhook
+  // writes for exactly that case rather than on "524" alone, which missed the other
+  // gateway codes and would have shown a live run as dead.
+  const isTimeoutEvent = /timed out|\b(408|502|503|504|52[234])\b/.test(latestEvent?.detail ?? "");
+  const latestIsDeadFailure = latestEvent?.status === "failed" && !isTimeoutEvent;
   const needsAttention = req.status === "needs_human_attention" && latestFailedEvent;
   const attentionExplanation = needsAttention
     ? explainNeedsAttention(latestFailedEvent!.stage, latestFailedEvent!.detail)
