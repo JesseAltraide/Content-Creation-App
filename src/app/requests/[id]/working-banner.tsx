@@ -24,10 +24,20 @@ export default function WorkingBanner({
   quiet,
   canReset,
   renderedEventAt,
+  visibleRound,
 }: {
   requestId: string;
   status: string;
   stalled: boolean;
+  /**
+   * Version of the newest draft currently rendered below this banner, or null when
+   * there is nothing to read yet. Workflow B writes each round to the database as it
+   * finishes it, so a complete, finished-looking draft sits under this spinner while
+   * the next round is still being written. Caught live: a v2 draft was on screen and
+   * fully readable at 19:00, the banner said "writing the draft", and nothing said
+   * the two were talking about different rounds.
+   */
+  visibleRound?: number | null;
   /** Nothing has been logged for this request in a while - see page.tsx. */
   quiet: boolean;
   /** Reviewers watch; only the author can reset a run. */
@@ -41,6 +51,13 @@ export default function WorkingBanner({
 }) {
   const router = useRouter();
   const [elapsed, setElapsed] = useState(0);
+  // The poll is the only thing keeping this page current, and it used to fail in
+  // total silence: a 401 from an expired session, and every subsequent request went
+  // into the same empty catch while the banner kept promising the page updates
+  // itself. Three consecutive failures is 30 seconds, long enough that a single
+  // blip or a sleeping laptop does not raise it.
+  const [pollBroken, setPollBroken] = useState(false);
+  const failuresRef = useRef(0);
   // Initialised in the effect, not here: Date.now() during render is impure.
   const startedAtRef = useRef(0);
   // A trigger status alone doesn't mean work is still happening: these statuses
@@ -92,18 +109,32 @@ export default function WorkingBanner({
     // hand. Polling that changes nothing is worse than no polling, because it looks
     // like it is working. A reload is heavy, so it only happens on a real change.
     const checkForChange = async () => {
+      const failed = () => {
+        if (cancelled) return;
+        failuresRef.current += 1;
+        if (failuresRef.current >= 3) setPollBroken(true);
+      };
+
       try {
         const res = await fetch(`/api/requests/${requestId}/status`, { cache: "no-store" });
-        if (!res.ok || cancelled) return;
+        if (cancelled) return;
+        if (!res.ok) {
+          failed();
+          return;
+        }
         const body = (await res.json()) as { status: string | null; latestEventAt: string | null };
         if (cancelled) return;
+        failuresRef.current = 0;
+        setPollBroken(false);
         const changed =
           (body.status && body.status !== status) ||
           (body.latestEventAt && body.latestEventAt !== renderedEventAt);
         if (changed) window.location.reload();
       } catch {
-        // A failed poll is not worth surfacing: the next one is 10 seconds away, and
-        // the stalled/quiet states already cover work that never reports back.
+        // Surfaced rather than swallowed. A poll that has stopped working is the
+        // same defect as the router.refresh() era: the page looks like it is
+        // keeping itself current and is in fact frozen.
+        failed();
       }
     };
     fallbackId = setInterval(checkForChange, POLL_MS);
@@ -184,6 +215,36 @@ export default function WorkingBanner({
     );
   }
 
+  // The poll has stopped answering, so the promise that this page keeps itself
+  // current is no longer true. Saying so is the whole point: the work may well be
+  // finished already and this tab would never find out.
+  if (pollBroken) {
+    return (
+      <div
+        role="status"
+        className="mt-4 flex items-start gap-3 rounded-xl border border-warning/30 bg-warning-soft px-4 py-3"
+      >
+        <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-warning text-[10px] font-bold text-white">
+          !
+        </span>
+        <div className="text-sm text-warning">
+          <p className="font-medium">{label}, but this page has stopped checking for updates.</p>
+          <p className="mt-0.5 text-xs text-warning/90">
+            The run itself is unaffected and may already have finished. Your session may
+            simply have expired in this tab. Refresh to see where it actually is.
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-2 rounded-lg bg-warning px-3 py-1.5 text-xs font-medium text-white"
+          >
+            Refresh
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       role="status"
@@ -194,6 +255,15 @@ export default function WorkingBanner({
         <p className="font-medium">
           {label}. This page updates itself automatically, no need to refresh.
         </p>
+        {/* Named explicitly, because a finished-looking draft under a "writing the
+            draft" spinner reads as a system that has hung rather than one that is
+            on its next round. */}
+        {typeof visibleRound === "number" && (
+          <p className="mt-0.5 text-xs font-medium text-accent">
+            The draft below is round {visibleRound} and is complete. It is being revised
+            now, and will be replaced once the next round has been evaluated.
+          </p>
+        )}
         <p className="mt-0.5 text-xs text-accent/80">
           Working for {elapsedText}. This stage can take a few minutes, so a wait on its own
           doesn&apos;t mean anything broke. If nothing reports back within 5 minutes,
