@@ -52,9 +52,10 @@ function statusChips(rows: { status: string }[]): { status: string; label: strin
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; tab?: string }>;
 }) {
-  const { status: statusFilter } = await searchParams;
+  const { status: statusFilter, tab } = await searchParams;
+  const activeTab: "mine" | "review" = tab === "review" ? "review" : "mine";
   const supabase = await createClient();
   const {
     data: { user },
@@ -92,6 +93,11 @@ export default async function HomePage({
     ? allToReview.filter((r) => r.status === statusFilter)
     : allToReview;
 
+  // The chips count the list that is actually on screen. Counting both at once showed
+  // "All 2" above a single visible request, because the second was someone else's work
+  // sitting in the other tab.
+  const countedRows = activeTab === "review" ? allToReview : allMine;
+
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <div className="flex items-center justify-between">
@@ -107,11 +113,13 @@ export default async function HomePage({
       {/* Suspense because useSearchParams opts a client component into deferred
           rendering; without it the whole page would have to be client-rendered. */}
       <Suspense fallback={<div className="mt-4 h-7" />}>
-        <StatusFilter counts={statusChips([...allMine, ...allToReview])} total={allMine.length + allToReview.length} />
+        <StatusFilter counts={statusChips(countedRows)} total={countedRows.length} />
       </Suspense>
 
       <RequestListTabs
-        reviewCount={visibleToReview.length}
+        activeTab={activeTab}
+        statusFilter={statusFilter}
+        reviewCount={allToReview.length}
         hasWorkInFlight={[...allMine, ...allToReview].some((r) => WORKING_STATUSES.has(r.status))}
         mine={
           <>

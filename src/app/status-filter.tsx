@@ -18,6 +18,17 @@ export default function StatusFilter({
 }) {
   const params = useSearchParams();
   const active = params.get("status");
+  const tab = params.get("tab");
+
+  // Keeps the tab, so filtering while looking at "Open for review" does not silently
+  // drop you back into your own list.
+  const href = (status: string | null) => {
+    const next = new URLSearchParams();
+    if (tab) next.set("tab", tab);
+    if (status) next.set("status", status);
+    const query = next.toString();
+    return query ? `/?${query}` : "/";
+  };
 
   const chip = (isActive: boolean) =>
     `rounded-full px-3 py-1 text-xs font-medium transition-colors ${
@@ -28,13 +39,13 @@ export default function StatusFilter({
 
   return (
     <div className="mt-4 flex flex-wrap items-center gap-1.5">
-      <Link href="/" prefetch={false} className={chip(!active)}>
+      <Link href={href(null)} prefetch={false} className={chip(!active)}>
         All {total}
       </Link>
       {counts.map((c) => (
         <Link
           key={c.status}
-          href={`/?status=${encodeURIComponent(c.status)}`}
+          href={href(c.status)}
           prefetch={false}
           className={chip(active === c.status)}
         >

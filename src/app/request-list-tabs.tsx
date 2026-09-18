@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import Link from "next/link";
 
 // Two lists on one screen: your own work, and other people's work that has
 // reached a reviewable stage. Tabs rather than stacked sections so the second
@@ -10,15 +11,23 @@ export default function RequestListTabs({
   toReview,
   reviewCount,
   hasWorkInFlight,
+  activeTab,
+  statusFilter,
 }: {
   mine: React.ReactNode;
   toReview: React.ReactNode;
   reviewCount: number;
+  /**
+   * In the URL rather than in state, so the status chips above can count the list that
+   * is actually on screen. They used to count both lists at once, which showed "All 2"
+   * over a single visible request.
+   */
+  activeTab: "mine" | "review";
+  /** Preserved when switching tabs, so a filtered view stays filtered. */
+  statusFilter?: string;
   /** Any request on this page currently mid-pipeline, so the badges will go stale. */
   hasWorkInFlight: boolean;
 }) {
-  const [tab, setTab] = useState<"mine" | "review">("mine");
-
   // These are server-rendered badges with no realtime subscription, so leaving this
   // page open while a run finishes showed a stale status indefinitely.
   //
@@ -53,24 +62,29 @@ export default function RequestListTabs({
     };
   }, [hasWorkInFlight]);
 
+  const href = (tab: "mine" | "review") => {
+    const params = new URLSearchParams();
+    if (tab === "review") params.set("tab", "review");
+    if (statusFilter) params.set("status", statusFilter);
+    const query = params.toString();
+    return query ? `/?${query}` : "/";
+  };
+
+  const tabClass = (isActive: boolean) =>
+    `rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+      isActive ? "bg-surface text-foreground shadow-sm" : "text-muted hover:text-foreground"
+    }`;
+
   return (
     <div className="mt-8">
       <div className="flex gap-1 rounded-lg bg-background p-1">
-        <button
-          type="button"
-          onClick={() => setTab("mine")}
-          className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-            tab === "mine" ? "bg-surface text-foreground shadow-sm" : "text-muted hover:text-foreground"
-          }`}
-        >
+        <Link href={href("mine")} prefetch={false} className={tabClass(activeTab === "mine")}>
           My requests
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("review")}
-          className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-            tab === "review" ? "bg-surface text-foreground shadow-sm" : "text-muted hover:text-foreground"
-          }`}
+        </Link>
+        <Link
+          href={href("review")}
+          prefetch={false}
+          className={`flex items-center gap-1.5 ${tabClass(activeTab === "review")}`}
         >
           Open for review
           {reviewCount > 0 && (
@@ -78,10 +92,10 @@ export default function RequestListTabs({
               {reviewCount}
             </span>
           )}
-        </button>
+        </Link>
       </div>
 
-      <div className="mt-4">{tab === "mine" ? mine : toReview}</div>
+      <div className="mt-4">{activeTab === "mine" ? mine : toReview}</div>
     </div>
   );
 }
