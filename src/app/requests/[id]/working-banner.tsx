@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -30,6 +30,8 @@ export default function WorkingBanner({
 }) {
   const router = useRouter();
   const [elapsed, setElapsed] = useState(0);
+  // Initialised in the effect, not here: Date.now() during render is impure.
+  const startedAtRef = useRef(0);
   // A trigger status alone doesn't mean work is still happening: these statuses
   // are set before the webhook fires and nothing sets them back if the run dies.
   // Caught live - Workflow A crashed on a duplicate-source insert, logged the
@@ -46,12 +48,31 @@ export default function WorkingBanner({
   // pipeline - it only re-renders the page.
   useEffect(() => {
     if (!label) return;
-    setElapsed(0);
-    const tickId = setInterval(() => setElapsed((s) => s + 1), 1000);
+    // Elapsed is derived from a start timestamp rather than reset via setState in
+    // the effect body, which triggers a cascading render (and an eslint error).
+    startedAtRef.current = Date.now();
+    const tickId = setInterval(
+      () => setElapsed(Math.floor((Date.now() - startedAtRef.current) / 1000)),
+      1000
+    );
 
     const supabase = createClient();
     let channel: ReturnType<typeof supabase.channel> | undefined;
     let cancelled = false;
+    let fallbackId: ReturnType<typeof setInterval> | undefined;
+
+    // Safety net. Realtime is the primary mechanism and costs nothing between real
+    // changes, but when it silently stops delivering the page just sits there
+    // forever - which is exactly the "it said Researching for 4 minutes while the
+    // work had already finished" failure. Caught live: A1 completed and updated the
+    // request, the page never noticed. A1's success path writes no event_log row at
+    // all, so a missed `requests` UPDATE is the only signal there is.
+    // This only runs when the socket is NOT confirmed healthy, so a working
+    // subscription still does zero polling.
+    const startFallback = () => {
+      if (cancelled || fallbackId) return;
+      fallbackId = setInterval(() => router.refresh(), 15000);
+    };
 
     // The access token has to reach the realtime socket BEFORE subscribing.
     // postgres_changes enforces RLS, and this project's policies require
@@ -68,8 +89,10 @@ export default function WorkingBanner({
       if (cancelled) return;
       if (session) supabase.realtime.setAuth(session.access_token);
 
+      // Unique per mount: a reused channel name whose previous instance hasn't
+      // finished being removed can fail to attach, and removeChannel is async.
       channel = supabase
-        .channel(`request-${requestId}-working`)
+        .channel(`request-${requestId}-working-${Math.random().toString(36).slice(2)}`)
         .on(
           "postgres_changes",
           { event: "UPDATE", schema: "public", table: "requests", filter: `id=eq.${requestId}` },
@@ -80,12 +103,30 @@ export default function WorkingBanner({
           { event: "INSERT", schema: "public", table: "event_log", filter: `request_id=eq.${requestId}` },
           () => router.refresh()
         )
-        .subscribe();
+        .subscribe((subStatus) => {
+          if (subStatus === "SUBSCRIBED") {
+            if (fallbackId) {
+              clearInterval(fallbackId);
+              fallbackId = undefined;
+            }
+            return;
+          }
+          // CHANNEL_ERROR / TIMED_OUT / CLOSED all mean we are no longer being told
+          // about changes, so stop trusting the socket and start checking.
+          startFallback();
+        });
+
+      // If SUBSCRIBED never arrives at all (the silent case - no error is emitted,
+      // it just never connects), don't wait forever to find out.
+      setTimeout(() => {
+        if (!cancelled && channel?.state !== "joined") startFallback();
+      }, 8000);
     })();
 
     return () => {
       cancelled = true;
       clearInterval(tickId);
+      if (fallbackId) clearInterval(fallbackId);
       if (channel) supabase.removeChannel(channel);
     };
     // `stalled` is a dependency too: when a retry clears it, this has to re-subscribe.
