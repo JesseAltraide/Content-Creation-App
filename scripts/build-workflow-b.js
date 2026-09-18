@@ -481,11 +481,40 @@ codeNode(
     "excerpts = excerpts.filter(e => e && typeof e === 'object');" + NL +
     "const sources = $('Count Scraped Sources').first().json.sources;" + NL +
     "const requestId = $('Config').first().json.request_id;" + NL +
+    // excerpts.source_id is NOT NULL, so an excerpt whose cited URL cannot be
+    // matched back to a scraped source has to be dropped. Exact string equality
+    // was doing that silently and far too often: Claude echoes the URL from the
+    // prompt, and any difference at all (trailing slash, http vs https, a www
+    // prefix, percent-encoding, a stored URL that arrived truncated from search)
+    // meant every excerpt was discarded and the run reported "no relevant
+    // passages" for sources that plainly were relevant. Confirmed live on a
+    // Champions League request whose UEFA source URL was stored truncated.
+    // Plain string ops rather than regex: this is assembled into a JS string, and
+    // the backslash escaping a regex needs does not survive that cleanly.
+    "const norm = (u) => {" + NL +
+    "  let x = String(u || '').trim().toLowerCase();" + NL +
+    "  if (x.startsWith('https://')) x = x.slice(8);" + NL +
+    "  else if (x.startsWith('http://')) x = x.slice(7);" + NL +
+    "  if (x.startsWith('www.')) x = x.slice(4);" + NL +
+    "  while (x.endsWith('/')) x = x.slice(0, -1);" + NL +
+    "  return x;" + NL +
+    "};" + NL +
+    "const findSource = (cited) => {" + NL +
+    "  const c = norm(cited);" + NL +
+    "  if (!c) return null;" + NL +
+    "  let hit = sources.find(s => norm(s.url) === c);" + NL +
+    "  if (hit) return hit;" + NL +
+    "  // One side may be a truncated form of the other." + NL +
+    "  hit = sources.find(s => { const n = norm(s.url); return n.startsWith(c) || c.startsWith(n); });" + NL +
+    "  return hit || null;" + NL +
+    "};" + NL +
     "const mapped = excerpts.map(e => {" + NL +
-    "  const source = sources.find(s => s.url === e.source_url);" + NL +
+    "  const source = findSource(e.source_url);" + NL +
     "  return { request_id: requestId, source_id: source ? source.id : null, text: e.text, reason: e.reason };" + NL +
     "}).filter(e => e.source_id);" + NL +
-    "return [{ json: { requestId, excerpts: mapped } }];"
+    "// Surfaced so a zero-excerpt outcome can be told apart from Claude simply" + NL +
+    "// finding nothing, which reads identically to the human but means the opposite." + NL +
+    "return [{ json: { requestId, excerpts: mapped, returnedByClaude: excerpts.length, unmatched: excerpts.length - mapped.length } }];"
 );
 connect("Claude: Select Excerpts", "Parse Excerpts", 0);
 
@@ -502,7 +531,12 @@ withLane(320, () => {
   supabaseWrite(
     "log-no-excerpts", "Log Event (no excerpts)", "POST",
     "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",
-    "={{ JSON.stringify({ request_id: $('Parse Excerpts').first().json.requestId, stage: 'excerpt_selection', status: 'failed', detail: 'Sources loaded fine but none contained a passage relevant to the chosen angle.' }) }}"
+    // Two very different outcomes used to read identically. Claude finding nothing
+    // relevant is a content judgement the human should act on; Claude finding
+    // plenty and every citation failing to match a stored source is a bug on our
+    // side, and telling someone their sources are irrelevant when they are not
+    // sends them off rewriting an angle that was fine.
+    "={{ JSON.stringify({ request_id: $('Parse Excerpts').first().json.requestId, stage: 'excerpt_selection', status: 'failed', detail: $('Parse Excerpts').first().json.returnedByClaude > 0 ? `Claude selected ${$('Parse Excerpts').first().json.returnedByClaude} passage(s), but none could be matched back to a scraped source, so none were saved. That is a system fault rather than a problem with your angle - retry, and report it if it happens again.` : 'Sources loaded fine but none contained a passage relevant to the chosen angle.' }) }}"
   );
   connect("Mark Needs Attention (no excerpts)", "Log Event (no excerpts)");
   respondNode("respond-no-excerpts", "Respond (no excerpts)", "={{ JSON.stringify({ ok: false, reason: 'zero_relevant_excerpts' }) }}");
