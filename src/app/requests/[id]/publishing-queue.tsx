@@ -38,7 +38,7 @@ type ScheduledItem = {
 
 const STATUS_LABELS: Record<string, { label: string; className: string }> = {
   scheduled: { label: "Scheduled", className: "bg-accent-soft text-accent" },
-  published: { label: "Published", className: "bg-success-soft text-success" },
+  published: { label: "Sent", className: "bg-success-soft text-success" },
   overdue: { label: "Overdue", className: "bg-warning-soft text-warning" },
   publish_failed: { label: "Failed", className: "bg-danger-soft text-danger" },
 };
@@ -134,9 +134,22 @@ export default function PublishingQueue({
           const pending = scheduledContent.find(
             (s) => s.channel === channel && (!post || s.channel_post_id === post.id) && s.status === "scheduled"
           );
+          // Scoped to the post in use, not to the channel. The channel's newest row can
+          // belong to a version that has since been replaced, and labelling the card
+          // "Sent" off the back of it describes different words from the ones being
+          // offered for scheduling: LinkedIn read "Sent" over a Schedule form because
+          // version 1 had gone out and version 2 was in use.
           const latestForChannel = scheduledContent
-            .filter((s) => s.channel === channel)
+            .filter((s) => s.channel === channel && (!post || s.channel_post_id === post.id))
             .sort((a, b) => new Date(b.scheduled_for).getTime() - new Date(a.scheduled_for).getTime())[0];
+
+          // A send of some OTHER version is still worth knowing about, so it is shown
+          // as history rather than as this post's state.
+          const earlierSend = post
+            ? scheduledContent
+                .filter((sc) => sc.channel === channel && sc.channel_post_id !== post.id && sc.status === "published")
+                .sort((a, b) => new Date(b.scheduled_for).getTime() - new Date(a.scheduled_for).getTime())[0]
+            : undefined;
 
           // Two lowest-scoring criteria by proportion of their own max, which is what
           // the human can actually act on. A criterion out of 25 losing 7 points
@@ -182,6 +195,15 @@ export default function PublishingQueue({
             (s): s is string => typeof s === "string" && s.trim().length > 0
           );
 
+          // Whether the post CURRENTLY in use has already gone out. Deliberately
+          // matched on channel_post_id rather than on the channel: a channel can hold
+          // a published row for an older version while a newer one is in use, and
+          // that newer version has not been sent and is still schedulable. Matching
+          // on the channel alone would lock it out for good.
+          const sent = post
+            ? scheduledContent.find((sc) => sc.channel_post_id === post.id && sc.status === "published")
+            : undefined;
+
           if (!post && !latestForChannel) return null;
 
           return (
@@ -202,14 +224,40 @@ export default function PublishingQueue({
               {latestForChannel && (
                 <p className="mt-1 text-xs text-muted">
                   {latestForChannel.status === "published"
-                    ? `Published ${new Date(latestForChannel.published_at ?? latestForChannel.scheduled_for).toLocaleString()}${
+                    ? `Sent ${new Date(latestForChannel.published_at ?? latestForChannel.scheduled_for).toLocaleString()}${
                         latestForChannel.notification_sent ? "" : ", notification email failed to send"
                       }`
                     : `Scheduled for ${new Date(latestForChannel.scheduled_for).toLocaleString()}`}
                 </p>
               )}
 
-              {isOwner && eligible && post && (
+              {earlierSend && !sent && (
+                <p className="mt-1 text-xs text-muted">
+                  An earlier version of this post was sent on{" "}
+                  {new Date(earlierSend.published_at ?? earlierSend.scheduled_for).toLocaleString()}.
+                  The version in use now has not been sent.
+                </p>
+              )}
+
+              {/* Once it has actually gone out there is nothing left to schedule, and
+                  offering the form invites someone to send the same thing twice. The
+                  newsletter is the case that matters: that is a real delivery to real
+                  inboxes, not a reminder to yourself. */}
+              {sent && (
+                <p className="mt-3 rounded-lg bg-success-soft px-3 py-2 text-xs text-success">
+                  {channel === "newsletter"
+                    ? "Sent to subscribers"
+                    : "Reminder sent to you"}{" "}
+                  on {new Date(sent.published_at ?? sent.scheduled_for).toLocaleString()}. This
+                  version has gone out and cannot be scheduled again.
+                  {/* Not a dead end: there is a real way forward, and it is the one the
+                      version picker already supports. */}
+                  {" "}
+                  To send something else, edit the post or switch to another version first.
+                </p>
+              )}
+
+              {isOwner && eligible && post && !sent && (
                 <div className="mt-3">
                   <ScheduleChannelForm requestId={requestId} channel={channel} hasPendingSchedule={!!pending} />
                 </div>
