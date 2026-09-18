@@ -20,11 +20,14 @@ export default function ReviewComments({
   comments,
   currentUserId,
   isOwner,
+  openForReview,
 }: {
   requestId: string;
   comments: Comment[];
   currentUserId: string;
   isOwner: boolean;
+  /** Comments are only invited while the request is actually open for review. */
+  openForReview: boolean;
 }) {
   const router = useRouter();
   const [body, setBody] = useState("");
@@ -68,13 +71,15 @@ export default function ReviewComments({
         Review comments{comments.length > 0 ? ` (${comments.length})` : ""}
       </h2>
       <p className="mt-1 text-xs text-muted">
-        {isOwner
+        {!openForReview
+          ? "This request is no longer open for review. Earlier comments are kept below."
+          : isOwner
           ? "Suggestions from the team. They're advisory: nothing here blocks scheduling, and it's your call what to act on."
           : "You can read this and suggest improvements. Only the author can edit or schedule it."}
       </p>
 
       <Card className="mt-2 p-5">
-        <form onSubmit={submit} className="flex flex-col gap-2">
+        {openForReview && <form onSubmit={submit} className="flex flex-col gap-2">
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
@@ -98,7 +103,7 @@ export default function ReviewComments({
             </Button>
             {error && <span className="text-sm text-danger">{error}</span>}
           </div>
-        </form>
+        </form>}
 
         {comments.length > 0 && (
           <div className="mt-4 flex flex-col gap-3 border-t border-border pt-4">

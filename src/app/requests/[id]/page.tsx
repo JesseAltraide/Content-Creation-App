@@ -17,7 +17,7 @@ import PublishingQueue from "./publishing-queue";
 import WorkingBanner from "./working-banner";
 import RequestTabs from "./request-tabs";
 import ReviewComments from "./review-comments";
-import { getRequestAccess } from "@/lib/request-access";
+import { getRequestAccess, REVIEWABLE_STATUSES } from "@/lib/request-access";
 import { CHANNEL_LABELS } from "@/lib/channel-post-format";
 
 const CHANNEL_TABS = [
@@ -142,6 +142,11 @@ export default async function RequestDetailPage({
         .eq("id", req.resolved_audience_profile_id)
         .maybeSingle()
     : { data: null };
+
+  // Commenting is only invited once the work is actually open to the team. Before
+  // that nobody else can even see the request, so offering a box captioned
+  // "suggestions from the team" promises something impossible.
+  const openForReview = REVIEWABLE_STATUSES.includes(req.status);
 
   const sourceUrlsById = Object.fromEntries((sources ?? []).map((s) => [s.id, s.url]));
 
@@ -459,12 +464,15 @@ export default async function RequestDetailPage({
       />
 
 
-      <ReviewComments
-        requestId={id}
-        comments={comments ?? []}
-        currentUserId={user!.id}
-        isOwner={access.isOwner}
-      />
+      {(openForReview || (comments ?? []).length > 0) && (
+        <ReviewComments
+          requestId={id}
+          comments={comments ?? []}
+          currentUserId={user!.id}
+          isOwner={access.isOwner}
+          openForReview={openForReview}
+        />
+      )}
 
       {/* Never auto-opens, not even on failure: the banners above already say what
           went wrong in plain language, and springing a wall of stage names on

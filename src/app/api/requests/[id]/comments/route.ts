@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { userCanViewRequest } from "@/lib/request-access";
+import { userCanViewRequest, REVIEWABLE_STATUSES } from "@/lib/request-access";
 
 // Deliberately gated on VIEW access, not modify: the whole point is that someone
 // other than the author can leave a suggestion. Commenting is the one thing a
@@ -27,6 +27,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
 
+  // Being able to see a request is not the same as it being open for review. The
+  // author can always see their own work, so without this they could comment on it
+  // while it was still private and nobody else could read it.
+  const admin = createAdminClient();
+  const { data: reqRow } = await admin
+    .from("requests")
+    .select("status")
+    .eq("id", requestId)
+    .maybeSingle();
+  if (!reqRow || !REVIEWABLE_STATUSES.includes(reqRow.status)) {
+    return NextResponse.json(
+      { error: "This request isn't open for review yet, so there's nothing to comment on." },
+      { status: 409 }
+    );
+  }
+
   const parsed = bodySchema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json(
@@ -35,7 +51,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     );
   }
 
-  const admin = createAdminClient();
   const { error } = await admin.from("request_comments").insert({
     request_id: requestId,
     user_id: user.id,
