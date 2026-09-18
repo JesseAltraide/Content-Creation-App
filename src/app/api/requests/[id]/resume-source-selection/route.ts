@@ -4,6 +4,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanModifyRequest } from "@/lib/request-access";
 import { logEvent } from "@/lib/events";
 
+// This route either calls a model, triggers an n8n workflow, or keeps working in
+// after() once the response has gone out. Serverless kills the function at its
+// duration limit whether or not that work finished, and work cut off halfway is
+// exactly what leaves a row stranded mid-stage. Stated explicitly rather than left
+// to the platform default.
+export const maxDuration = 300;
+
 // Workflow A1's success path is Insert Candidate Sources -> Mark Awaiting Selection
 // -> Respond, and only the first of those has any failure handling. When the middle
 // step does not take effect, the sources are sitting in the table ready to pick while

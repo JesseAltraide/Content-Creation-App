@@ -8,6 +8,13 @@ import { getOnboardingStatus } from "@/lib/onboarding";
 import { preflightResonance } from "@/lib/resonance-preflight";
 import { assessSourceUrls } from "@/lib/source-quality";
 
+// This route either calls a model, triggers an n8n workflow, or keeps working in
+// after() once the response has gone out. Serverless kills the function at its
+// duration limit whether or not that work finished, and work cut off halfway is
+// exactly what leaves a row stranded mid-stage. Stated explicitly rather than left
+// to the platform default.
+export const maxDuration = 300;
+
 export async function POST(request: Request) {
   const supabase = await createClient();
   const {

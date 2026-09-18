@@ -4,6 +4,13 @@ import { createClient } from "@/lib/supabase/server";
 import { userCanModifyRequest } from "@/lib/request-access";
 import { triggerEditTriage } from "@/lib/n8n";
 
+// This route either calls a model, triggers an n8n workflow, or keeps working in
+// after() once the response has gone out. Serverless kills the function at its
+// duration limit whether or not that work finished, and work cut off halfway is
+// exactly what leaves a row stranded mid-stage. Stated explicitly rather than left
+// to the platform default.
+export const maxDuration = 300;
+
 // No comment/reason required, unlike regenerate-with-comment (Decision #63) - the
 // edit itself is the explanation; the human is directly stating what the content
 // should say, not asking Claude to guess at a change.

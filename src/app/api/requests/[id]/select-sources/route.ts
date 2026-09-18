@@ -7,6 +7,13 @@ import { logEvent } from "@/lib/events";
 import { blockSourceUrl } from "@/lib/source-quality";
 import { triggerScrapeAndProposeAngle } from "@/lib/n8n";
 
+// This route either calls a model, triggers an n8n workflow, or keeps working in
+// after() once the response has gone out. Serverless kills the function at its
+// duration limit whether or not that work finished, and work cut off halfway is
+// exactly what leaves a row stranded mid-stage. Stated explicitly rather than left
+// to the platform default.
+export const maxDuration = 300;
+
 const bodySchema = z.object({
   selectedSourceIds: z.array(z.string().uuid()).min(1, "Select at least one source."),
 });

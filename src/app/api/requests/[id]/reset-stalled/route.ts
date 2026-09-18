@@ -5,6 +5,13 @@ import { userCanModifyRequest } from "@/lib/request-access";
 import { logEvent } from "@/lib/events";
 import { SAFE_STATE, STALLED_MANUAL_MS } from "@/lib/stalled-runs";
 
+// This route either calls a model, triggers an n8n workflow, or keeps working in
+// after() once the response has gone out. Serverless kills the function at its
+// duration limit whether or not that work finished, and work cut off halfway is
+// exactly what leaves a row stranded mid-stage. Stated explicitly rather than left
+// to the platform default.
+export const maxDuration = 300;
+
 // A run that dies inside n8n without reaching one of its own failure handlers leaves
 // the request in a working status with nothing logged. The status is the only thing
 // the UI has to go on, so the request sits there claiming to be busy forever: caught

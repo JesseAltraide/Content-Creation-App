@@ -5,6 +5,13 @@ import { userCanModifyRequest } from "@/lib/request-access";
 import { logEvent } from "@/lib/events";
 import { triggerAdaptAndEvaluate } from "@/lib/n8n";
 
+// This route either calls a model, triggers an n8n workflow, or keeps working in
+// after() once the response has gone out. Serverless kills the function at its
+// duration limit whether or not that work finished, and work cut off halfway is
+// exactly what leaves a row stranded mid-stage. Stated explicitly rather than left
+// to the platform default.
+export const maxDuration = 300;
+
 // Hard rule (Decision #36, PRD test #5): approving content for which no passing
 // evaluation record exists is blocked at the state-transition level, not just hidden
 // in the UI. The atomic UPDATE below only succeeds if a real, passing evaluation

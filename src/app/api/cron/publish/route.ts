@@ -5,6 +5,13 @@ import { sendMail } from "@/lib/mailer";
 import { parseXPosts, parseNewsletter } from "@/lib/channel-post-format";
 import { newsletterHtml, markdownToPlainText } from "@/lib/newsletter-html";
 
+// This route either calls a model, triggers an n8n workflow, or keeps working in
+// after() once the response has gone out. Serverless kills the function at its
+// duration limit whether or not that work finished, and work cut off halfway is
+// exactly what leaves a row stranded mid-stage. Stated explicitly rather than left
+// to the platform default.
+export const maxDuration = 300;
+
 // Newsletter's unsubscribe footer, appended to every real send - required
 // alongside real sending, not optional (week4-full-flow.md line 295): a basic
 // unsubscribe link, honored immediately, not a silent compliance gap.

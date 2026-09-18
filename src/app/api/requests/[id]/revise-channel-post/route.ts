@@ -12,6 +12,13 @@ import { getClaude, GENERATION_MODEL, EVALUATION_MODEL } from "@/lib/claude";
 // can never disagree about the shape.
 import { asList } from "@/lib/eval-shape";
 
+// This route either calls a model, triggers an n8n workflow, or keeps working in
+// after() once the response has gone out. Serverless kills the function at its
+// duration limit whether or not that work finished, and work cut off halfway is
+// exactly what leaves a row stranded mid-stage. Stated explicitly rather than left
+// to the platform default.
+export const maxDuration = 300;
+
 // Workflow D's auto-revision loop stops after 2 rounds, and what it leaves behind is
 // a scored draft plus the evaluator's own suggestions for closing the gap. Until now
 // the only way past that was to hand-edit the post yourself, which for an X thread

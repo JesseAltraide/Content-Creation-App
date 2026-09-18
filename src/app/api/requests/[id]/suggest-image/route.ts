@@ -8,6 +8,13 @@ import { formatForEvaluator } from "@/lib/channel-post-format";
 import type Anthropic from "@anthropic-ai/sdk";
 import { getClaude, TRIAGE_MODEL } from "@/lib/claude";
 
+// This route either calls a model, triggers an n8n workflow, or keeps working in
+// after() once the response has gone out. Serverless kills the function at its
+// duration limit whether or not that work finished, and work cut off halfway is
+// exactly what leaves a row stranded mid-stage. Stated explicitly rather than left
+// to the platform default.
+export const maxDuration = 300;
+
 // Only LinkedIn and X. The newsletter is sent by this app as plain text, so there is
 // nowhere to put an image, and suggesting one would be advice the human cannot act on.
 const bodySchema = z.object({ channel: z.enum(["linkedin", "x"]) });

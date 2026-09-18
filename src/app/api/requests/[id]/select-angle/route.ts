@@ -7,6 +7,13 @@ import { logEvent } from "@/lib/events";
 import { triggerGenerateAndEvaluate } from "@/lib/n8n";
 import { REGENERATION_CAP } from "@/lib/regeneration";
 
+// This route either calls a model, triggers an n8n workflow, or keeps working in
+// after() once the response has gone out. Serverless kills the function at its
+// duration limit whether or not that work finished, and work cut off halfway is
+// exactly what leaves a row stranded mid-stage. Stated explicitly rather than left
+// to the platform default.
+export const maxDuration = 300;
+
 const bodySchema = z.object({ angleId: z.string().uuid() });
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {

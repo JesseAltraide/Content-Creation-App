@@ -4,6 +4,13 @@ import { logEvent } from "@/lib/events";
 import { sendMail } from "@/lib/mailer";
 import { SAFE_STATE, STALLED_SWEEP_MS } from "@/lib/stalled-runs";
 
+// This route either calls a model, triggers an n8n workflow, or keeps working in
+// after() once the response has gone out. Serverless kills the function at its
+// duration limit whether or not that work finished, and work cut off halfway is
+// exactly what leaves a row stranded mid-stage. Stated explicitly rather than left
+// to the platform default.
+export const maxDuration = 300;
+
 // Every stage of this pipeline runs on n8n and writes straight to Supabase, which is
 // what makes it safe to close the tab, and also what made it silent. A run that
 // finished, or dead-ended, while you were elsewhere told you nothing: you had to

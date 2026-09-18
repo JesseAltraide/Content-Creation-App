@@ -6,6 +6,13 @@ import { triggerSearchSources, triggerScrapeAndProposeAngle } from "@/lib/n8n";
 import { logEvent } from "@/lib/events";
 import { firedRecently } from "@/lib/debounce-trigger";
 
+// This route either calls a model, triggers an n8n workflow, or keeps working in
+// after() once the response has gone out. Serverless kills the function at its
+// duration limit whether or not that work finished, and work cut off halfway is
+// exactly what leaves a row stranded mid-stage. Stated explicitly rather than left
+// to the platform default.
+export const maxDuration = 300;
+
 // Re-triggers whichever stage the request was last attempting, without re-running
 // anything that already succeeded (already-scraped sources stay scraped). Per the
 // no-partial-progress rule: nothing in Supabase moved forward on the earlier
