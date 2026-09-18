@@ -8,6 +8,9 @@ import { firedRecently } from "@/lib/debounce-trigger";
 import { findLengthViolations, CHANNEL_CHAR_LIMITS, formatForEvaluator } from "@/lib/channel-post-format";
 import type Anthropic from "@anthropic-ai/sdk";
 import { getClaude, GENERATION_MODEL, EVALUATION_MODEL } from "@/lib/claude";
+// Shared with the pages that render these rows, so what is written and what is read
+// can never disagree about the shape.
+import { asList } from "@/lib/eval-shape";
 
 // Workflow D's auto-revision loop stops after 2 rounds, and what it leaves behind is
 // a scored draft plus the evaluator's own suggestions for closing the gap. Until now
@@ -127,25 +130,6 @@ function normaliseInput(channel: string, input: Record<string, unknown>): Record
   if (!Array.isArray(posts) && posts && typeof posts === "object") posts = Object.values(posts);
   if (!Array.isArray(posts)) posts = [];
   return { ...input, posts: (posts as unknown[]).map((p) => String(p)) };
-}
-
-// The same guard applied to the EVALUATION's nested values, which this route stores
-// directly. It was missing, so a stringified suggestions array went into the database
-// as a string and the request page crashed on .map, taking the whole channel tab with
-// it. Guarding the generation output and not the evaluation output was an oversight,
-// not a distinction.
-function toArray(value: unknown): unknown[] {
-  let v = value;
-  if (typeof v === "string") {
-    try {
-      v = JSON.parse(v);
-    } catch {
-      return [v];
-    }
-  }
-  if (Array.isArray(v)) return v;
-  if (v && typeof v === "object") return Object.values(v);
-  return [];
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -450,8 +434,8 @@ Fidelity of figures: carry every number, unit, percentage, date and conditional 
     content_version: newVersion,
     overall_score: evalInput.overall_score,
     status: evalInput.status,
-    criteria: toArray(evalInput.criteria),
-    weakest_criteria_suggestions: toArray(evalInput.weakest_criteria_suggestions).map((x) => String(x)),
+    criteria: asList<Record<string, unknown>>(evalInput.criteria),
+    weakest_criteria_suggestions: asList<string>(evalInput.weakest_criteria_suggestions).map((x) => String(x)),
     hard_block_triggered: false,
     hard_block_reason: null,
   });
