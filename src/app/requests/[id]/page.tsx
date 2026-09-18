@@ -300,6 +300,7 @@ export default async function RequestDetailPage({
         latestFailedEvent={latestFailedEvent}
         channelPosts={channelPosts ?? []}
         evaluations={pass2Evaluations ?? []}
+        isOwner={access.isOwner}
       />
 
       <RequestTabs
@@ -374,6 +375,7 @@ export default async function RequestDetailPage({
           <ArticleReview
             requestId={id}
             requestStatus={req.status}
+            isOwner={access.isOwner}
             regenerationCount={req.regeneration_count ?? 0}
             sections={sections ?? []}
             evaluations={evaluations ?? []}
@@ -395,6 +397,7 @@ export default async function RequestDetailPage({
                   latestFailedEvent={latestFailedEvent}
                   channelPosts={channelPosts ?? []}
                   evaluations={pass2Evaluations ?? []}
+                  isOwner={access.isOwner}
                   channelOnly={c}
                 />,
               ])
@@ -407,6 +410,7 @@ export default async function RequestDetailPage({
             evaluations={pass2Evaluations ?? []}
             scheduledContent={scheduledContent ?? []}
             brandChangedAt={brandChangedAt}
+            isOwner={access.isOwner}
           />
           ),
           sources: (
@@ -469,7 +473,13 @@ export default async function RequestDetailPage({
       )}
 
       <section className="mt-10 border-t border-border pt-6">
-        <DeleteButton requestId={id} title={req.raw_idea || req.primary_keyword} />
+        {access.isOwner ? (
+          <DeleteButton requestId={id} title={req.raw_idea || req.primary_keyword} />
+        ) : (
+          <p className="text-xs text-muted">
+            This is someone else&apos;s request. You can read it and comment, nothing more.
+          </p>
+        )}
       </section>
     </main>
   );

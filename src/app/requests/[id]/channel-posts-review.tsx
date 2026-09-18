@@ -34,6 +34,7 @@ export default function ChannelPostsReview({
   channelPosts,
   evaluations,
   channelOnly,
+  isOwner,
 }: {
   requestId: string;
   requestStatus: string;
@@ -47,6 +48,7 @@ export default function ChannelPostsReview({
    * above the tab strip so a failure can never hide behind an unselected tab.
    */
   channelOnly?: "linkedin" | "x" | "newsletter";
+  isOwner: boolean;
 }) {
   const isAdapting = requestStatus === "adapting";
   // A failed adaptation attempt reverts to 'approved' (see approve/route.ts and
@@ -112,6 +114,7 @@ export default function ChannelPostsReview({
         channel={post.channel}
         body={post.body}
         evaluation={evalByChannel.get(post.channel)}
+        isOwner={isOwner}
         alternate={
           alt
             ? { version: alt.version, body: alt.body, evaluation: alternateEvalByChannel.get(post.channel) }

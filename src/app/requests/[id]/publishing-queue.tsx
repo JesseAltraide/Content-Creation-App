@@ -37,6 +37,7 @@ export default function PublishingQueue({
   evaluations,
   scheduledContent,
   brandChangedAt,
+  isOwner,
 }: {
   requestId: string;
   channelPosts: ChannelPost[];
@@ -44,6 +45,8 @@ export default function PublishingQueue({
   scheduledContent: ScheduledItem[];
   /** When the audience or tone last changed, if ever. */
   brandChangedAt: string | null;
+  /** Only the author schedules; reviewers see the queue state read-only. */
+  isOwner: boolean;
 }) {
   // Only shows once there's at least one eligible (passing) channel post to
   // schedule, or an existing queue entry to display - nothing to show before
@@ -119,7 +122,7 @@ export default function PublishingQueue({
                 </p>
               )}
 
-              {eligible && post && (
+              {isOwner && eligible && post && (
                 <div className="mt-3">
                   <ScheduleChannelForm requestId={requestId} channel={channel} hasPendingSchedule={!!pending} />
                 </div>

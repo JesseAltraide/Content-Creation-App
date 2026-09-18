@@ -41,6 +41,7 @@ type Excerpt = { id: string; text: string; reason: string; source_id: string };
 export default function ArticleReview({
   requestId,
   requestStatus,
+  isOwner,
   regenerationCount,
   sections,
   evaluations,
@@ -49,6 +50,8 @@ export default function ArticleReview({
 }: {
   requestId: string;
   requestStatus: string;
+  /** Reviewers read a colleague's draft; every action stays with the author. */
+  isOwner: boolean;
   regenerationCount: number;
   sections: Section[];
   evaluations: EvalResult[];
@@ -63,7 +66,8 @@ export default function ArticleReview({
   // passed or is stuck at needs_human_attention (the internal auto-revision loop's
   // own cap having been reached doesn't remove the human's ability to try again with
   // guidance - regenerate's own separate 5-attempt cap is what actually stops this).
-  const canReview = requestStatus === "pending_approval" || requestStatus === "needs_human_attention";
+  const canReview =
+    isOwner && (requestStatus === "pending_approval" || requestStatus === "needs_human_attention");
 
   return (
     <section className="mt-8">

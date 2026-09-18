@@ -75,12 +75,15 @@ export default function ChannelPostCard({
   body,
   evaluation,
   alternate,
+  isOwner,
 }: {
   requestId: string;
   channel: "linkedin" | "x" | "newsletter";
   body: string;
   evaluation: EvalResult | undefined;
   alternate?: AlternateVariant;
+  /** Reviewers see the post and its scores, never the controls. */
+  isOwner: boolean;
 }) {
   const [editing, setEditing] = useState(false);
 
@@ -90,7 +93,7 @@ export default function ChannelPostCard({
         <h3 className="text-sm font-semibold">{CHANNEL_LABELS[channel] ?? channel}</h3>
         <div className="flex items-center gap-3">
           {evaluation && <span className="text-lg font-bold">{evaluation.overall_score}/100</span>}
-          {!editing && (
+          {isOwner && !editing && (
             <Button variant="ghost" onClick={() => setEditing(true)}>
               Edit
             </Button>
@@ -141,7 +144,7 @@ export default function ChannelPostCard({
         </div>
       )}
 
-      {!editing && (
+      {isOwner && !editing && (
         <div className="mt-4 border-t border-border pt-4">
           {alternate ? (
             <div>
