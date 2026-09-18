@@ -470,17 +470,16 @@ function adaptCachedContext() {
   );
 }
 
-// Prompt caching is PAUSED (Change #10): recombined into one block so D's reimport
-// carries only the citation and house-style fixes. adaptCachedContext() and
-// claudeNode's cachedContextExpr both remain, so re-enabling is a small change.
+// Prompt caching re-enabled (Change #10 reversed): the article, excerpts, audience
+// and channel rules are byte-identical across the initial adapt and every revise
+// round, so they become the cached prefix and only the feedback varies.
 function adaptPrompt(feedbackExpr) {
-  const base = adaptCachedContext().slice(0, -1); // drop the closing backtick
   return feedbackExpr
-    ? base + "\\n\\nThe previous attempt needs these specific changes: ${" + feedbackExpr + "}`"
-    : base + "`";
+    ? "`The previous attempt needs these specific changes: ${" + feedbackExpr + "}`"
+    : "`Write the first version now.`";
 }
 
-claudeNode("claude-adapt", "Claude: Adapt to Channels", "claude-sonnet-5", ADAPT_TOOL, adaptPrompt(null), 4000);
+claudeNode("claude-adapt", "Claude: Adapt to Channels", "claude-sonnet-5", ADAPT_TOOL, adaptPrompt(null), 4000, adaptCachedContext());
 connect("Build Adaptation Context", "Claude: Adapt to Channels: Build Request");
 claudeErrorBranch("Claude: Adapt to Channels", "channel_adaptation");
 
@@ -667,8 +666,7 @@ function pass2EvalCachedContext() {
 
 function pass2EvalPrompt(textNodeName) {
   return (
-    pass2EvalCachedContext().slice(0, -1) +
-    "\\n\\nEvaluate each adapted channel post below against the rubric and excerpts above. You have not seen the adaptation reasoning - judge only what's here.\\n\\n" +
+    "`Evaluate each adapted channel post below against the rubric and excerpts above. You have not seen the adaptation reasoning - judge only what's here.\\n\\n" +
     "Adapted posts to evaluate - score every one shown here. Each entry in per_channel MUST include its own \\\"channel\\\" field set to that post's exact channel name (linkedin/x/newsletter), in addition to using that name as its key:\\n${$('" + textNodeName + "').first().json.channelsText}`"
   );
 }
@@ -743,7 +741,8 @@ function buildPass2EvalRound(roundLabel, channelPostsSourceName, isFinalRound) {
     // adjusting for 3x the content) truncated mid-generation - confirmed live via
     // stop_reason: "max_tokens" with an empty tool_use input, not a prompt/schema
     // problem as first suspected.
-    8000
+    8000,
+    pass2EvalCachedContext()
   );
   connect(textNodeName, `Claude: Evaluate Channels (${roundLabel}): Build Request`);
   claudeErrorBranch(`Claude: Evaluate Channels (${roundLabel})`, "pass2_evaluation");
@@ -828,7 +827,7 @@ function buildPass2RevisionRound(roundNum, prevGateIfName, prevChannelPostsSourc
   const feedbackExpr =
     "JSON.stringify($('Gate (" + prevRoundLabel + ")').first().json.perChannel)";
 
-  claudeNode(`claude-${idBase}`, `Claude: Revise Channels (${label})`, "claude-sonnet-5", ADAPT_TOOL, adaptPrompt(feedbackExpr), 4000);
+  claudeNode(`claude-${idBase}`, `Claude: Revise Channels (${label})`, "claude-sonnet-5", ADAPT_TOOL, adaptPrompt(feedbackExpr), 4000, adaptCachedContext());
   connect(prevGateIfName, `Claude: Revise Channels (${label}): Build Request`, 1);
   claudeErrorBranch(`Claude: Revise Channels (${label})`, "channel_adaptation");
 

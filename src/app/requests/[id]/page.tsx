@@ -15,6 +15,14 @@ import ArticleReview from "./article-review";
 import ChannelPostsReview from "./channel-posts-review";
 import PublishingQueue from "./publishing-queue";
 import WorkingBanner from "./working-banner";
+import RequestTabs from "./request-tabs";
+import { CHANNEL_LABELS } from "@/lib/channel-post-format";
+
+const CHANNEL_TABS = [
+  { key: "linkedin" as const, label: CHANNEL_LABELS.linkedin },
+  { key: "x" as const, label: CHANNEL_LABELS.x },
+  { key: "newsletter" as const, label: CHANNEL_LABELS.newsletter },
+];
 
 const SOURCE_STATUS_STYLES: Record<string, string> = {
   scraped: "bg-success-soft text-success",
@@ -138,6 +146,12 @@ export default async function RequestDetailPage({
   const canTryDifferentAngle =
     needsAttention && ["excerpt_selection", "evaluation"].includes(latestFailedEvent!.stage);
 
+  // A channel only earns a tab once it actually has a chosen post to show.
+  const channelTabKeys = new Set(
+    (channelPosts ?? []).filter((p) => p.chosen).map((p) => p.channel as string)
+  );
+  const showSchedule = channelTabKeys.size > 0 || (scheduledContent ?? []).length > 0;
+
   return (
     <main className="mx-auto max-w-2xl px-6 py-12">
       <Link
@@ -233,69 +247,9 @@ export default async function RequestDetailPage({
         />
       )}
 
-      {angles && angles.length > 0 && (
-        <section className="mt-8">
-          <h2 className="text-sm font-semibold text-muted">
-            {angles.length > 1 ? "Proposed angles" : "Proposed angle"}
-          </h2>
-          <div className="mt-2 flex flex-col gap-3">
-            {angles.map((a) => (
-              <Card key={a.id} className={`p-5 ${a.chosen ? "border-accent" : ""}`}>
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="font-medium">{a.working_title}</p>
-                    <p className="mt-1 text-sm text-muted">{a.thesis}</p>
-                  </div>
-                  {a.chosen && (
-                    <span className="shrink-0 rounded-full bg-accent-soft px-2.5 py-1 text-xs font-semibold text-accent">
-                      Selected
-                    </span>
-                  )}
-                </div>
-
-                <div className="mt-4">
-                  <ScoreBar label="Audience resonance" score={a.resonance_score} max={15} floor={7} />
-                  <p className="mt-1 text-xs text-muted">
-                    Floor at 7/15. Below it, generation is hard-blocked; 7-10 proceeds with a
-                    soft flag; 11-15 proceeds cleanly.
-                  </p>
-                </div>
-
-                {Array.isArray(a.section_shape) && a.section_shape.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-                      Section shape
-                    </p>
-                    <ol className="mt-1.5 flex flex-col gap-1 text-sm text-foreground">
-                      {a.section_shape.map((heading: string, i: number) => (
-                        <li key={i} className="flex gap-2">
-                          <span className="text-muted">{i + 1}.</span>
-                          {heading}
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
-                )}
-
-                {req.status === "awaiting_angle_selection" && (
-                  <SelectAngleButton requestId={id} angleId={a.id} />
-                )}
-              </Card>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <ArticleReview
-        requestId={id}
-        requestStatus={req.status}
-        regenerationCount={req.regeneration_count ?? 0}
-        sections={sections ?? []}
-        evaluations={evaluations ?? []}
-        excerpts={excerpts ?? []}
-        sourceUrlsById={sourceUrlsById}
-      />
-
+      {/* Cross-channel banners and actions stay OUTSIDE the tabs on purpose: a
+          failure or a "mark ready" action must never be hidden behind a tab the
+          human has not selected. */}
       <ChannelPostsReview
         requestId={id}
         requestStatus={req.status}
@@ -305,32 +259,138 @@ export default async function RequestDetailPage({
         evaluations={pass2Evaluations ?? []}
       />
 
-      <PublishingQueue
-        requestId={id}
-        channelPosts={channelPosts ?? []}
-        evaluations={pass2Evaluations ?? []}
-        scheduledContent={scheduledContent ?? []}
+      <RequestTabs
+        tabs={[
+          ...(angles && angles.length > 0
+            ? [{ key: "angle" as const, label: angles.length > 1 ? "Angles" : "Angle" }]
+            : []),
+          ...((sections ?? []).length > 0 ? [{ key: "draft" as const, label: "Draft" }] : []),
+          ...CHANNEL_TABS.filter((c) => channelTabKeys.has(c.key)),
+          ...(showSchedule ? [{ key: "schedule" as const, label: "Schedule" }] : []),
+          ...((sources ?? []).length > 0 ? [{ key: "sources" as const, label: "Sources" }] : []),
+        ]}
+        panels={{
+          angle: (
+            <>
+        {angles && angles.length > 0 && (
+          <section className="mt-8">
+            <h2 className="text-sm font-semibold text-muted">
+              {angles.length > 1 ? "Proposed angles" : "Proposed angle"}
+            </h2>
+            <div className="mt-2 flex flex-col gap-3">
+              {angles.map((a) => (
+                <Card key={a.id} className={`p-5 ${a.chosen ? "border-accent" : ""}`}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="font-medium">{a.working_title}</p>
+                      <p className="mt-1 text-sm text-muted">{a.thesis}</p>
+                    </div>
+                    {a.chosen && (
+                      <span className="shrink-0 rounded-full bg-accent-soft px-2.5 py-1 text-xs font-semibold text-accent">
+                        Selected
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-4">
+                    <ScoreBar label="Audience resonance" score={a.resonance_score} max={15} floor={7} />
+                    <p className="mt-1 text-xs text-muted">
+                      Floor at 7/15. Below it, generation is hard-blocked; 7-10 proceeds with a
+                      soft flag; 11-15 proceeds cleanly.
+                    </p>
+                  </div>
+
+                  {Array.isArray(a.section_shape) && a.section_shape.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                        Section shape
+                      </p>
+                      <ol className="mt-1.5 flex flex-col gap-1 text-sm text-foreground">
+                        {a.section_shape.map((heading: string, i: number) => (
+                          <li key={i} className="flex gap-2">
+                            <span className="text-muted">{i + 1}.</span>
+                            {heading}
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+
+                  {req.status === "awaiting_angle_selection" && (
+                    <SelectAngleButton requestId={id} angleId={a.id} />
+                  )}
+                </Card>
+              ))}
+            </div>
+          </section>
+        )}
+
+            </>
+          ),
+          draft: (
+          <ArticleReview
+            requestId={id}
+            requestStatus={req.status}
+            regenerationCount={req.regeneration_count ?? 0}
+            sections={sections ?? []}
+            evaluations={evaluations ?? []}
+            excerpts={excerpts ?? []}
+            sourceUrlsById={sourceUrlsById}
+          />
+
+          ),
+          ...Object.fromEntries(
+            (["linkedin", "x", "newsletter"] as const)
+              .filter((c) => channelTabKeys.has(c))
+              .map((c) => [
+                c,
+                <ChannelPostsReview
+                  key={c}
+                  requestId={id}
+                  requestStatus={req.status}
+                  latestEvent={latestEvent}
+                  latestFailedEvent={latestFailedEvent}
+                  channelPosts={channelPosts ?? []}
+                  evaluations={pass2Evaluations ?? []}
+                  channelOnly={c}
+                />,
+              ])
+          ),
+          schedule: (
+
+          <PublishingQueue
+            requestId={id}
+            channelPosts={channelPosts ?? []}
+            evaluations={pass2Evaluations ?? []}
+            scheduledContent={scheduledContent ?? []}
+          />
+          ),
+          sources: (
+            <>
+        {sources && sources.length > 0 && (
+          <section className="mt-8">
+            <h2 className="text-sm font-semibold text-muted">Sources</h2>
+            <Card className="mt-2 divide-y divide-border p-1">
+              {sources.map((s) => (
+                <div key={s.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                  <span className="min-w-0 truncate text-sm text-foreground">{s.url}</span>
+                  <span
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
+                      SOURCE_STATUS_STYLES[s.status] ?? "bg-black/5 text-muted"
+                    }`}
+                  >
+                    {s.status.replace(/_/g, " ")}
+                  </span>
+                </div>
+              ))}
+            </Card>
+          </section>
+        )}
+            </>
+          ),
+        }}
       />
 
-      {sources && sources.length > 0 && (
-        <section className="mt-8">
-          <h2 className="text-sm font-semibold text-muted">Sources</h2>
-          <Card className="mt-2 divide-y divide-border p-1">
-            {sources.map((s) => (
-              <div key={s.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                <span className="min-w-0 truncate text-sm text-foreground">{s.url}</span>
-                <span
-                  className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
-                    SOURCE_STATUS_STYLES[s.status] ?? "bg-black/5 text-muted"
-                  }`}
-                >
-                  {s.status.replace(/_/g, " ")}
-                </span>
-              </div>
-            ))}
-          </Card>
-        </section>
-      )}
 
       {/* Never auto-opens, not even on failure: the banners above already say what
           went wrong in plain language, and springing a wall of stage names on

@@ -621,17 +621,19 @@ const EVAL_TOOL = {
 const RUBRIC_TEXT =
   "Score out of 100 across: Topic Relevance (20, floor 15), Source Grounding (20, floor 15), Factual Consistency (20, floor 15), Audience Fit (15, floor 6), SEO Fit (10, floor 4), Clarity (10, floor 4), Completeness (5, floor 2). Topic Relevance/Source Grounding/Factual Consistency are hard-block tier: if any scores below its floor, hard_block_triggered must be true regardless of the total. Verify every claim against the excerpt it cites and flag any claim citing nothing. Always populate weakest_criteria_suggestions, even on a passing score - a passing draft can still have one mediocre criterion worth naming.";
 
-// Prompt caching is PAUSED (programmer's call: see the whole flow working first,
-// with as few moving parts as possible). The split-prompt + cache_control version
-// is in git history and claudeNode still supports it via cachedContextExpr - this
-// is back to the single-block form so Workflow B's reimport carries only bug fixes.
+// Prompt caching re-enabled. The excerpts and rubric are byte-identical across all
+// three eval rounds in a run, so they become the cached prefix; the article body,
+// which is exactly what changes each round, stays in the uncached tail.
+const EVAL_CACHED_CONTEXT =
+  "`Grounded excerpts to check this article against:\\n${$('Build Excerpts Text').first().json.excerptsTextPlain}\\n\\nRubric: " +
+  RUBRIC_TEXT +
+  "`";
+
 function evalPrompt(bodyExpr) {
   return (
-    "`Evaluate this article against the rubric. You have not seen how it was written or planned - judge only what's here.\\n\\nRubric: " +
-    RUBRIC_TEXT +
-    "\\n\\nArticle:\\n${" +
+    "`Evaluate the article below against the rubric and excerpts above. You have not seen how it was written or planned - judge only what's here.\\n\\nArticle:\\n${" +
     bodyExpr +
-    "}\\n\\nGrounded excerpts it should be checked against:\\n${$('Build Excerpts Text').first().json.excerptsTextPlain}`"
+    "}`"
   );
 }
 
@@ -659,7 +661,8 @@ function buildEvalRound(roundLabel, sectionSourceName, isFinalRound) {
     "claude-opus-5",
     EVAL_TOOL,
     evalPrompt(`$('${sectionSourceName}').first().json.body_markdown`),
-    3000
+    3000,
+    EVAL_CACHED_CONTEXT
   );
   connect(sectionSourceName, `Claude: Evaluate (${roundLabel}): Build Request`);
   claudeErrorBranch(`Claude: Evaluate (${roundLabel})`, "evaluation", "$('Config').first().json.request_id");
@@ -756,9 +759,13 @@ function buildRevisionRound(roundNum, prevGateIfName, prevSectionName) {
     (roundNum === 1 ? "Round 0" : `Round ${roundNum - 1}`) +
     ")').first().json.recommended_changes)}\\nUnsupported/weak claims flagged: ${JSON.stringify($('Gate (" +
     (roundNum === 1 ? "Round 0" : `Round ${roundNum - 1}`) +
-    ")').first().json.unsupported_or_weak_claims)}\\n\\nGrounded excerpts available:\\n${$('Build Excerpts Text').first().json.excerptsTextPlain}`";
+    ")').first().json.unsupported_or_weak_claims)}`";
 
-  claudeNode(`claude-${idBase}`, `Claude: Revise (${label})`, "claude-sonnet-5", ARTICLE_TOOL, revisePrompt, 4000);
+  // Same excerpts block for both revise rounds, so they share one cache entry.
+  const REVISE_CACHED_CONTEXT =
+    "`Grounded excerpts available:\\n${$('Build Excerpts Text').first().json.excerptsTextPlain}`";
+
+  claudeNode(`claude-${idBase}`, `Claude: Revise (${label})`, "claude-sonnet-5", ARTICLE_TOOL, revisePrompt, 4000, REVISE_CACHED_CONTEXT);
   connect(prevGateIfName, `Claude: Revise (${label}): Build Request`, 1);
   claudeErrorBranch(`Claude: Revise (${label})`, "revision", "$('Config').first().json.request_id");
 

@@ -1,5 +1,5 @@
 import { Card } from "@/components/ui/card";
-import { CHANNEL_LABELS } from "@/lib/channel-post-format";
+import { CHANNEL_LABELS, findLengthViolations } from "@/lib/channel-post-format";
 import ScheduleChannelForm from "./schedule-channel-form";
 
 // Newsletter shares this same table/cron job but gets real delivery to every
@@ -7,7 +7,7 @@ import ScheduleChannelForm from "./schedule-channel-form";
 // /api/cron/publish for the branch.
 const QUEUE_CHANNELS = ["linkedin", "x", "newsletter"] as const;
 
-type ChannelPost = { id: string; channel: string; version: number; chosen: boolean };
+type ChannelPost = { id: string; channel: string; version: number; chosen: boolean; body: string };
 type EvalResult = { channel: string | null; content_version: number; status: string };
 type ScheduledItem = {
   id: string;
@@ -63,7 +63,11 @@ export default function PublishingQueue({
           const evalForPost = post
             ? evaluations.find((e) => e.channel === channel && e.content_version === post.version)
             : undefined;
-          const eligible = evalForPost?.status === "pass";
+          // Over-limit content is unpublishable regardless of its score, so it
+          // blocks scheduling the same way a failed evaluation does. Same helper
+          // the schedule route enforces with, so the two can't drift.
+          const lengthViolations = post ? findLengthViolations(channel, post.body ?? "") : [];
+          const eligible = evalForPost?.status === "pass" && lengthViolations.length === 0;
           const pending = scheduledContent.find(
             (s) => s.channel === channel && (!post || s.channel_post_id === post.id) && s.status === "scheduled"
           );
@@ -104,7 +108,18 @@ export default function PublishingQueue({
                 </div>
               )}
 
-              {post && !eligible && (
+              {post && lengthViolations.length > 0 && (
+                <p className="mt-2 text-xs text-danger">
+                  Over the {CHANNEL_LABELS[channel]} limit, so this can&apos;t be scheduled until it&apos;s
+                  shortened:{" "}
+                  {lengthViolations
+                    .map((v) => `${v.label} is ${v.length} characters (limit ${v.limit})`)
+                    .join("; ")}
+                  . Edit the post above to fix it.
+                </p>
+              )}
+
+              {post && !eligible && lengthViolations.length === 0 && (
                 <p className="mt-2 text-xs text-muted">
                   This channel&apos;s current draft hasn&apos;t passed Pass 2 evaluation yet, so there&apos;s nothing to
                   schedule until it does.

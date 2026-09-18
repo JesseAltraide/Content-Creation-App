@@ -33,6 +33,7 @@ export default function ChannelPostsReview({
   latestFailedEvent,
   channelPosts,
   evaluations,
+  channelOnly,
 }: {
   requestId: string;
   requestStatus: string;
@@ -40,6 +41,12 @@ export default function ChannelPostsReview({
   latestFailedEvent: { stage: string; status: string; detail: string | null } | undefined;
   channelPosts: ChannelPost[];
   evaluations: EvalResult[];
+  /**
+   * With a channel: render just that channel's card, for its own tab.
+   * Without: render only the cross-channel banners and actions, which stay pinned
+   * above the tab strip so a failure can never hide behind an unselected tab.
+   */
+  channelOnly?: "linkedin" | "x" | "newsletter";
 }) {
   const isAdapting = requestStatus === "adapting";
   // A failed adaptation attempt reverts to 'approved' (see approve/route.ts and
@@ -95,6 +102,25 @@ export default function ChannelPostsReview({
   const allNowPass =
     stuckHere && latestPosts.length > 0 && latestPosts.every((p) => evalByChannel.get(p.channel)?.status === "pass");
 
+  if (channelOnly) {
+    const post = latestByChannel.get(channelOnly);
+    if (!post) return null;
+    const alt = alternateByChannel.get(channelOnly);
+    return (
+      <ChannelPostCard
+        requestId={requestId}
+        channel={post.channel}
+        body={post.body}
+        evaluation={evalByChannel.get(post.channel)}
+        alternate={
+          alt
+            ? { version: alt.version, body: alt.body, evaluation: alternateEvalByChannel.get(post.channel) }
+            : undefined
+        }
+      />
+    );
+  }
+
   return (
     <section className="mt-8">
       <h2 className="text-sm font-semibold text-muted">Channel adaptation</h2>
@@ -126,22 +152,6 @@ export default function ChannelPostsReview({
           </p>
         </Card>
       )}
-
-      <div className="mt-4 flex flex-col gap-4">
-        {latestPosts.map((post) => {
-          const alt = alternateByChannel.get(post.channel);
-          return (
-            <ChannelPostCard
-              key={post.id}
-              requestId={requestId}
-              channel={post.channel}
-              body={post.body}
-              evaluation={evalByChannel.get(post.channel)}
-              alternate={alt ? { version: alt.version, body: alt.body, evaluation: alternateEvalByChannel.get(post.channel) } : undefined}
-            />
-          );
-        })}
-      </div>
 
       {stuckHere && (
         <Card className="mt-4 p-5">

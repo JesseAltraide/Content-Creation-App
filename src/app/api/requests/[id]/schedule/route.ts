@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logEvent } from "@/lib/events";
+import { findLengthViolations } from "@/lib/channel-post-format";
 
 // Newsletter shares this same scheduled_content table and cron job (Decision
 // #22/#48) but the cron handles it differently at fire time: LinkedIn/X get a
@@ -46,7 +47,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const { data: post } = await admin
     .from("channel_posts")
-    .select("id, version")
+    .select("id, version, body")
     .eq("request_id", requestId)
     .eq("channel", parsed.data.channel)
     .eq("chosen", true)
@@ -56,6 +57,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   if (!post) {
     return NextResponse.json({ error: "No adapted content exists for this channel yet." }, { status: 409 });
+  }
+
+  // Hard platform limits are not a quality judgment the evaluator can weigh against
+  // other criteria, they are a publishing fact: an over-length X post cannot be
+  // posted at all. Blocked here rather than left to the score, because a post can
+  // pass Pass 2 overall while still being unpublishable, and an edit re-scored
+  // through Workflow E used to bypass the length check entirely.
+  const violations = findLengthViolations(parsed.data.channel, post.body ?? "");
+  if (violations.length > 0) {
+    const detail = violations
+      .map((v) => `${v.label} is ${v.length} characters, limit is ${v.limit}`)
+      .join("; ");
+    return NextResponse.json(
+      {
+        error: `This ${parsed.data.channel} post is over the platform limit and can't be scheduled until it's shortened. ${detail}.`,
+      },
+      { status: 409 }
+    );
   }
 
   const { data: evaluation } = await admin
