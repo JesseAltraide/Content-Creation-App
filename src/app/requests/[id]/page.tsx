@@ -154,6 +154,12 @@ export default async function RequestDetailPage({
   // Commenting is only invited once the work is actually open to the team. Before
   // that nobody else can even see the request, so offering a box captioned
   // "suggestions from the team" promises something impossible.
+  // Every owner-only control in the subtree keys off one prop, so closing a rejected
+  // request is one substitution rather than a status check in each component. Delete
+  // deliberately keeps using access.isOwner: throwing away finished work is
+  // housekeeping, and a rejected request would otherwise be undeletable forever.
+  const canAct = access.isOwner && !access.isClosed;
+
   const openForReview = REVIEWABLE_STATUSES.includes(req.status);
 
   const sourceUrlsById = Object.fromEntries((sources ?? []).map((s) => [s.id, s.url]));
@@ -226,6 +232,18 @@ export default async function RequestDetailPage({
         </h1>
         <StatusBadge status={req.status} />
       </div>
+
+      {access.isClosed && (
+        <Card className="mt-4 p-4">
+          <p className="text-sm font-medium">This request was rejected and is closed.</p>
+          <p className="mt-0.5 text-xs text-muted">
+            Everything below stays readable as a record of what happened, including the scores
+            and the technical log, but nothing about it can change now: no edits, no revisions,
+            no scheduling, and it can&apos;t be reopened. Any post still waiting to publish was
+            cancelled. Start a new request to take the idea further.
+          </p>
+        </Card>
+      )}
 
       {!access.isOwner && (
         <Card className="mt-4 border-accent/20 bg-accent-soft p-4">
@@ -339,7 +357,7 @@ export default async function RequestDetailPage({
         latestFailedEvent={latestFailedEvent}
         channelPosts={channelPosts ?? []}
         evaluations={pass2Evaluations ?? []}
-        isOwner={access.isOwner}
+        isOwner={canAct}
       />
 
       <RequestTabs
@@ -419,7 +437,7 @@ export default async function RequestDetailPage({
           <ArticleReview
             requestId={id}
             requestStatus={req.status}
-            isOwner={access.isOwner}
+            isOwner={canAct}
             regenerationCount={req.regeneration_count ?? 0}
             sections={sections ?? []}
             evaluations={evaluations ?? []}
@@ -441,7 +459,7 @@ export default async function RequestDetailPage({
                   latestFailedEvent={latestFailedEvent}
                   channelPosts={channelPosts ?? []}
                   evaluations={pass2Evaluations ?? []}
-                  isOwner={access.isOwner}
+                  isOwner={canAct}
                   channelOnly={c}
                 />,
               ])
@@ -454,7 +472,7 @@ export default async function RequestDetailPage({
             evaluations={pass2Evaluations ?? []}
             scheduledContent={scheduledContent ?? []}
             brandChangedAt={brandChangedAt}
-            isOwner={access.isOwner}
+            isOwner={canAct}
           />
           ),
           sources: (
@@ -498,7 +516,7 @@ export default async function RequestDetailPage({
           requestId={id}
           comments={comments ?? []}
           currentUserId={user!.id}
-          isOwner={access.isOwner}
+          isOwner={canAct}
           openForReview={openForReview}
         />
       )}

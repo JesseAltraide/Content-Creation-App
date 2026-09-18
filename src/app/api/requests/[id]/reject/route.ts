@@ -57,11 +57,33 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     );
   }
 
+  // Closing the request has to close what it already put in motion. A post that was
+  // scheduled before the rejection would otherwise still be sent by the publish cron,
+  // which for the newsletter means real delivery to real subscribers of content the
+  // author just rejected. Pending entries only: anything already published is history
+  // and stays on the record.
+  const { data: channelPosts } = await admin
+    .from("channel_posts")
+    .select("id")
+    .eq("request_id", requestId);
+
+  const postIds = (channelPosts ?? []).map((p) => p.id);
+  let cancelled = 0;
+  if (postIds.length > 0) {
+    const { data: removed } = await admin
+      .from("scheduled_content")
+      .delete()
+      .in("channel_post_id", postIds)
+      .eq("status", "scheduled")
+      .select();
+    cancelled = removed?.length ?? 0;
+  }
+
   await logEvent({
     requestId,
     stage: "approval",
     status: "failed",
-    detail: `Rejected: ${parsed.data.reason}`,
+    detail: `Rejected: ${parsed.data.reason}${cancelled ? ` (${cancelled} pending scheduled post(s) cancelled).` : ""}`,
   });
 
   return NextResponse.json({ ok: true });

@@ -102,6 +102,18 @@ export default function ReviewActions({
   if (rejecting) {
     return (
       <div className="flex flex-col gap-2">
+        {/* Reject reads as "reject these posts" when it sits under the channel
+            adaptation, but it ends the whole request: the approved article and every
+            channel post stop here, and there is no route back to any of them. Worth
+            saying plainly before the click rather than discovering it after. */}
+        <div className="rounded-lg bg-danger-soft px-3 py-2.5">
+          <p className="text-sm font-medium text-danger">This ends the whole request.</p>
+          <p className="mt-0.5 text-xs text-danger/90">
+            The article and every channel post stop here. Nothing is deleted, but the request
+            can&apos;t continue afterwards and there&apos;s no way to reopen it. If you only want
+            to change one post, cancel and edit or revise it instead.
+          </p>
+        </div>
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-medium">Reason for rejecting *</span>
           <textarea
