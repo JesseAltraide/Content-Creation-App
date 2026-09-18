@@ -12,7 +12,7 @@
 // deliberately is worse than telling them what they are about to get.
 
 export type SourceIssue = {
-  kind: "video" | "homepage" | "listing" | "commercial" | "social";
+  kind: "video" | "homepage" | "listing" | "commercial" | "social" | "paywall";
   /** "weak" means it usually cannot support claims. "check" means look before relying on it. */
   severity: "weak" | "check";
   label: string;
@@ -21,6 +21,23 @@ export type SourceIssue = {
 
 const VIDEO_HOSTS = ["youtube.com", "youtu.be", "vimeo.com", "tiktok.com", "dailymotion.com"];
 const SOCIAL_HOSTS = ["twitter.com", "x.com", "facebook.com", "instagram.com", "threads.net", "reddit.com"];
+// Sites that meter or wall their articles. A scrape of one of these usually succeeds
+// and returns the teaser: a headline, the first paragraph or two, and a subscribe
+// prompt. That is the worst failure shape in this system, because nothing reports an
+// error. The excerpt step then quotes an intro as though it were the argument, and the
+// draft is grounded in a fragment.
+//
+// A list of domains is a blunt instrument and deliberately only warns: metering means
+// some of these are readable some of the time, and a scraper can get through. It
+// exists so the human knows what they are likely to get before they spend a scrape on
+// it, not to refuse the source.
+const PAYWALL_HOSTS = [
+  "nytimes.com", "ft.com", "wsj.com", "economist.com", "bloomberg.com", "washingtonpost.com",
+  "thetimes.co.uk", "telegraph.co.uk", "newyorker.com", "theatlantic.com", "wired.com",
+  "hbr.org", "businessinsider.com", "medium.com", "seekingalpha.com", "barrons.com",
+  "foreignaffairs.com", "thetimes.com", "afr.com", "theinformation.com",
+];
+
 const LISTING_SEGMENTS = ["tag", "tags", "category", "categories", "topic", "topics", "author", "search", "archive", "overview"];
 const COMMERCIAL_SEGMENTS = ["pricing", "plans", "checkout", "signup", "sign-up", "register", "cart", "contact"];
 
@@ -50,6 +67,16 @@ export function assessSourceUrl(rawUrl: string): SourceIssue | null {
       label: "Video",
       message:
         "Scraping a video page gets the title and description, not what is said in the video, so claims drawn from it are usually thin and hard to verify. Prefer an article that reports the same thing.",
+    };
+  }
+
+  if (PAYWALL_HOSTS.some((h) => host === h || host.endsWith("." + h))) {
+    return {
+      kind: "paywall",
+      severity: "check",
+      label: "Likely paywalled",
+      message:
+        "This site usually meters or walls its articles. A scrape often succeeds and returns only the opening paragraphs and a subscribe prompt, which reads as a real source but cannot support a claim. Check what actually came back before relying on it.",
     };
   }
 
@@ -116,4 +143,35 @@ export function assessSourceUrls(urls: string[]): SourceIssue[] {
     if (issue && !byKind.has(issue.kind)) byKind.set(issue.kind, issue);
   }
   return [...byKind.values()];
+}
+
+// What a paywall teaser looks like AFTER scraping, which is the only reliable signal:
+// the domain list above is a guess, this is evidence. Checked on the request page once
+// scraped_text exists, so a source that scraped "successfully" into 400 characters and
+// a subscribe prompt is visible as such rather than being quietly quoted as though it
+// were the article.
+const PAYWALL_PHRASES = [
+  "subscribe to continue",
+  "already a subscriber",
+  "subscribers only",
+  "to continue reading",
+  "create a free account",
+  "sign in to read",
+  "this article is for subscribers",
+  "start your free trial",
+  "register to continue",
+];
+
+/** Roughly 400 words. Below this, an article page has almost certainly been truncated. */
+const THIN_SCRAPE_CHARS = 2200;
+
+export function looksPaywalled(scrapedText: string | null | undefined): {
+  thin: boolean;
+  phrase: string | null;
+} {
+  const text = (scrapedText ?? "").trim();
+  if (!text) return { thin: false, phrase: null };
+  const lowered = text.toLowerCase();
+  const phrase = PAYWALL_PHRASES.find((p) => lowered.includes(p)) ?? null;
+  return { thin: text.length < THIN_SCRAPE_CHARS, phrase };
 }

@@ -22,6 +22,7 @@ import CopyLinkButton from "@/components/copy-link-button";
 import ReviewComments from "./review-comments";
 import { getRequestAccess, REVIEWABLE_STATUSES } from "@/lib/request-access";
 import { CHANNEL_LABELS } from "@/lib/channel-post-format";
+import { looksPaywalled } from "@/lib/source-quality";
 
 const CHANNEL_TABS = [
   { key: "linkedin" as const, label: CHANNEL_LABELS.linkedin },
@@ -532,27 +533,46 @@ export default async function RequestDetailPage({
           <section className="mt-8">
             <h2 className="text-sm font-semibold text-muted">Sources</h2>
             <Card className="mt-2 divide-y divide-border p-1">
-              {sources.map((s) => (
-                <div key={s.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                  <a
-                  href={s.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="min-w-0 truncate text-sm text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
-                  title={s.url}
-                >
-                  {s.url}
-                </a>
-                <CopyLinkButton url={s.url} />
-                  <span
-                    className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
-                      SOURCE_STATUS_STYLES[s.status] ?? "bg-black/5 text-muted"
-                    }`}
-                  >
-                    {s.status.replace(/_/g, " ")}
-                  </span>
-                </div>
-              ))}
+              {sources.map((s) => {
+                // The reliable paywall signal, unlike the domain guess at intake: a
+                // scrape that "succeeded" into a teaser. Nothing errors in that case, so
+                // without this the excerpt step quotes an introduction as though it were
+                // the article.
+                const paywall = s.status === "scraped" ? looksPaywalled(s.scraped_text) : null;
+                const teaser = paywall && (paywall.thin || paywall.phrase);
+
+                return (
+                  <div key={s.id} className="px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <a
+                        href={s.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="min-w-0 truncate text-sm text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
+                        title={s.url}
+                      >
+                        {s.url}
+                      </a>
+                      <CopyLinkButton url={s.url} />
+                      <span
+                        className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
+                          SOURCE_STATUS_STYLES[s.status] ?? "bg-black/5 text-muted"
+                        }`}
+                      >
+                        {s.status.replace(/_/g, " ")}
+                      </span>
+                    </div>
+                    {teaser && (
+                      <p className="mt-1.5 text-xs text-warning">
+                        {paywall!.phrase
+                          ? `This scrape contains "${paywall!.phrase}", so it is probably a paywall teaser rather than the article.`
+                          : `Only ${(s.scraped_text ?? "").trim().length} characters came back, which is short for an article and usually means a teaser or a partial page.`}{" "}
+                        Worth opening it yourself before relying on anything drawn from it.
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </Card>
           </section>
         )}
