@@ -6,13 +6,55 @@ import { StatusBadge } from "@/components/ui/badge";
 import { REVIEWABLE_STATUSES } from "@/lib/request-access";
 import RequestListTabs from "./request-list-tabs";
 import LinkPendingDot from "@/components/link-pending-dot";
+import StatusFilter from "./status-filter";
+import { Suspense } from "react";
 
 // The statuses where n8n is mid-run and the badge on this page will change without
 // anything the human does. Kept next to the only consumer rather than in a shared
 // module: the request detail page derives its own from the banner it renders.
 const WORKING_STATUSES = new Set(["researching", "generating", "adapting", "revising"]);
 
-export default async function HomePage() {
+// Human-readable names for the filter chips, in pipeline order so the row reads as a
+// journey rather than an alphabetical list. Anything not named here still gets a chip,
+// falling back to its raw status, so a new status cannot silently become unfilterable.
+const STATUS_ORDER: [string, string][] = [
+  ["draft", "Draft"],
+  ["researching", "Researching"],
+  ["awaiting_source_selection", "Pick sources"],
+  ["awaiting_angle_selection", "Pick angle"],
+  ["generating", "Generating"],
+  ["revising", "Revising"],
+  ["pending_approval", "Review draft"],
+  ["approved", "Approved"],
+  ["adapting", "Adapting"],
+  ["ready_to_schedule", "Ready to schedule"],
+  ["needs_human_attention", "Needs attention"],
+  ["rejected", "Rejected"],
+];
+
+function statusChips(rows: { status: string }[]): { status: string; label: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const r of rows) counts.set(r.status, (counts.get(r.status) ?? 0) + 1);
+
+  const known = STATUS_ORDER.filter(([status]) => counts.has(status)).map(([status, label]) => ({
+    status,
+    label,
+    count: counts.get(status)!,
+  }));
+  const namedStatuses = new Set(STATUS_ORDER.map(([s]) => s));
+  const unknown = [...counts.entries()]
+    .filter(([status]) => !namedStatuses.has(status))
+    .map(([status, count]) => ({ status, label: status.replace(/_/g, " "), count }));
+
+  return [...known, ...unknown];
+}
+
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>;
+}) {
+  const { status: statusFilter } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -40,6 +82,16 @@ export default async function HomePage() {
     .neq("user_id", user!.id)
     .order("created_at", { ascending: false });
 
+  // Filtered in memory rather than in the query, so the chips can show how many are in
+  // each status. These lists are small enough that a second round trip per chip would
+  // cost more than it saves.
+  const allMine = requests ?? [];
+  const allToReview = toReview ?? [];
+  const visibleMine = statusFilter ? allMine.filter((r) => r.status === statusFilter) : allMine;
+  const visibleToReview = statusFilter
+    ? allToReview.filter((r) => r.status === statusFilter)
+    : allToReview;
+
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <div className="flex items-center justify-between">
@@ -52,25 +104,35 @@ export default async function HomePage() {
         </Link>
       </div>
 
+      {/* Suspense because useSearchParams opts a client component into deferred
+          rendering; without it the whole page would have to be client-rendered. */}
+      <Suspense fallback={<div className="mt-4 h-7" />}>
+        <StatusFilter counts={statusChips([...allMine, ...allToReview])} total={allMine.length + allToReview.length} />
+      </Suspense>
+
       <RequestListTabs
-        reviewCount={(toReview ?? []).length}
-        hasWorkInFlight={[...(requests ?? []), ...(toReview ?? [])].some((r) =>
-          WORKING_STATUSES.has(r.status)
-        )}
+        reviewCount={visibleToReview.length}
+        hasWorkInFlight={[...allMine, ...allToReview].some((r) => WORKING_STATUSES.has(r.status))}
         mine={
           <>
-            {(!requests || requests.length === 0) && (
+            {visibleMine.length === 0 && (
               <Card className="flex flex-col items-center gap-2 px-6 py-16 text-center">
                 <span className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-soft text-accent">
                   +
                 </span>
-                <p className="text-sm font-medium">No requests yet</p>
-                <p className="text-sm text-muted">Start one from a raw idea or a source URL.</p>
+                <p className="text-sm font-medium">
+                  {statusFilter ? "Nothing in that status" : "No requests yet"}
+                </p>
+                <p className="text-sm text-muted">
+                  {statusFilter
+                    ? `You have ${allMine.length} request${allMine.length === 1 ? "" : "s"} in other statuses. Pick "All" to see them.`
+                    : "Start one from a raw idea or a source URL."}
+                </p>
               </Card>
             )}
 
             <ul className="flex flex-col gap-3">
-              {(requests ?? []).map((r) => (
+              {visibleMine.map((r) => (
                 <li key={r.id}>
                   <Link href={`/requests/${r.id}`}>
                     <Card className="flex items-center justify-between gap-4 px-5 py-4 transition-shadow hover:shadow-md">
@@ -102,17 +164,21 @@ export default async function HomePage() {
               schedule.
             </p>
 
-            {(!toReview || toReview.length === 0) && (
+            {visibleToReview.length === 0 && (
               <Card className="mt-3 flex flex-col items-center gap-2 px-6 py-16 text-center">
-                <p className="text-sm font-medium">Nothing to review right now</p>
+                <p className="text-sm font-medium">
+                  {statusFilter ? "Nothing to review in that status" : "Nothing to review right now"}
+                </p>
                 <p className="text-sm text-muted">
-                  Other people&apos;s requests show up here once they reach approval or scheduling.
+                  {statusFilter
+                    ? `Pick "All" to see the ${allToReview.length} open for review.`
+                    : "Other people's requests show up here once they reach approval or scheduling."}
                 </p>
               </Card>
             )}
 
             <div className="mt-3 flex flex-col gap-2">
-              {(toReview ?? []).map((r) => (
+              {visibleToReview.map((r) => (
                 <Link key={r.id} href={`/requests/${r.id}`}>
                   <Card className="flex items-center justify-between gap-4 p-4 hover:border-accent">
                     <span className="min-w-0 truncate text-sm font-medium">
