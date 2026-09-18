@@ -332,8 +332,11 @@ export default async function RequestDetailPage({
         </section>
       )}
 
+      {/* Never auto-opens, not even on failure: the banners above already say what
+          went wrong in plain language, and springing a wall of stage names on
+          someone is noise. Anyone who wants the detail can open it. */}
       {events && events.length > 0 && (
-        <details className="mt-8" open={events.some((ev) => ev.status === "failed")}>
+        <details className="mt-8">
           <summary className="cursor-pointer text-sm font-semibold text-muted hover:text-foreground">
             Technical log ({events.length} event{events.length === 1 ? "" : "s"})
           </summary>

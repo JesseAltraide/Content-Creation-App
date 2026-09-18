@@ -359,7 +359,7 @@ connect("Fetch Audience Profile", "Fetch Tone Samples");
 
 supabaseGet(
   "fetch-excerpts", "Fetch Excerpts",
-  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/excerpts?request_id=eq.{{$('Config').first().json.request_id}}&select=id,text,reason,source_id"
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/excerpts?request_id=eq.{{$('Config').first().json.request_id}}&select=id,text,reason,source_id,sources(url)"
 );
 connect("Fetch Tone Samples", "Fetch Excerpts");
 
@@ -376,7 +376,7 @@ codeNode(
     "    : 'No tone samples on file for this channel - use a neutral, professional default tone.';" + NL +
     "}" + NL +
     "const excerpts = $('Fetch Excerpts').all().map(i => i.json).filter(e => e && e.id);" + NL +
-    "const excerptsTextPlain = excerpts.map((e, i) => `[${i}] Source: ${e.source_id}" + BSN + "${e.text}`).join('" + BSN + BSN + "');" + NL +
+    "const excerptsTextPlain = excerpts.map((e, i) => `[${i}] Source: ${(e.sources && e.sources.url) || e.source_id}" + BSN + "${e.text}`).join('" + BSN + BSN + "');" + NL +
     "return [{ json: {" + NL +
     "  channels: req.channels," + NL +
     "  x_thread_length: req.x_thread_length || 'single'," + NL +
@@ -458,19 +458,29 @@ function adaptCachedContext() {
     "Audience: ${$('Build Adaptation Context').first().json.audienceText}\\n\\n" +
     "Only produce a 'linkedin' key if linkedin is in the requested channels, only 'x' if x is requested, only 'newsletter' if newsletter is requested. " +
     "For each requested channel, write in that channel's own real voice and format, grounded only in the article and its underlying excerpts below - no unsupported claims, and every claim must stay traceable to the same source material as the article itself:\\n${$('Build Adaptation Context').first().json.excerptsTextPlain}\\n\\n" +
-    "LinkedIn: PAS structure (Problem-Agitate-Solution), short paragraphs, sparing emoji, a clear CTA. Tone reference (real previous posts or a described target, follow this voice):\\n${$('Build Adaptation Context').first().json.toneByChannel.linkedin || 'not requested'}\\n\\n" +
+    // These two rules were being produced as evaluator *suggestions* on every run
+    // (Channel Fit 22/25, repeatedly), which meant the model kept making the same
+    // two mistakes and the human kept reading the same two notes. A rule the
+    // evaluator reliably flags belongs in the generation prompt, not in feedback.
+    "LinkedIn: PAS structure (Problem-Agitate-Solution), short paragraphs, sparing emoji, a clear CTA. Write it as plain text, NOT markdown: LinkedIn renders markdown literally, so never use '#' headings or '**' bold. The first line must be a plain sentence that works as the hook above the 'see more' fold. Tone reference (real previous posts or a described target, follow this voice):\\n${$('Build Adaptation Context').first().json.toneByChannel.linkedin || 'not requested'}\\n\\n" +
     "X: hook-first, one core idea per post, line breaks over hashtags, at most 1-2 hashtags and only on the final post if threaded. The human requested '${$('Build Adaptation Context').first().json.x_thread_length}' - 'single' means exactly one post, 'mini' means roughly 3 posts, 'expansive' means roughly 5 posts. Never pad to hit a target count - if the idea genuinely doesn't need that many posts, write fewer and say nothing about it. Each individual post must fit in 280 characters - this will be checked programmatically, so respect it exactly, don't rely on being checked. Tone reference:\\n${$('Build Adaptation Context').first().json.toneByChannel.x || 'not requested'}\\n\\n" +
-    "Newsletter: a subject line, a 1-3 sentence intro, a skimmable body, and a closing CTA, 250-600 words total in body_markdown. Tone reference:\\n${$('Build Adaptation Context').first().json.toneByChannel.newsletter || 'not requested'}`"
+    "Newsletter: a subject line, a 1-3 sentence intro, a skimmable body, and a closing CTA, 250-600 words total in body_markdown. Tone reference:\\n${$('Build Adaptation Context').first().json.toneByChannel.newsletter || 'not requested'}\\n\\n" +
+    "Citations: these are published posts, not the article, so never put inline [Source: ...] tags in the body. Stay just as strictly grounded in the excerpts, but carry provenance the way each platform actually does it: LinkedIn and X get at most one short closing line naming the sources in plain words (for example 'Sources: Microsoft Learn docs and indexing benchmarks, links in comments'), and the newsletter may link naturally inside the body.\\n\\n" +
+    "House style, applies to every channel: never use em dashes (the character U+2014). Use a full stop, a comma, a colon or parentheses instead. Do not state anything the excerpts do not support, and do not soften an unsupported claim with hedging language to sneak it in.`"
   );
 }
 
+// Prompt caching is PAUSED (Change #10): recombined into one block so D's reimport
+// carries only the citation and house-style fixes. adaptCachedContext() and
+// claudeNode's cachedContextExpr both remain, so re-enabling is a small change.
 function adaptPrompt(feedbackExpr) {
+  const base = adaptCachedContext().slice(0, -1); // drop the closing backtick
   return feedbackExpr
-    ? "`The previous attempt needs these specific changes: ${" + feedbackExpr + "}`"
-    : "`Write the first version now.`";
+    ? base + "\\n\\nThe previous attempt needs these specific changes: ${" + feedbackExpr + "}`"
+    : base + "`";
 }
 
-claudeNode("claude-adapt", "Claude: Adapt to Channels", "claude-sonnet-5", ADAPT_TOOL, adaptPrompt(null), 4000, adaptCachedContext());
+claudeNode("claude-adapt", "Claude: Adapt to Channels", "claude-sonnet-5", ADAPT_TOOL, adaptPrompt(null), 4000);
 connect("Build Adaptation Context", "Claude: Adapt to Channels: Build Request");
 claudeErrorBranch("Claude: Adapt to Channels", "channel_adaptation");
 
@@ -653,7 +663,8 @@ function pass2EvalCachedContext() {
 
 function pass2EvalPrompt(textNodeName) {
   return (
-    "`Evaluate each adapted channel post below against the rubric and excerpts above. You have not seen the adaptation reasoning - judge only what's here.\\n\\n" +
+    pass2EvalCachedContext().slice(0, -1) +
+    "\\n\\nEvaluate each adapted channel post below against the rubric and excerpts above. You have not seen the adaptation reasoning - judge only what's here.\\n\\n" +
     "Adapted posts to evaluate - score every one shown here. Each entry in per_channel MUST include its own \\\"channel\\\" field set to that post's exact channel name (linkedin/x/newsletter), in addition to using that name as its key:\\n${$('" + textNodeName + "').first().json.channelsText}`"
   );
 }
@@ -728,8 +739,7 @@ function buildPass2EvalRound(roundLabel, channelPostsSourceName, isFinalRound) {
     // adjusting for 3x the content) truncated mid-generation - confirmed live via
     // stop_reason: "max_tokens" with an empty tool_use input, not a prompt/schema
     // problem as first suspected.
-    8000,
-    pass2EvalCachedContext()
+    8000
   );
   connect(textNodeName, `Claude: Evaluate Channels (${roundLabel}): Build Request`);
   claudeErrorBranch(`Claude: Evaluate Channels (${roundLabel})`, "pass2_evaluation");
@@ -814,7 +824,7 @@ function buildPass2RevisionRound(roundNum, prevGateIfName, prevChannelPostsSourc
   const feedbackExpr =
     "JSON.stringify($('Gate (" + prevRoundLabel + ")').first().json.perChannel)";
 
-  claudeNode(`claude-${idBase}`, `Claude: Revise Channels (${label})`, "claude-sonnet-5", ADAPT_TOOL, adaptPrompt(feedbackExpr), 4000, adaptCachedContext());
+  claudeNode(`claude-${idBase}`, `Claude: Revise Channels (${label})`, "claude-sonnet-5", ADAPT_TOOL, adaptPrompt(feedbackExpr), 4000);
   connect(prevGateIfName, `Claude: Revise Channels (${label}): Build Request`, 1);
   claudeErrorBranch(`Claude: Revise Channels (${label})`, "channel_adaptation");
 

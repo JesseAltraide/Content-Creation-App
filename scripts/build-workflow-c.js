@@ -332,7 +332,9 @@ connectToSetupFailureHandler("Fetch Latest Section");
 
 supabaseGet(
   "fetch-excerpts", "Fetch Excerpts",
-  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/excerpts?request_id=eq.{{$('Config').first().json.request_id}}&select=id,text,reason,source_id",
+  // sources(url) embed: see build-workflow-b.js - without it Claude is handed
+  // source_id and cites raw UUIDs into the article.
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/excerpts?request_id=eq.{{$('Config').first().json.request_id}}&select=id,text,reason,source_id,sources(url)",
   { onError: "continueErrorOutput" }
 );
 connect("Fetch Latest Section", "Fetch Excerpts");
@@ -341,7 +343,7 @@ connectToSetupFailureHandler("Fetch Excerpts");
 codeNode(
   "build-excerpts-text", "Build Excerpts Text",
   "const excerpts = $input.all().map(i => i.json);" + NL +
-    "const plain = excerpts.map((e, i) => `[${i}] Source: ${e.source_id}" + BSN + "${e.text}`).join('" + BSN + BSN + "');" + NL +
+    "const plain = excerpts.map((e, i) => `[${i}] Source: ${(e.sources && e.sources.url) || e.source_id}" + BSN + "${e.text}`).join('" + BSN + BSN + "');" + NL +
     "return [{ json: { excerpts, excerptsTextPlain: plain } }];",
   { notes: "Same reason as Workflow B: excerpt text can contain backticks (quoted code), so join in real Code-node JS, never inline in an HTTP node expression." }
 );
@@ -384,7 +386,7 @@ connect("Build Excerpts Text", "Increment Regeneration Count");
 connectToSetupFailureHandler("Increment Regeneration Count");
 
 const regeneratePrompt =
-  "`Regenerate this article. The human reviewer read the previous version and asked for a specific change - address it directly, don't just lightly reword the same draft.\\n\\nWorking title: ${$('Fetch Chosen Angle').first().json.working_title}\\nThesis: ${$('Fetch Chosen Angle').first().json.thesis}\\nSection shape: ${JSON.stringify($('Fetch Chosen Angle').first().json.section_shape)}\\nPrimary keyword (must appear naturally, including in a heading): ${$('Fetch Request Row').first().json.primary_keyword}\\nDesired length: ${$('Fetch Request Row').first().json.desired_length || 'no specific target'}\\n\\nPrevious version:\\n${$('Fetch Latest Section').first().json.body_markdown}\\n\\nReviewer's comment on what to change:\\n${$('Config').first().json.comment}\\n\\nStay grounded only in the excerpts below - no unsupported claims or invented statistics, even to satisfy the comment:\\n${$('Build Excerpts Text').first().json.excerptsTextPlain}\\n\\nWrite in markdown with proper H1/H2 heading hierarchy.`";
+  "`Regenerate this article. The human reviewer read the previous version and asked for a specific change - address it directly, don't just lightly reword the same draft.\\n\\nWorking title: ${$('Fetch Chosen Angle').first().json.working_title}\\nThesis: ${$('Fetch Chosen Angle').first().json.thesis}\\nSection shape: ${JSON.stringify($('Fetch Chosen Angle').first().json.section_shape)}\\nPrimary keyword (must appear naturally, including in a heading): ${$('Fetch Request Row').first().json.primary_keyword}\\nDesired length: ${$('Fetch Request Row').first().json.desired_length || 'no specific target'}\\n\\nPrevious version:\\n${$('Fetch Latest Section').first().json.body_markdown}\\n\\nReviewer's comment on what to change:\\n${$('Config').first().json.comment}\\n\\nStay grounded only in the excerpts below - no unsupported claims or invented statistics, even to satisfy the comment:\\n${$('Build Excerpts Text').first().json.excerptsTextPlain}\\n\\nWrite in markdown with proper H1/H2 heading hierarchy.\\n\\nHouse style: never use em dashes (the character U+2014) anywhere in the output. Use a full stop, a comma, a colon or parentheses instead. Do not state anything the excerpts do not support, and do not use hedging language to smuggle in a claim you cannot cite.`";
 
 claudeNode("claude-regenerate", "Claude: Regenerate Article", "claude-sonnet-5", ARTICLE_TOOL, regeneratePrompt, 4000);
 connect("Increment Regeneration Count", "Claude: Regenerate Article: Build Request");
