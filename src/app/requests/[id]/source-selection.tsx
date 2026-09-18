@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import CopyLinkButton from "@/components/copy-link-button";
+import { assessSourceUrl } from "@/lib/source-quality";
 
 export default function SourceSelection({
   requestId,
@@ -17,6 +18,12 @@ export default function SourceSelection({
   const [selected, setSelected] = useState<string[]>(sources.map((s) => s.id));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Judged from the URL because that is all that exists at this point: scraped_text
+  // is not written until after this selection is made, so nothing about the page body
+  // can be checked at the moment the human is actually choosing.
+  const issues = new Map(sources.map((s) => [s.id, assessSourceUrl(s.url)]));
+  const weakSelected = selected.filter((id) => issues.get(id)?.severity === "weak").length;
 
   function toggle(id: string) {
     setSelected((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
@@ -60,6 +67,15 @@ export default function SourceSelection({
                   URL pushes the whole card wider than the page instead of truncating. */}
               <span className="min-w-0 flex-1">
                 <span className="block font-medium">{s.title || s.url}</span>
+                {issues.get(s.id) && (
+                  <span
+                    className={`mt-0.5 block text-xs ${
+                      issues.get(s.id)!.severity === "weak" ? "text-danger" : "text-warning"
+                    }`}
+                  >
+                    {issues.get(s.id)!.label}: {issues.get(s.id)!.message}
+                  </span>
+                )}
                 <span className="flex items-center gap-1.5">
                   {/* stopPropagation: this sits inside the <label>, so a plain click
                       would toggle the checkbox instead of opening the source. */}
@@ -82,6 +98,13 @@ export default function SourceSelection({
           </li>
         ))}
       </ul>
+      {weakSelected > 0 && (
+        <p className="mt-3 rounded-lg bg-warning-soft px-3 py-2 text-xs text-warning">
+          {weakSelected} of the sources you have selected {weakSelected === 1 ? "is" : "are"} unlikely
+          to yield quotable text. You can still continue, but the draft will lean on whatever is
+          left, and claims drawn from these are usually the ones that end up undateable or unverifiable.
+        </p>
+      )}
       {error && <p className="mt-3 text-sm text-danger">{error}</p>}
       <Button onClick={handleContinue} disabled={submitting || selected.length === 0} className="mt-4">
         {submitting ? "Continuing…" : `Continue with ${selected.length} source(s)`}

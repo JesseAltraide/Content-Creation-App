@@ -6,6 +6,7 @@ import { logEvent } from "@/lib/events";
 import { triggerSearchSources, triggerScrapeAndProposeAngle } from "@/lib/n8n";
 import { getOnboardingStatus } from "@/lib/onboarding";
 import { preflightResonance } from "@/lib/resonance-preflight";
+import { assessSourceUrls } from "@/lib/source-quality";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -59,6 +60,11 @@ export async function POST(request: Request) {
   // Both are worth running early: the URL path still scrapes every URL and makes an
   // angle call before A2's gate can fire, so an obvious mismatch is worth mentioning
   // before that spend rather than after it.
+  // Needs no model at all: a video, a homepage or a live-updating overview page is
+  // knowable from the URL alone, and those are the sources that produce claims nobody
+  // can date or verify later.
+  const sourceIssues = input.inputPath === "url" ? assessSourceUrls(urls) : [];
+
   {
     const advisory = input.inputPath === "url";
     let verdict = null;
@@ -91,11 +97,13 @@ export async function POST(request: Request) {
     // pointing away from the idea, an idea that is really several, and on the URL
     // path a weak keyword-to-audience fit. None can be caught by word rules and none
     // justifies a refusal, so they are shown once and the author decides.
-    if (verdict && verdict.warnings.length > 0 && !input.acknowledgedWarnings) {
-      return NextResponse.json(
-        { error: "intake_warnings", warnings: verdict.warnings },
-        { status: 409 }
-      );
+    const warnings = [
+      ...(verdict?.warnings ?? []),
+      ...sourceIssues.map((issue) => ({ kind: `source_${issue.kind}`, message: `${issue.label}: ${issue.message}` })),
+    ];
+
+    if (warnings.length > 0 && !input.acknowledgedWarnings) {
+      return NextResponse.json({ error: "intake_warnings", warnings }, { status: 409 });
     }
   }
 
