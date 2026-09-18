@@ -61,7 +61,7 @@ const RESONANCE_TOOL: Anthropic.Tool = {
  * over-blocking is its own failure).
  */
 export type IntakeWarning = {
-  kind: "keyword_mismatch" | "multiple_topics" | "weak_resonance";
+  kind: "keyword_mismatch" | "multiple_topics";
   message: string;
 };
 
@@ -79,11 +79,12 @@ export async function preflightResonance(input: {
   primaryKeyword: string;
   audienceProfileId?: string | null;
   /**
-   * "block" on the raw-idea path, where the author has written an idea and there is a
-   * real argument to judge. "advisory" on the URL path, where there is no idea text at
-   * all: the judgement rests on a keyword and whatever context was typed, which is too
-   * thin to refuse work on. The authoritative gate for that path is Workflow A2's own
-   * resonance block, which runs with the scraped sources in hand.
+   * "advisory" on the URL path, where no idea text exists: it changes how the model is
+   * briefed, so it judges the subject from the keyword and context instead of marking
+   * the missing idea statement down. It no longer changes the verdict. A score at or
+   * below the floor blocks on both paths, because a score that low means no stated
+   * connection to the audience at all, and letting it through only defers the same
+   * refusal until after the scrape is paid for.
    */
   mode?: "block" | "advisory";
 }): Promise<ResonanceVerdict | null> {
@@ -166,16 +167,6 @@ Calibrate against this scale: a topic squarely in this audience's domain, stated
 
   const warnings: IntakeWarning[] = [];
 
-  // On the URL path a low score is a warning rather than a refusal: it was reached
-  // without any idea text, and the author has already committed to specific sources.
-  // A2 still hard-blocks later with those sources actually read.
-  if (advisory && result.resonance_score <= BLOCK_AT_OR_BELOW) {
-    warnings.push({
-      kind: "weak_resonance",
-      message: `Judged only on the keyword "${input.primaryKeyword}" and your context, this scores ${result.resonance_score}/15 against ${result.best_profile_name ?? candidates[0].name}. ${result.reason ?? ""} The sources get read before anything is written, so this may look different then, but it is worth a second look now.`.trim(),
-    });
-  }
-
   // Meaningless without an idea to compare the keyword against, so it is only ever
   // raised where there is one.
   if (hasIdea && result.keyword_matches_idea === false) {
@@ -194,7 +185,11 @@ Calibrate against this scale: a topic squarely in this audience's domain, stated
   }
 
   return {
-    blocked: !advisory && result.resonance_score <= BLOCK_AT_OR_BELOW,
+    // Blocks on both paths. The URL path used to downgrade this to a warning because
+    // the judgement rests on a keyword rather than an idea, but a score this low means
+    // the content has no stated connection to the audience at all, and letting it
+    // through just moves the same refusal to after the scrape has been paid for.
+    blocked: result.resonance_score <= BLOCK_AT_OR_BELOW,
     score: result.resonance_score,
     reason: result.reason ?? "No reason given.",
     profileName: result.best_profile_name ?? candidates[0].name,

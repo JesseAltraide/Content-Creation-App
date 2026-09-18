@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanModifyRequest } from "@/lib/request-access";
 import { logEvent } from "@/lib/events";
+import { blockSourceUrl } from "@/lib/source-quality";
 import { triggerScrapeAndProposeAngle } from "@/lib/n8n";
 
 const bodySchema = z.object({
@@ -52,6 +53,30 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json(
       { error: "This request is not awaiting source selection (already progressed, or refresh to see the latest)." },
       { status: 409 }
+    );
+  }
+
+  // Candidates on this path come from a search, not from the human, so nothing has
+  // vetted them against the rule intake applies. This is the last point before n8n is
+  // told to go and fetch them.
+  const { data: candidates } = await admin
+    .from("sources")
+    .select("id, url")
+    .eq("request_id", requestId)
+    .in("id", parsed.data.selectedSourceIds);
+
+  const refused = (candidates ?? [])
+    .map((c) => ({ url: c.url, reason: blockSourceUrl(c.url) }))
+    .filter((c) => c.reason);
+
+  if (refused.length > 0) {
+    return NextResponse.json(
+      {
+        error: `${refused.length} of the selected sources can't be fetched: ${refused
+          .map((r) => `${r.url} (${r.reason})`)
+          .join("; ")}. Deselect them and continue with the rest.`,
+      },
+      { status: 400 }
     );
   }
 

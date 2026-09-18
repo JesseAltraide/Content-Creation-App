@@ -12,7 +12,16 @@
 // deliberately is worse than telling them what they are about to get.
 
 export type SourceIssue = {
-  kind: "video" | "homepage" | "listing" | "commercial" | "social" | "paywall";
+  kind:
+    | "video"
+    | "homepage"
+    | "listing"
+    | "commercial"
+    | "social"
+    | "paywall"
+    | "shortener"
+    | "lookalike"
+    | "download";
   /** "weak" means it usually cannot support claims. "check" means look before relying on it. */
   severity: "weak" | "check";
   label: string;
@@ -139,7 +148,7 @@ export function assessSourceUrl(rawUrl: string): SourceIssue | null {
 export function assessSourceUrls(urls: string[]): SourceIssue[] {
   const byKind = new Map<string, SourceIssue>();
   for (const url of urls) {
-    const issue = assessSourceUrl(url);
+    const issue = assessSourceUrl(url) ?? suspiciousSourceUrl(url);
     if (issue && !byKind.has(issue.kind)) byKind.set(issue.kind, issue);
   }
   return [...byKind.values()];
@@ -174,4 +183,139 @@ export function looksPaywalled(scrapedText: string | null | undefined): {
   const lowered = text.toLowerCase();
   const phrase = PAYWALL_PHRASES.find((p) => lowered.includes(p)) ?? null;
   return { thin: text.length < THIN_SCRAPE_CHARS, phrase };
+}
+
+// ---------------------------------------------------------------------------
+// Refusals, as opposed to the warnings above.
+//
+// Everything else in this file advises; this part blocks. The distinction matters
+// because a stored URL is eventually fetched by n8n's scraper from a server, not by
+// the person who typed it. That makes the source list a server-side request
+// primitive: whatever goes in here, something on the network will go and GET.
+// ---------------------------------------------------------------------------
+
+const PRIVATE_V4 = [
+  /^10\./,
+  /^127\./,
+  /^0\./,
+  /^192\.168\./,
+  /^169\.254\./, // link-local, which is how cloud metadata is usually reached
+  /^172\.(1[6-9]|2\d|3[01])\./,
+];
+
+function isPrivateHost(host: string): boolean {
+  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".internal") || host.endsWith(".local")) {
+    return true;
+  }
+  if (host === "::1" || host === "[::1]" || host.startsWith("fd") || host.startsWith("fe80")) return true;
+  return PRIVATE_V4.some((re) => re.test(host));
+}
+
+/** A bare IPv4 address, which a real article almost never lives on. */
+function isIpLiteral(host: string): boolean {
+  return /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.startsWith("[");
+}
+
+/**
+ * Why a URL must not be stored or scraped at all, or null if it is acceptable.
+ *
+ * Deliberately strict: each of these is a URL a content researcher has no legitimate
+ * reason to submit, and several of them are how a fetch-on-behalf-of-the-server
+ * becomes a way to read things the server can see and the user cannot.
+ */
+export function blockSourceUrl(rawUrl: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(rawUrl.trim());
+  } catch {
+    return "That is not a valid URL.";
+  }
+
+  // https only. http is trivially intercepted and rewritten in transit, and what comes
+  // back becomes source material a draft is grounded in.
+  if (url.protocol !== "https:") {
+    return url.protocol === "http:"
+      ? "Only https links can be used as sources. Try the https version of this address."
+      : `Only https links can be used as sources (this one is ${url.protocol.replace(":", "")}).`;
+  }
+
+  // Credentials in the URL would be sent to the scraper and stored in plain text.
+  if (url.username || url.password) {
+    return "Remove the username and password from this URL before using it as a source.";
+  }
+
+  const host = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+
+  if (isPrivateHost(host)) {
+    return "That address points inside a private network, so it cannot be fetched or used as a source.";
+  }
+
+  if (host.endsWith(".onion") || host.endsWith(".i2p")) {
+    return "That address is not reachable from here, so it cannot be used as a source.";
+  }
+
+  if (isIpLiteral(host)) {
+    return "Use the site's domain name rather than a raw IP address.";
+  }
+
+  // 443 is implied by https; anything else on an https URL is unusual enough that it
+  // is more likely to be an internal service than an article.
+  if (url.port && url.port !== "443") {
+    return `Sources have to be on the standard https port, not port ${url.port}.`;
+  }
+
+  return null;
+}
+
+const SHORTENER_HOSTS = [
+  "bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly", "buff.ly", "rebrand.ly",
+  "is.gd", "cutt.ly", "shorturl.at", "lnkd.in",
+];
+
+/**
+ * Sketchy but not refused: the destination is hidden or the page is unlikely to be an
+ * article. Warned about for the same reason as everything else in this file, because
+ * a legitimate use exists for each of them.
+ */
+export function suspiciousSourceUrl(rawUrl: string): SourceIssue | null {
+  let url: URL;
+  try {
+    url = new URL(rawUrl.trim());
+  } catch {
+    return null;
+  }
+  const host = url.hostname.replace(/^www\./, "").toLowerCase();
+
+  if (SHORTENER_HOSTS.some((h) => host === h || host.endsWith("." + h))) {
+    return {
+      kind: "shortener",
+      severity: "check",
+      label: "Shortened link",
+      message:
+        "A shortened link hides where it actually goes, and what gets scraped is whatever it redirects to on the day. Paste the real article URL so the source stays checkable later.",
+    };
+  }
+
+  // Punycode: a domain that renders as familiar letters but is not the site it looks
+  // like. Rare in honest use, standard in impersonation.
+  if (host.split(".").some((part) => part.startsWith("xn--"))) {
+    return {
+      kind: "lookalike",
+      severity: "check",
+      label: "Lookalike domain",
+      message:
+        "This domain uses characters that can render as a different, more familiar name. Check it really is the site you meant before using it as a source.",
+    };
+  }
+
+  if (/\.(exe|zip|dmg|apk|msi|bin|iso)$/i.test(url.pathname)) {
+    return {
+      kind: "download",
+      severity: "weak",
+      label: "File download",
+      message: "That link points at a file download rather than an article, so there is nothing to read from it.",
+    };
+  }
+
+  return null;
 }

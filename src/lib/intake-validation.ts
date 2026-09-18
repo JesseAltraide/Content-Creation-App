@@ -1,16 +1,22 @@
 import { z } from "zod";
+import { blockSourceUrl } from "@/lib/source-quality";
 
 const CHANNELS = ["linkedin", "x", "newsletter"] as const;
 
 // Exported so the form can disable submit on exactly what the schema would reject,
 // rather than keeping a second, drifting copy of the rule.
+//
+// Delegates to blockSourceUrl because a stored URL is eventually fetched by n8n from a
+// server: https only, no credentials, no private or link-local addresses, no odd
+// ports. A protocol check alone would have accepted http://169.254.169.254/ and handed
+// it to the scraper.
 export function isFetchableUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    return false;
-  }
+  return blockSourceUrl(value) === null;
+}
+
+/** The reason a URL was refused, for showing the person what to fix. */
+export function urlRejectionReason(value: string): string | null {
+  return blockSourceUrl(value);
 }
 
 export const intakeSchema = z
@@ -51,13 +57,13 @@ export const intakeSchema = z
           path: ["urls"],
         });
       }
-      const invalid = urls.filter((u) => !isFetchableUrl(u));
-      if (invalid.length > 0) {
-        ctx.addIssue({
-          code: "custom",
-          message: `Not a valid http(s) URL: ${invalid.join(", ")}`,
-          path: ["urls"],
-        });
+      // Reported one at a time with its own reason: "not a valid URL" is useless when
+      // the actual problem is that it is http, or points at a private address.
+      for (const url of urls) {
+        const reason = blockSourceUrl(url);
+        if (reason) {
+          ctx.addIssue({ code: "custom", message: `${url}: ${reason}`, path: ["urls"] });
+        }
       }
     }
 
