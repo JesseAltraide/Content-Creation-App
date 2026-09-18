@@ -188,12 +188,30 @@ Open it here: ${baseUrl}/requests/${req.id}
     if (result.ok) {
       notified += 1;
     } else {
+      // Give the claim back, so the next sweep tries again. The claim exists to stop
+      // two overlapping runs sending the same email twice; holding it after a FAILED
+      // send throws the notification away permanently instead. That is not
+      // hypothetical: every notification raised before Gmail SMTP was configured was
+      // claimed, failed, and never retried, so six requests reached a state needing
+      // attention and nobody was ever told.
+      //
+      // The original reasoning against retrying was that the same email arriving
+      // every five minutes forever is worse than one missed. That was written when
+      // this ran every five minutes. It now runs once a day, so a retry costs at
+      // most one duplicate a day, and only while sending is broken, in which case
+      // nothing is arriving anyway.
+      await admin
+        .from("requests")
+        .update({ notified_status: req.notified_status, notified_at: null })
+        .eq("id", req.id)
+        .eq("notified_status", req.status);
+
       failures.push(`${req.id}: ${result.error}`);
       await logEvent({
         requestId: req.id,
         stage: "notification",
         status: "failed",
-        detail: `Couldn't email the ${req.status} notification: ${result.error}`,
+        detail: `Couldn't email the ${req.status} notification: ${result.error}. It will be retried on the next sweep.`,
       });
     }
   }
