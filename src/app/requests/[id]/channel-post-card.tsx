@@ -10,6 +10,7 @@ import { parseXPosts, parseNewsletter, CHANNEL_LABELS, floorForPass2Criterion } 
 import EditChannelPostForm from "./edit-channel-post-form";
 import ReviseWithSuggestionsButton from "./revise-with-suggestions-button";
 import ImageSuggestion, { type StoredImageSuggestion } from "./image-suggestion";
+import ChannelVersionPicker, { type ChannelVersion } from "./channel-version-picker";
 
 type EvalResult = {
   overall_score: number;
@@ -102,6 +103,7 @@ export default function ChannelPostCard({
   evaluation,
   isOwner,
   imageSuggestion,
+  versions,
 }: {
   requestId: string;
   channel: "linkedin" | "x" | "newsletter";
@@ -111,6 +113,8 @@ export default function ChannelPostCard({
   evaluation: EvalResult | undefined;
   /** Reviewers see the post and its scores, never the controls. */
   isOwner: boolean;
+  /** Every version this channel has, so the author can pick which one to work with. */
+  versions: ChannelVersion[];
 }) {
   const [editing, setEditing] = useState(false);
   const [confirmingEdit, setConfirmingEdit] = useState(false);
@@ -222,6 +226,15 @@ export default function ChannelPostCard({
             </div>
           )}
         </div>
+      )}
+
+      {!editing && (
+        <ChannelVersionPicker
+          requestId={requestId}
+          channel={channel}
+          versions={versions}
+          isOwner={isOwner}
+        />
       )}
 
       {channel !== "newsletter" && !editing && (

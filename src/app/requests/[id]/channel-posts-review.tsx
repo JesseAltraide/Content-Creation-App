@@ -6,6 +6,7 @@ import RejectButton from "./reject-button";
 import ChannelPostCard from "./channel-post-card";
 import type { StoredImageSuggestion } from "./image-suggestion";
 import MarkReadyButton from "./mark-ready-button";
+import type { ChannelVersion } from "./channel-version-picker";
 
 type ChannelPost = {
   id: string;
@@ -96,6 +97,25 @@ export default function ChannelPostsReview({
   const allNowPass =
     stuckHere && latestPosts.length > 0 && latestPosts.every((p) => evaluationPassed(evalByChannel.get(p.channel)));
 
+  // Every version this channel has, newest last, each with the score it was given.
+  // Scores are matched on the version number within this channel; a request can hold
+  // two different v1 posts when adaptation is re-run, so the LAST evaluation for a
+  // version wins, the same rule the queue and the card already use.
+  const versionsFor = (channel: string): ChannelVersion[] =>
+    channelPosts
+      .filter((p) => p.channel === channel)
+      .map((p) => {
+        const ev = [...evaluations]
+          .reverse()
+          .find((e) => e.channel === channel && e.content_version === p.version);
+        return {
+          version: p.version,
+          chosen: p.chosen,
+          createdAt: (p as unknown as { created_at: string }).created_at,
+          score: typeof ev?.overall_score === "number" ? ev.overall_score : null,
+        };
+      });
+
   if (channelOnly) {
     const post = latestByChannel.get(channelOnly);
     if (!post) return null;
@@ -107,6 +127,7 @@ export default function ChannelPostsReview({
         evaluation={evalByChannel.get(post.channel)}
         isOwner={isOwner}
         imageSuggestion={post.image_suggestion ?? null}
+        versions={versionsFor(post.channel)}
       />
     );
   }
