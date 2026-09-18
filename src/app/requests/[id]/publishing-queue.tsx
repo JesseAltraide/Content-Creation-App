@@ -1,4 +1,5 @@
 import { Card } from "@/components/ui/card";
+import { asList } from "@/lib/eval-shape";
 import { CHANNEL_LABELS, findLengthViolations } from "@/lib/channel-post-format";
 import ScheduleChannelForm from "./schedule-channel-form";
 import NewsletterEmailPreview from "./newsletter-email-preview";
@@ -119,11 +120,11 @@ export default function PublishingQueue({
           // Two lowest-scoring criteria by proportion of their own max, which is what
           // the human can actually act on. A criterion out of 25 losing 7 points
           // matters more than one out of 15 losing 2, and raw scores hide that.
-          const weakest = [...(evalForPost?.criteria ?? [])]
+          const weakest = [...asList<Criterion>(evalForPost?.criteria)]
             .filter((c) => c && typeof c.score === "number" && typeof c.max === "number" && c.max > 0)
             .sort((a, b) => a.score / a.max - b.score / b.max)
             .slice(0, 2);
-          const suggestions = (evalForPost?.weakest_criteria_suggestions ?? []).filter(
+          const suggestions = asList<string>(evalForPost?.weakest_criteria_suggestions).filter(
             (s): s is string => typeof s === "string" && s.trim().length > 0
           );
 

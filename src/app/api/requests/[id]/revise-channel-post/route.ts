@@ -112,7 +112,7 @@ function bodyForStorage(channel: string, input: Record<string, unknown>): string
 
 // Claude returns a nested tool value as a JSON string often enough that every parse
 // in this codebase guards for it (Errors #83-#85, and again on Workflow B's
-// excerpts). A thread arriving as "[\"post one\",\"post two\"]" would otherwise be
+// excerpts, and again on Workflow D's channels). A thread arriving as "[\"post one\",\"post two\"]" would otherwise be
 // stored as a single 2-post-long string and blow the character limit on save.
 function normaliseInput(channel: string, input: Record<string, unknown>): Record<string, unknown> {
   if (channel !== "x") return input;
@@ -127,6 +127,25 @@ function normaliseInput(channel: string, input: Record<string, unknown>): Record
   if (!Array.isArray(posts) && posts && typeof posts === "object") posts = Object.values(posts);
   if (!Array.isArray(posts)) posts = [];
   return { ...input, posts: (posts as unknown[]).map((p) => String(p)) };
+}
+
+// The same guard applied to the EVALUATION's nested values, which this route stores
+// directly. It was missing, so a stringified suggestions array went into the database
+// as a string and the request page crashed on .map, taking the whole channel tab with
+// it. Guarding the generation output and not the evaluation output was an oversight,
+// not a distinction.
+function toArray(value: unknown): unknown[] {
+  let v = value;
+  if (typeof v === "string") {
+    try {
+      v = JSON.parse(v);
+    } catch {
+      return [v];
+    }
+  }
+  if (Array.isArray(v)) return v;
+  if (v && typeof v === "object") return Object.values(v);
+  return [];
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -369,6 +388,37 @@ Fidelity of figures: carry every number, unit, percentage, date and conditional 
     );
   }
 
+  // A revision that scores lower is not an improvement, and replacing the current
+  // post with it would mean the button quietly makes things worse the moment the
+  // rewrite trades one criterion for another. The evaluator is also an independent
+  // judgement each time, so some of any drop is variance rather than the text getting
+  // worse; either way, keeping the better version is the honest default.
+  //
+  // The one exception is a post that cannot be published at all: a version over the
+  // character limit is worth replacing even by a lower-scoring one that fits, because
+  // an unschedulable post is worth nothing regardless of its score.
+  const previousScore = latestEval?.overall_score ?? null;
+  const previousBlocked = lengthViolations.length > 0;
+  const scoredWorse = previousScore !== null && evalInput.overall_score < previousScore;
+
+  if (scoredWorse && !previousBlocked) {
+    await logEvent({
+      requestId,
+      stage: "channel_revision",
+      status: "failed",
+      detail: `${channel} rewrite scored ${evalInput.overall_score}/100 against the current ${previousScore}/100, so it was discarded and the current version kept.`,
+    });
+    return NextResponse.json(
+      {
+        error: `The rewrite came back at ${evalInput.overall_score}/100, below the ${previousScore}/100 you already have, so your current version was kept. Try again, or use "Add your own steer" to say what you actually want changed.`,
+        score: evalInput.overall_score,
+        previousScore,
+        keptExisting: true,
+      },
+      { status: 409 }
+    );
+  }
+
   const newVersion = current.version + 1;
   const { error: insertError } = await admin.from("channel_posts").insert({
     request_id: requestId,
@@ -400,8 +450,8 @@ Fidelity of figures: carry every number, unit, percentage, date and conditional 
     content_version: newVersion,
     overall_score: evalInput.overall_score,
     status: evalInput.status,
-    criteria: evalInput.criteria,
-    weakest_criteria_suggestions: evalInput.weakest_criteria_suggestions ?? null,
+    criteria: toArray(evalInput.criteria),
+    weakest_criteria_suggestions: toArray(evalInput.weakest_criteria_suggestions).map((x) => String(x)),
     hard_block_triggered: false,
     hard_block_reason: null,
   });

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { asList } from "@/lib/eval-shape";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ScoreBar } from "@/components/ui/score-bar";
@@ -118,7 +119,7 @@ export default function ChannelPostCard({
             </p>
           )}
           <div className="flex flex-col gap-3">
-            {evaluation.criteria.map((c) => (
+            {asList<{ name: string; score: number; max: number; notes?: string }>(evaluation.criteria).map((c) => (
               <div key={c.name}>
                 <ScoreBar label={c.name} score={c.score} max={c.max} floor={floorForPass2Criterion(c.name)} />
                 {c.notes && <p className="mt-1 text-xs text-muted">{c.notes}</p>}
@@ -131,7 +132,7 @@ export default function ChannelPostCard({
                 Improvement suggestions
               </p>
               <ul className="mt-1.5 flex flex-col gap-1 text-sm text-warning">
-                {evaluation.weakest_criteria_suggestions.map((s, i) => (
+                {asList(evaluation.weakest_criteria_suggestions).map((s, i) => (
                   <li key={i}>{s}</li>
                 ))}
               </ul>

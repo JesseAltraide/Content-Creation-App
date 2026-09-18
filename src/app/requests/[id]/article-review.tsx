@@ -1,4 +1,5 @@
 import ReactMarkdown from "react-markdown";
+import { asList } from "@/lib/eval-shape";
 import { extractCitations } from "@/lib/citations";
 import { Card } from "@/components/ui/card";
 import { ScoreBar } from "@/components/ui/score-bar";
@@ -151,7 +152,7 @@ export default function ArticleReview({
             </p>
           )}
           <div className="mt-4 flex flex-col gap-4">
-            {latestEval.criteria.map((c) => (
+            {asList<{ name: string; score: number; max: number; notes?: string }>(latestEval.criteria).map((c) => (
               <div key={c.name}>
                 <ScoreBar label={c.name} score={c.score} max={c.max} floor={floorFor(c.name)} />
                 {c.notes && <p className="mt-1 text-xs text-muted">{c.notes}</p>}
@@ -164,7 +165,7 @@ export default function ArticleReview({
                 Improvement suggestions
               </p>
               <ul className="mt-1.5 flex flex-col gap-1 text-sm text-warning">
-                {latestEval.weakest_criteria_suggestions.map((s, i) => (
+                {asList(latestEval.weakest_criteria_suggestions).map((s, i) => (
                   <li key={i}>{s}</li>
                 ))}
               </ul>
