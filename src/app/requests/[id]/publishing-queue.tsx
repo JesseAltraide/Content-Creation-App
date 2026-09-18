@@ -8,12 +8,21 @@ import ScheduleChannelForm from "./schedule-channel-form";
 const QUEUE_CHANNELS = ["linkedin", "x", "newsletter"] as const;
 
 type ChannelPost = { id: string; channel: string; version: number; chosen: boolean; body: string };
+type Criterion = { name: string; score: number; max: number; notes?: string };
 type EvalResult = {
   channel: string | null;
   content_version: number;
   status: string;
   created_at?: string;
+  overall_score?: number;
+  criteria?: Criterion[] | null;
+  weakest_criteria_suggestions?: string[] | null;
 };
+
+// Workflow D's gate: 85 or better passes. Duplicated as a display constant rather
+// than imported because the authority genuinely lives in the workflow, and a stale
+// number here would only ever mislabel a banner, never let something through.
+const PASS_MARK = 85;
 type ScheduledItem = {
   id: string;
   channel_post_id: string;
@@ -95,6 +104,17 @@ export default function PublishingQueue({
             .filter((s) => s.channel === channel)
             .sort((a, b) => new Date(b.scheduled_for).getTime() - new Date(a.scheduled_for).getTime())[0];
 
+          // Two lowest-scoring criteria by proportion of their own max, which is what
+          // the human can actually act on. A criterion out of 25 losing 7 points
+          // matters more than one out of 15 losing 2, and raw scores hide that.
+          const weakest = [...(evalForPost?.criteria ?? [])]
+            .filter((c) => c && typeof c.score === "number" && typeof c.max === "number" && c.max > 0)
+            .sort((a, b) => a.score / a.max - b.score / b.max)
+            .slice(0, 2);
+          const suggestions = (evalForPost?.weakest_criteria_suggestions ?? []).filter(
+            (s): s is string => typeof s === "string" && s.trim().length > 0
+          );
+
           if (!post && !latestForChannel) return null;
 
           return (
@@ -147,11 +167,36 @@ export default function PublishingQueue({
                 </p>
               )}
 
-              {post && !eligible && lengthViolations.length === 0 && (
-                <p className="mt-2 text-xs text-muted">
-                  This channel&apos;s current draft hasn&apos;t passed Pass 2 evaluation yet, so there&apos;s nothing to
-                  schedule until it does.
-                </p>
+              {/* "It didn't pass" on its own is a dead end: it states a fact and
+                  leaves the human with no idea what to do next. The evaluator already
+                  knows the gap and what would close it, so show that instead. */}
+              {post && evalForPost?.status !== "pass" && (
+                <div className="mt-2 rounded-lg bg-warning-soft p-3">
+                  <p className="text-xs font-semibold text-warning">
+                    {typeof evalForPost?.overall_score !== "number"
+                      ? "This draft hasn't been scored yet, so it can't be scheduled."
+                      : evalForPost.overall_score < PASS_MARK
+                        ? `Scored ${evalForPost.overall_score}/100, ${PASS_MARK - evalForPost.overall_score} short of the ${PASS_MARK} needed to schedule.`
+                        : `Scored ${evalForPost.overall_score}/100 but still marked for revision.`}
+                  </p>
+                  {weakest.length > 0 && (
+                    <p className="mt-1 text-xs text-warning/90">
+                      Weakest: {weakest.map((c) => `${c.name} ${c.score}/${c.max}`).join(", ")}.
+                    </p>
+                  )}
+                  {suggestions.length > 0 && (
+                    <ul className="mt-1.5 flex list-disc flex-col gap-1 pl-4 text-xs text-warning/90">
+                      {suggestions.map((sug, i) => (
+                        <li key={i}>{sug}</li>
+                      ))}
+                    </ul>
+                  )}
+                  <p className="mt-2 text-xs text-warning/90">
+                    {isOwner
+                      ? `Edit the post in the ${CHANNEL_LABELS[channel]} tab to fix it. Saving an edit re-runs the evaluation, and it becomes schedulable as soon as it clears ${PASS_MARK}.`
+                      : "The author can edit the post to fix this, which re-runs the evaluation."}
+                  </p>
+                </div>
               )}
             </Card>
           );
