@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import ResetStalledButton from "./reset-stalled-button";
 
 // These are exactly the statuses Next.js sets right before firing an after()
 // trigger (see retry/route.ts, select-angle/route.ts, approve/route.ts) - the
@@ -21,12 +22,15 @@ export default function WorkingBanner({
   status,
   stalled,
   quiet,
+  canReset,
 }: {
   requestId: string;
   status: string;
   stalled: boolean;
   /** Nothing has been logged for this request in a while - see page.tsx. */
   quiet: boolean;
+  /** Reviewers watch; only the author can reset a run. */
+  canReset?: boolean;
 }) {
   const router = useRouter();
   const [elapsed, setElapsed] = useState(0);
@@ -140,6 +144,11 @@ export default function WorkingBanner({
           <p className="mt-0.5 text-xs text-warning/90">
             Something is probably down. We advise you try again later.
           </p>
+          {/* Without this the request sits claiming to be busy forever: a run that dies
+              inside n8n without reaching one of its own handlers logs nothing, and the
+              status is all the UI has to go on. Caught live at 'adapting' for nearly
+              two hours with no channel posts and no events. */}
+          {canReset && <ResetStalledButton requestId={requestId} />}
         </div>
       </div>
     );

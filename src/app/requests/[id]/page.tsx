@@ -298,6 +298,7 @@ export default async function RequestDetailPage({
         status={req.status}
         stalled={latestIsDeadFailure}
         quiet={goneQuiet}
+        canReset={canAct}
       />
 
       <Card className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 p-5 text-sm">
