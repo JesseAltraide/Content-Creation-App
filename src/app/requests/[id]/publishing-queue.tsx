@@ -3,6 +3,7 @@ import { asList } from "@/lib/eval-shape";
 import { CHANNEL_LABELS, findLengthViolations, evaluationPassed } from "@/lib/channel-post-format";
 import ScheduleChannelForm from "./schedule-channel-form";
 import NewsletterEmailPreview from "./newsletter-email-preview";
+import UseVersionButton from "./use-version-button";
 
 // Newsletter shares this same table/cron job but gets real delivery to every
 // active subscriber instead of a reminder email (Decision #22/#48) - see
@@ -50,6 +51,7 @@ export default function PublishingQueue({
   brandChangedAt,
   isOwner,
   subscriberCount,
+  manuallyEditedChannels,
 }: {
   requestId: string;
   channelPosts: ChannelPost[];
@@ -61,6 +63,13 @@ export default function PublishingQueue({
   brandChangedAt: string | null;
   /** Only the author schedules; reviewers see the queue state read-only. */
   isOwner: boolean;
+  /**
+   * Channels whose current post came from a manual edit, read from the edit_triage
+   * events. It decides only what the score-regression banner SAYS and whether going
+   * back to an earlier version is offered: an edit is the author's own text and is
+   * never swapped out, an automated round is the system's own work and can be.
+   */
+  manuallyEditedChannels: string[];
 }) {
   // Only shows once there's at least one eligible (passing) channel post to
   // schedule, or an existing queue entry to display - nothing to show before
@@ -129,12 +138,33 @@ export default function PublishingQueue({
           // re-scores it. But it can still end up shipping a post that scores worse than
           // one they already had, without anyone mentioning it. So the fact is surfaced
           // here, at the point of scheduling, and the decision stays theirs.
-          const bestForChannel = evaluations
-            .filter((e) => e.channel === channel && typeof e.overall_score === "number")
-            .reduce<number | null>((best, e) => (best === null || e.overall_score! > best ? e.overall_score! : best), null);
+          const scoredForChannel = evaluations.filter(
+            (e) => e.channel === channel && typeof e.overall_score === "number"
+          );
+          const bestEval = scoredForChannel.reduce<EvalResult | null>(
+            (best, e) => (best === null || e.overall_score! > best.overall_score! ? e : best),
+            null
+          );
+          const bestForChannel = bestEval?.overall_score ?? null;
           const currentScore = evalForPost?.overall_score ?? null;
           const betterExisted =
             currentScore !== null && bestForChannel !== null && bestForChannel > currentScore;
+          // The banner used to state flatly that a manual edit caused this, because
+          // that was the only case it was written for. It is not the only case: a
+          // Workflow D adaptation round can replace a passing version with a worse
+          // one all by itself, and blaming an edit the author never made sends them
+          // looking for a mistake that is not theirs. Caught live on a request with
+          // no edits at all: X scored 62, then 87, then 62 again.
+          const wasEdited = manuallyEditedChannels.includes(channel);
+          // Only offered for a version this app produced. A manual edit is the
+          // author's own text and is never swapped out from under them, which is the
+          // whole of Decision #126.
+          const betterVersion =
+            betterExisted && !wasEdited && bestEval
+              ? channelPosts.find(
+                  (p) => p.channel === channel && p.version === bestEval.content_version
+                )
+              : undefined;
 
           const suggestions = asList<string>(evalForPost?.weakest_criteria_suggestions).filter(
             (s): s is string => typeof s === "string" && s.trim().length > 0
@@ -207,12 +237,23 @@ export default function PublishingQueue({
               )}
 
               {post && betterExisted && (
-                <p className="mt-2 rounded-lg bg-warning-soft px-3 py-2 text-xs text-warning">
-                  An earlier version of this post scored {bestForChannel}/100, higher than the{" "}
-                  {currentScore}/100 you are about to schedule. That is expected after a manual
-                  edit, which is kept as written rather than being judged against the old score.
-                  Worth a look if the edit was not deliberate.
-                </p>
+                <div className="mt-2 rounded-lg bg-warning-soft px-3 py-2 text-xs text-warning">
+                  <p>
+                    An earlier version of this post scored {bestForChannel}/100, higher than the{" "}
+                    {currentScore}/100 currently in use.{" "}
+                    {wasEdited
+                      ? "That is expected after a manual edit, which is kept as written rather than being judged against the old score. Worth a look if the edit was not deliberate."
+                      : "Nobody edited this: a later automated revision round replaced a better version with a worse one. You can go back to the better one."}
+                  </p>
+                  {betterVersion && isOwner && (
+                    <UseVersionButton
+                      requestId={requestId}
+                      channel={channel}
+                      version={betterVersion.version}
+                      score={bestForChannel!}
+                    />
+                  )}
+                </div>
               )}
 
               {post && !evaluationPassed(evalForPost) && (

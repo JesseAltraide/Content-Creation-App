@@ -181,6 +181,20 @@ export default async function RequestDetailPage({
 
   const sourceUrlsById = Object.fromEntries((sources ?? []).map((s) => [s.id, s.url]));
 
+  // Which channels carry a manual edit, read from the edit_triage events those runs
+  // write ("Edit to x re-evaluated: 82/100 (pass)."). Only used to word the
+  // score-regression banner correctly and to decide whether going back to an earlier
+  // version is offered: an automated round can be replaced, an author's own text
+  // never is.
+  const manuallyEditedChannels = Array.from(
+    new Set(
+      (events ?? [])
+        .filter((e) => e.stage === "edit_triage" && e.status === "success")
+        .map((e) => /Edit to (\w+)/.exec(e.detail ?? "")?.[1])
+        .filter((c): c is string => !!c)
+    )
+  );
+
   const latestEvent = events?.[0];
   // There is no liveness signal from n8n - a trigger status only ever gets cleared
   // by n8n reporting back, so if n8n is offline (or the run died without logging),
@@ -526,6 +540,7 @@ export default async function RequestDetailPage({
             subscriberCount={subscriberCount ?? 0}
             brandChangedAt={brandChangedAt}
             isOwner={canAct}
+            manuallyEditedChannels={manuallyEditedChannels}
           />
           ),
           sources: (
