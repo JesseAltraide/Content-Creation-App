@@ -126,6 +126,11 @@ export default function ChannelPostsReview({
           .reverse()
           .find((e) => e.channel === channel && e.content_version === p.version);
         return {
+          // The row id, because version numbers are NOT unique per channel: re-running
+          // adaptation restarts them at 1, so a request holds two v1 posts and React
+          // saw two children with the same key. Switching version had the same
+          // ambiguity underneath it, which matters more than the warning did.
+          id: p.id,
           version: p.version,
           chosen: p.chosen,
           createdAt: (p as unknown as { created_at: string }).created_at,

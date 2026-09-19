@@ -266,8 +266,13 @@ export default async function RequestDetailPage({
   // Angles that have never been generated from. Shown in the offer because "try a
   // different angle" is only worth taking if a different one exists.
   const unusedAngles = (angles ?? []).filter((a) => (a.generation_count ?? 0) === 0).length;
+  // And only when there is actually another angle to move to. Offering "try a
+  // different angle" when the proposal returned exactly one sends the human back to a
+  // screen holding the single angle they already used, which is not a choice.
   const canTryDifferentAngle =
-    needsAttention && ["excerpt_selection", "evaluation"].includes(latestFailedEvent!.stage);
+    needsAttention &&
+    unusedAngles > 0 &&
+    ["excerpt_selection", "evaluation"].includes(latestFailedEvent!.stage);
 
   // A channel only earns a tab once it actually has a chosen post to show.
   const channelTabKeys = new Set(

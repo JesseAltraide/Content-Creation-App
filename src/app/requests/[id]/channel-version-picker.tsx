@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { PASS_MARK } from "@/lib/channel-post-format";
 
 export type ChannelVersion = {
+  /** The channel_posts row id. Version numbers repeat across adaptation runs. */
+  id: string;
   version: number;
   chosen: boolean;
   createdAt: string;
@@ -38,7 +40,7 @@ export default function ChannelVersionPicker({
   pendingSendAt?: string | null;
 }) {
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState<number | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // One version is not a history. Two or more is a choice worth offering.
@@ -46,14 +48,14 @@ export default function ChannelVersionPicker({
 
   const current = versions.find((v) => v.chosen);
 
-  const use = async (version: number) => {
-    setBusy(version);
+  const use = async (postId: string) => {
+    setBusy(postId);
     setError(null);
     try {
       const res = await fetch(`/api/requests/${requestId}/use-channel-version`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channel, version }),
+        body: JSON.stringify({ channel, postId }),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -88,7 +90,7 @@ export default function ChannelVersionPicker({
             const schedulable = v.score !== null && v.score >= PASS_MARK;
             return (
               <div
-                key={v.version}
+                key={v.id}
                 className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-xs ${
                   v.chosen ? "border-accent bg-accent-soft" : "border-border"
                 }`}
@@ -108,10 +110,10 @@ export default function ChannelVersionPicker({
                   isOwner && (
                     <Button
                       variant="secondary"
-                      onClick={() => use(v.version)}
+                      onClick={() => use(v.id)}
                       disabled={busy !== null}
                     >
-                      {busy === v.version ? "Switching..." : "Use this one"}
+                      {busy === v.id ? "Switching..." : "Use this one"}
                     </Button>
                   )
                 )}

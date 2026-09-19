@@ -307,7 +307,7 @@ export default function PublishingQueue({
                     <UseVersionButton
                       requestId={requestId}
                       channel={channel}
-                      version={betterVersion.version}
+                      postId={betterVersion.id}
                       score={bestForChannel!}
                     />
                   )}

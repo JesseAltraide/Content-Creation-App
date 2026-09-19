@@ -18,9 +18,12 @@ import { logEvent } from "@/lib/events";
 // exists and presses a button to go back to it. Deliberately not automatic, because
 // the identical mechanism would otherwise revert a manual edit, which the author's
 // own text must never be subject to.
+// The row id, not the version number. Version numbers restart at 1 every time
+// adaptation is re-run, so a channel can hold two v3 posts and "switch to v3" has no
+// single answer: it marked both chosen at once when the workflow did the same thing.
 const Body = z.object({
   channel: z.enum(["linkedin", "x", "newsletter"]),
-  version: z.number().int().positive(),
+  postId: z.string().uuid(),
 });
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -30,7 +33,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
-  const { channel, version } = parsed.data;
+  const { channel, postId } = parsed.data;
 
   const supabase = await createClient();
   const {
@@ -49,7 +52,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     .eq("request_id", requestId)
     .eq("channel", channel);
 
-  const target = (posts ?? []).find((p) => p.version === version);
+  const target = (posts ?? []).find((p) => p.id === postId);
   if (!target) {
     return NextResponse.json({ error: "That version no longer exists." }, { status: 404 });
   }
@@ -135,7 +138,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     stage: "channel_revision",
     status: "success",
     detail:
-      `Switched ${channel} to version ${version} by hand.` +
+      `Switched ${channel} to version ${target.version} by hand.` +
       (cancelled > 0 ? " The pending schedule pointed at the previous version and was cancelled." : ""),
   });
 

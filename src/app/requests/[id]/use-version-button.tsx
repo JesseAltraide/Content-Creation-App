@@ -10,12 +10,13 @@ import { Button } from "@/components/ui/button";
 export default function UseVersionButton({
   requestId,
   channel,
-  version,
+  postId,
   score,
 }: {
   requestId: string;
   channel: string;
-  version: number;
+  /** The row id: version numbers repeat across adaptation runs. */
+  postId: string;
   score: number;
 }) {
   const [busy, setBusy] = useState(false);
@@ -28,7 +29,7 @@ export default function UseVersionButton({
       const res = await fetch(`/api/requests/${requestId}/use-channel-version`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channel, version }),
+        body: JSON.stringify({ channel, postId }),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;

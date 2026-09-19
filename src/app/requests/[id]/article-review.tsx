@@ -184,7 +184,9 @@ export default function ArticleReview({
           {/* Regenerating reuses the chosen angle, so it produces the same shape of
               article. When the treatment itself is the problem, the answer is a
               different angle, and that was only reachable from a dead end until now. */}
-          {requestStatus === "pending_approval" && (
+          {/* Only when another angle actually exists to move to: with one proposed
+              angle this offers a screen holding the angle already in use. */}
+          {requestStatus === "pending_approval" && unusedAngles > 0 && (
             <div className="mt-4 border-t border-border pt-4">
               <p className="text-sm text-muted">
                 Want a different treatment rather than another pass at this one?
