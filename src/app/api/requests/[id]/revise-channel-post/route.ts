@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanModifyRequest } from "@/lib/request-access";
 import { logEvent } from "@/lib/events";
 import { firedRecently } from "@/lib/debounce-trigger";
-import { findLengthViolations, CHANNEL_CHAR_LIMITS, formatForEvaluator } from "@/lib/channel-post-format";
+import { findLengthViolations, CHANNEL_CHAR_LIMITS, formatForEvaluator, PASS_MARK } from "@/lib/channel-post-format";
 import type Anthropic from "@anthropic-ai/sdk";
 import { getClaude, GENERATION_MODEL, EVALUATION_MODEL } from "@/lib/claude";
 // Shared with the pages that render these rows, so what is written and what is read
@@ -433,6 +433,18 @@ Fidelity of figures: carry every number, unit, percentage, date and conditional 
     .eq("channel", channel)
     .eq("version", current.version);
 
+  // The gate's verdict, not the model's own word for it. Caught live: this route
+  // stored an X rewrite as "pass" at 81, and the log said so too, while the schedule
+  // route and the publishing queue both correctly refuse anything under 85. The same
+  // mismatch has now appeared four times in this build (Errors #46, #54, #59), always
+  // because a label was written where a number was the actual authority.
+  //
+  // A character-limit violation is a fail regardless of score, for the same reason it
+  // blocks scheduling: an over-length post cannot be published at all.
+  const revisedViolations = findLengthViolations(channel, bodyForStorage(channel, genInput));
+  const gateStatus =
+    revisedViolations.length > 0 || evalInput.overall_score < PASS_MARK ? "revise" : "pass";
+
   await admin.from("evaluation_results").insert({
     request_id: requestId,
     section_id: null,
@@ -440,7 +452,7 @@ Fidelity of figures: carry every number, unit, percentage, date and conditional 
     pass: "pass_2_channel",
     content_version: newVersion,
     overall_score: evalInput.overall_score,
-    status: evalInput.status,
+    status: gateStatus,
     criteria: asList<Record<string, unknown>>(evalInput.criteria),
     weakest_criteria_suggestions: asList<string>(evalInput.weakest_criteria_suggestions).map((x) => String(x)),
     hard_block_triggered: false,
@@ -451,7 +463,7 @@ Fidelity of figures: carry every number, unit, percentage, date and conditional 
     requestId,
     stage: "channel_revision",
     status: "success",
-    detail: `${channel} revised against the evaluator's suggestions: ${latestEval?.overall_score ?? "?"}/100 to ${evalInput.overall_score}/100 (${evalInput.status})${violations.length ? `, still over the character limit` : ""}.`,
+    detail: `${channel} revised against the evaluator's suggestions: ${latestEval?.overall_score ?? "?"}/100 to ${evalInput.overall_score}/100 (${gateStatus})${violations.length ? `, still over the character limit` : ""}.`,
   });
 
   return NextResponse.json({
