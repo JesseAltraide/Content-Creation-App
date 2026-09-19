@@ -21,8 +21,9 @@ const NL = String.fromCharCode(10);
 // ${} code in a Claude prompt - a raw newline there is a JS syntax error (Error #6);
 // this is the literal 2-character escape sequence instead, safe anywhere.
 const BSN = String.fromCharCode(92, 110);
-const SUPABASE_CRED = { id: "supabase-account", name: "Supabase account" };
-const ANTHROPIC_CRED = { id: "anthropic-account", name: "Anthropic account" };
+const CREDS = require("./n8n-credentials");
+const SUPABASE_CRED = CREDS.supabaseApi;
+const ANTHROPIC_CRED = CREDS.anthropicApi;
 
 const nodes = [];
 const connections = {};

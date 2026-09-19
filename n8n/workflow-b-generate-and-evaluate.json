@@ -72,7 +72,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -106,7 +106,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -140,7 +140,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -173,7 +173,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -197,7 +197,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -221,7 +221,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -303,7 +303,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -338,7 +338,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -402,7 +402,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "anthropicApi": {
-          "id": "anthropic-account",
+          "id": "PASTE_ID_HERE",
           "name": "Anthropic account"
         }
       },
@@ -450,7 +450,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -485,7 +485,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -520,7 +520,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -610,7 +610,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -645,7 +645,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -691,7 +691,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -714,7 +714,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -782,7 +782,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "anthropicApi": {
-          "id": "anthropic-account",
+          "id": "PASTE_ID_HERE",
           "name": "Anthropic account"
         }
       },
@@ -848,7 +848,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -896,7 +896,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -931,7 +931,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -966,7 +966,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -1013,7 +1013,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -1050,7 +1050,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -1103,7 +1103,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "anthropicApi": {
-          "id": "anthropic-account",
+          "id": "PASTE_ID_HERE",
           "name": "Anthropic account"
         }
       },
@@ -1151,7 +1151,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -1186,7 +1186,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -1221,7 +1221,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -1280,7 +1280,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -1359,7 +1359,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -1394,7 +1394,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -1458,7 +1458,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "anthropicApi": {
-          "id": "anthropic-account",
+          "id": "PASTE_ID_HERE",
           "name": "Anthropic account"
         }
       },
@@ -1506,7 +1506,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -1541,7 +1541,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -1576,7 +1576,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -1635,7 +1635,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -1688,7 +1688,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "anthropicApi": {
-          "id": "anthropic-account",
+          "id": "PASTE_ID_HERE",
           "name": "Anthropic account"
         }
       },
@@ -1736,7 +1736,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -1771,7 +1771,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -1806,7 +1806,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -1865,7 +1865,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -1944,7 +1944,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -1979,7 +1979,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -2043,7 +2043,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "anthropicApi": {
-          "id": "anthropic-account",
+          "id": "PASTE_ID_HERE",
           "name": "Anthropic account"
         }
       },
@@ -2091,7 +2091,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -2126,7 +2126,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -2161,7 +2161,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -2220,7 +2220,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -2273,7 +2273,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "anthropicApi": {
-          "id": "anthropic-account",
+          "id": "PASTE_ID_HERE",
           "name": "Anthropic account"
         }
       },
@@ -2321,7 +2321,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -2356,7 +2356,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -2391,7 +2391,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -2450,7 +2450,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -2529,7 +2529,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -2564,7 +2564,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -2610,7 +2610,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
@@ -2645,7 +2645,7 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "supabase-account",
+          "id": "PASTE_ID_HERE",
           "name": "Supabase account"
         }
       },
