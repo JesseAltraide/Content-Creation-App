@@ -5,6 +5,8 @@ import { Card } from "@/components/ui/card";
 import { ScoreBar } from "@/components/ui/score-bar";
 import ReviewActions from "./review-actions";
 import BackToAngleSelectionButton from "./back-to-angle-selection-button";
+import { pickDraft, scoreForDraft } from "@/lib/pick-draft";
+import DraftVersionPicker from "./draft-version-picker";
 
 const CRITERION_FLOORS: Record<string, number> = {
   "topic relevance": 15,
@@ -22,8 +24,10 @@ function floorFor(name: string): number | undefined {
 
 type Section = {
   id: string;
-  created_at?: string;
+  created_at: string;
   version: number;
+  /** Optional until migration 016 is applied; the score decides in its absence. */
+  chosen?: boolean | null;
   title: string | null;
   body_markdown: string | null;
   generation_status: string;
@@ -69,7 +73,18 @@ export default function ArticleReview({
 }) {
   if (sections.length === 0) return null;
 
-  const latest = sections[sections.length - 1];
+  // The best draft, not the newest. A regeneration that scored worse used to become
+  // the article silently while the better draft sat in the table unreachable, which is
+  // the same complaint the channel version picker was built for.
+  const latest = pickDraft(sections, evaluations) ?? sections[sections.length - 1];
+  const draftVersions = [...sections]
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    .map((sec) => ({
+      id: sec.id,
+      version: sec.version,
+      score: scoreForDraft(sec, evaluations),
+      chosen: sec.id === latest.id,
+    }));
   // The generation prompt asks for "proper H1/H2 heading hierarchy", so body_markdown
   // opens with an H1 of the article's own title, and the title is already rendered
   // above it from section.title. Two identical headings, one on top of the other.
@@ -138,6 +153,8 @@ export default function ArticleReview({
             </ol>
           </div>
         )}
+
+        <DraftVersionPicker requestId={requestId} versions={draftVersions} isOwner={isOwner} />
       </Card>
 
       {latestEval && (
