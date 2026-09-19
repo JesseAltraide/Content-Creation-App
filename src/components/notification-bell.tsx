@@ -21,6 +21,8 @@ const COPY: Record<string, string> = {
   needs_human_attention: "Needs your attention",
 };
 
+const SEEN_KEY = "content-agent:notices-seen";
+
 function ago(iso: string): string {
   const seconds = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
   if (seconds < 60) return "just now";
@@ -43,6 +45,42 @@ function ago(iso: string): string {
 export default function NotificationBell({ initial }: { initial: Notice[] }) {
   const [notices, setNotices] = useState<Notice[]>(initial);
   const [open, setOpen] = useState(false);
+  // What has already been looked at. Keyed by request AND status, so a request that
+  // moves from "draft ready" to "needs attention" counts as new again: it is a
+  // different thing to tell someone, even though it is the same request.
+  const [seen, setSeen] = useState<Set<string>>(new Set());
+
+  // Per browser, in localStorage, deliberately. A "read" marker is a property of the
+  // person looking, not of the request, and the alternative is a table and a write on
+  // every glance. The cost is that it does not follow you to another device, which for
+  // a count that only says "look here" is a fair trade.
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(SEEN_KEY);
+      if (raw) setSeen(new Set(JSON.parse(raw) as string[]));
+    } catch {
+      // Private windows and blocked site data both throw. An empty set just means
+      // everything reads as unread, which is the safe direction to fail.
+    }
+  }, []);
+
+  const keyOf = (n: Notice) => `${n.id}:${n.status}`;
+  const unread = notices.filter((n) => !seen.has(keyOf(n)));
+
+  // Opening the panel is what counts as reading them. Marking on click-through would
+  // leave the badge lit for the ones you decided not to act on yet, which is the
+  // behaviour being complained about.
+  const markAllSeen = () => {
+    const next = new Set(seen);
+    for (const n of notices) next.add(keyOf(n));
+    setSeen(next);
+    try {
+      // Only what is still live, so the list cannot grow without bound.
+      window.localStorage.setItem(SEEN_KEY, JSON.stringify([...next].slice(-200)));
+    } catch {
+      // Nothing to do: the badge simply comes back on the next load.
+    }
+  };
 
   useEffect(() => {
     const supabase = createClient();
@@ -93,7 +131,8 @@ export default function NotificationBell({ initial }: { initial: Notice[] }) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        aria-label={`Notifications${notices.length > 0 ? ` (${notices.length})` : ""}`}
+        onClickCapture={() => { if (!open) markAllSeen(); }}
+        aria-label={`Notifications${unread.length > 0 ? `, ${unread.length} unread` : ""}`}
         className="relative flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-black/5 hover:text-foreground"
       >
         {/* Inline rather than an icon dependency, which this project does not have. */}
@@ -106,9 +145,9 @@ export default function NotificationBell({ initial }: { initial: Notice[] }) {
           />
           <path d="M6.4 13a1.7 1.7 0 0 0 3.2 0" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
         </svg>
-        {notices.length > 0 && (
+        {unread.length > 0 && (
           <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-accent-foreground">
-            {notices.length}
+            {unread.length}
           </span>
         )}
       </button>
@@ -123,11 +162,12 @@ export default function NotificationBell({ initial }: { initial: Notice[] }) {
             onClick={() => setOpen(false)}
             className="fixed inset-0 z-10 cursor-default"
           />
-          <div className="absolute right-0 z-20 mt-2 w-80 rounded-xl border border-border bg-surface p-2 shadow-lg">
+          {/* Capped and scrollable: eleven requests needing attention is a real state
+              in this database, and at three lines each the panel ran off the page. */}
+          <div className="absolute right-0 z-20 mt-2 max-h-80 w-72 overflow-y-auto rounded-xl border border-border bg-surface p-1.5 shadow-lg">
             {notices.length === 0 ? (
               <p className="px-2 py-3 text-xs text-muted">
-                Nothing needs you right now. Anything waiting on you appears here as soon
-                as it happens.
+                Nothing needs you right now.
               </p>
             ) : (
               <ul className="flex flex-col">
@@ -137,13 +177,17 @@ export default function NotificationBell({ initial }: { initial: Notice[] }) {
                       href={`/requests/${n.id}`}
                       prefetch={false}
                       onClick={() => setOpen(false)}
-                      className="flex flex-col gap-0.5 rounded-lg px-2 py-2 hover:bg-black/5"
+                      className="flex flex-col gap-0.5 rounded-lg px-2 py-1.5 hover:bg-black/5"
                     >
-                      <span className="text-xs font-semibold text-foreground">
-                        {COPY[n.status] ?? n.status}
+                      {/* Status and age on one line, the request on the next. The age
+                          was its own row purely because it was written that way. */}
+                      <span className="flex items-baseline justify-between gap-2">
+                        <span className="truncate text-xs font-semibold text-foreground">
+                          {COPY[n.status] ?? n.status}
+                        </span>
+                        <span className="shrink-0 text-[11px] text-muted">{ago(n.at)}</span>
                       </span>
                       <span className="truncate text-xs text-muted">{n.label}</span>
-                      <span className="text-[11px] text-muted">{ago(n.at)}</span>
                     </Link>
                   </li>
                 ))}
