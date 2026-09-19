@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { hardRefresh } from "@/lib/hard-refresh";
 
 export default function MarkReadyButton({ requestId }: { requestId: string }) {
   const router = useRouter();
@@ -19,7 +20,11 @@ export default function MarkReadyButton({ requestId }: { requestId: string }) {
         setError(body.error ?? "Something went wrong.");
         return;
       }
-      router.refresh();
+      // Not router.refresh(): client navigation has repeatedly failed to re-render
+      // the server components on this page, which shows up as an action that
+      // appears to do nothing. Same reason the polling and the source picker
+      // reload outright.
+      hardRefresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {

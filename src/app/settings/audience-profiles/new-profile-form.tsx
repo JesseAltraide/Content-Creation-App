@@ -1,15 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { hardRefresh } from "@/lib/hard-refresh";
 
 const inputClass =
   "rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20";
 
 export default function NewProfileForm() {
-  const router = useRouter();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -35,7 +34,7 @@ export default function NewProfileForm() {
 
     setName("");
     setDescription("");
-    router.refresh();
+    hardRefresh();
   }
 
   return (

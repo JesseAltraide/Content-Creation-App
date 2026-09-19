@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
 import { REGENERATION_CAP } from "@/lib/regeneration";
+import { hardRefresh } from "@/lib/hard-refresh";
 
 export default function ReviewActions({
   requestId,
@@ -15,7 +15,6 @@ export default function ReviewActions({
   regenerationCount: number;
   canApprove: boolean;
 }) {
-  const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState(false);
@@ -45,7 +44,7 @@ export default function ReviewActions({
         setError(message);
         return;
       }
-      router.refresh();
+      hardRefresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {

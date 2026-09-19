@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { hardRefresh } from "@/lib/hard-refresh";
 
 export default function SelectAngleButton({
   requestId,
@@ -16,7 +16,6 @@ export default function SelectAngleButton({
   alreadyGenerated: boolean;
   attemptsLeft: number;
 }) {
-  const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,7 +33,7 @@ export default function SelectAngleButton({
       setError(body.error ?? "Something went wrong.");
       return;
     }
-    router.refresh();
+    hardRefresh();
   }
 
   // The cost of re-picking is the same full Workflow B run as pressing Regenerate,

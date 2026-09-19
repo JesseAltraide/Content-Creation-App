@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { hardRefresh } from "@/lib/hard-refresh";
 
 export default function ResetStalledButton({ requestId }: { requestId: string }) {
   const [submitting, setSubmitting] = useState(false);
@@ -21,7 +22,7 @@ export default function ResetStalledButton({ requestId }: { requestId: string })
       // decides which banners and actions the server renders, and refresh() was leaving
       // the old markup on screen until the person reloaded by hand. A recovery action
       // that appears not to have worked is worse than a page flash.
-      window.location.reload();
+      hardRefresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {

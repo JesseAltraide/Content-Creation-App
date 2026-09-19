@@ -1,11 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { hardRefresh } from "@/lib/hard-refresh";
 
 export default function DeleteProfileButton({ profileId }: { profileId: string }) {
-  const router = useRouter();
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,7 +21,7 @@ export default function DeleteProfileButton({ profileId }: { profileId: string }
       setError(body.error ?? "Couldn't remove that. Try again.");
       return;
     }
-    router.refresh();
+    hardRefresh();
   }
 
   return (

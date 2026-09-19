@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { hardRefresh } from "@/lib/hard-refresh";
 
 export type Announcement = {
   id: string;
@@ -30,7 +30,6 @@ export default function SettingsAnnouncementPopup({
 }: {
   announcements: Announcement[];
 }) {
-  const router = useRouter();
   const [dismissing, setDismissing] = useState(false);
   const [hidden, setHidden] = useState(false);
 
@@ -56,7 +55,7 @@ export default function SettingsAnnouncementPopup({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ announcementIds: announcements.map((a) => a.id) }),
       });
-      router.refresh();
+      hardRefresh();
     } finally {
       setDismissing(false);
     }

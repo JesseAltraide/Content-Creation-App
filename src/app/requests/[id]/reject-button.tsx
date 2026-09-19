@@ -1,11 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { hardRefresh } from "@/lib/hard-refresh";
 
 export default function RejectButton({ requestId }: { requestId: string }) {
-  const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState(false);
@@ -25,7 +24,7 @@ export default function RejectButton({ requestId }: { requestId: string }) {
       setError(body.error ?? "Something went wrong.");
       return;
     }
-    router.refresh();
+    hardRefresh();
   }
 
   if (rejecting) {

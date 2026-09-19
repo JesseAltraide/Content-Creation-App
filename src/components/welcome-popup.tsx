@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { hardRefresh } from "@/lib/hard-refresh";
 
 type Profile = { name: string; description: string };
 
@@ -17,7 +17,6 @@ export default function WelcomePopup({
   profiles: Profile[];
   toneChannels: string[];
 }) {
-  const router = useRouter();
   const [hidden, setHidden] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -27,7 +26,7 @@ export default function WelcomePopup({
     setBusy(true);
     setHidden(true);
     await fetch("/api/welcome-seen", { method: "POST" });
-    router.refresh();
+    hardRefresh();
   }
 
   return (

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { hardRefresh } from "@/lib/hard-refresh";
 
 function localInputValue(d: Date): string {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
@@ -17,7 +17,6 @@ export default function ScheduleChannelForm({
   channel: "linkedin" | "x" | "newsletter";
   hasPendingSchedule: boolean;
 }) {
-  const router = useRouter();
   const [value, setValue] = useState("");
   // datetime-local wants local wall-clock time, not an ISO/UTC string, so the offset
   // has to be subtracted before slicing. Without that, anyone west of UTC gets a min
@@ -60,7 +59,7 @@ export default function ScheduleChannelForm({
         setError(body.error ?? "Something went wrong.");
         return;
       }
-      router.refresh();
+      hardRefresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
@@ -82,7 +81,7 @@ export default function ScheduleChannelForm({
         setError(body.error ?? "Something went wrong.");
         return;
       }
-      router.refresh();
+      hardRefresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {

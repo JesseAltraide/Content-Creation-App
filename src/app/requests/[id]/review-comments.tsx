@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { CHANNEL_LABELS } from "@/lib/channel-post-format";
+import { hardRefresh } from "@/lib/hard-refresh";
 
 export type Comment = {
   id: string;
@@ -29,7 +29,6 @@ export default function ReviewComments({
   /** Comments are only invited while the request is actually open for review. */
   openForReview: boolean;
 }) {
-  const router = useRouter();
   const [body, setBody] = useState("");
   const [channel, setChannel] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
@@ -52,7 +51,7 @@ export default function ReviewComments({
       }
       setBody("");
       setChannel("");
-      router.refresh();
+      hardRefresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
@@ -62,7 +61,7 @@ export default function ReviewComments({
 
   async function remove(commentId: string) {
     await fetch(`/api/requests/${requestId}/comments?commentId=${commentId}`, { method: "DELETE" });
-    router.refresh();
+    hardRefresh();
   }
 
   return (

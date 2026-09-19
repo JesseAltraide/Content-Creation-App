@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { hardRefresh } from "@/lib/hard-refresh";
 
 export default function SignOutButton() {
   const router = useRouter();
@@ -10,7 +11,7 @@ export default function SignOutButton() {
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/login");
-    router.refresh();
+    hardRefresh();
   }
 
   return (

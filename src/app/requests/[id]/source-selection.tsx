@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import CopyLinkButton from "@/components/copy-link-button";
 import { assessSourceUrl, blockSourceUrl } from "@/lib/source-quality";
+import { hardRefresh } from "@/lib/hard-refresh";
 
 export default function SourceSelection({
   requestId,
@@ -50,7 +51,7 @@ export default function SourceSelection({
     // server components on this page (the same reason the polling had to stop using
     // it), and here that reads as the button saying "Continuing" and nothing else
     // happening, which is exactly how this was reported.
-    window.location.reload();
+    hardRefresh();
   }
 
   return (

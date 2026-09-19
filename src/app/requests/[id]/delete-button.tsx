@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -12,7 +11,6 @@ export default function DeleteButton({
   requestId: string;
   title: string;
 }) {
-  const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,8 +24,9 @@ export default function DeleteButton({
       setError("Failed to delete.");
       return;
     }
-    router.push("/");
-    router.refresh();
+    // A hard navigation rather than push+refresh: the list has to be re-fetched
+    // without the deleted request, and a client push can leave it showing.
+    window.location.href = "/";
   }
 
   if (!confirming) {

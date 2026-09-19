@@ -1,10 +1,10 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { findLink, TONE_SAMPLE_LINK_MESSAGE } from "@/lib/find-link";
+import { hardRefresh } from "@/lib/hard-refresh";
 
 type Sample = { id: string; content: string; source: string; created_at: string };
 
@@ -20,7 +20,6 @@ export default function ChannelToneSection({
   /** Only the content manager edits the brand voice (migration 009). */
   canEdit: boolean;
 }) {
-  const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<"real_post" | "described_target">("real_post");
   const [content, setContent] = useState("");
@@ -58,14 +57,14 @@ export default function ChannelToneSection({
       return;
     }
     setContent("");
-    router.refresh();
+    hardRefresh();
   }
 
   async function handleDelete(id: string) {
     setDeletingId(id);
     await fetch(`/api/tone-samples/${id}`, { method: "DELETE" });
     setDeletingId(null);
-    router.refresh();
+    hardRefresh();
   }
 
   return (

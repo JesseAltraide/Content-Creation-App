@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import { hardRefresh } from "@/lib/hard-refresh";
 
 // Two lists on one screen: your own work, and other people's work that has
 // reached a reviewable stage. Tabs rather than stacked sections so the second
@@ -48,7 +49,7 @@ export default function RequestListTabs({
         const { digest } = (await res.json()) as { digest: string };
         if (cancelled) return;
         if (seen === null) seen = digest;
-        else if (digest !== seen) window.location.reload();
+        else if (digest !== seen) hardRefresh();
       } catch {
         // Next tick is 10 seconds away; a failed poll is not worth surfacing here.
       }

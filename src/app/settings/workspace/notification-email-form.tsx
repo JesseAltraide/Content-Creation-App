@@ -1,11 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { hardRefresh } from "@/lib/hard-refresh";
 
 export default function NotificationEmailForm({ currentEmail }: { currentEmail: string | null }) {
-  const router = useRouter();
   const [email, setEmail] = useState(currentEmail ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +26,7 @@ export default function NotificationEmailForm({ currentEmail }: { currentEmail: 
         return;
       }
       setSaved(true);
-      router.refresh();
+      hardRefresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
