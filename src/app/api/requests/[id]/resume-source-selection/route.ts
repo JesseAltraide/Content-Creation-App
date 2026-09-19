@@ -51,19 +51,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     );
   }
 
-  // Guarded on 'researching' so this can only ever fix the stuck case, never pull a
-  // request backwards from a stage it has legitimately moved on to.
+  // Guarded on the two states a request can be in while its candidate sources sit
+  // unconsumed, so this can only ever fix the stuck case and never pull a request
+  // backwards from a stage it has legitimately moved on to.
+  //
+  // needs_human_attention is here because the stalled-run reset puts it there. That
+  // reset is the action the page recommends for a silent run, and it used to remove
+  // the only way forward: the sources were still saved and ready to pick, and nothing
+  // offered them any more. Recovering from a recovery should not be a dead end.
   const { data: updated, error } = await admin
     .from("requests")
     .update({ status: "awaiting_source_selection" })
     .eq("id", requestId)
-    .eq("status", "researching")
+    .in("status", ["researching", "needs_human_attention"])
     .select()
     .single();
 
   if (error || !updated) {
     return NextResponse.json(
-      { error: "This request isn't waiting on research any more. Refresh to see where it got to." },
+      { error: "This request has moved on from research. Refresh to see where it got to." },
       { status: 409 }
     );
   }

@@ -226,8 +226,14 @@ export default async function RequestDetailPage({
   // insert that has no failure handling of its own. Offering "retry the search" here
   // would redo work that already succeeded; the honest action is to go where the data
   // already is.
+  //
+  // Also offered after the stalled-run reset, which lands on needs_human_attention.
+  // Pressing reset is what the page tells you to do when a run goes silent, and it
+  // used to take the sources with it: they were still saved, still unconsumed, and
+  // nothing on the page offered them. Caught live on a request that sat at
+  // needs_human_attention with eight candidates and no way to reach them.
   const strandedSources =
-    req.status === "researching"
+    req.status === "researching" || req.status === "needs_human_attention"
       ? (sources ?? []).filter((s) => s.status === "pending_selection").length
       : 0;
   // needs_human_attention is a status, not itself a log line - it doesn't change just
@@ -355,12 +361,13 @@ export default async function RequestDetailPage({
       {strandedSources > 0 && (
         <Card className="mt-8 border-warning/30 bg-warning-soft p-5">
           <p className="text-sm font-medium text-warning">
-            The search found {strandedSources} source{strandedSources === 1 ? "" : "s"}, but the run
-            stopped before handing them over.
+            The search found {strandedSources} source{strandedSources === 1 ? "" : "s"}, and they are
+            still waiting to be picked from.
           </p>
           <p className="mt-1 text-xs text-warning/90">
-            They were saved and are ready to pick from, so nothing needs researching again. This is
-            a known gap in the research workflow rather than a problem with your idea.
+            {req.status === "needs_human_attention"
+              ? "Resetting the run did not throw them away: the search had already finished and saved them, so you can carry on from where it stopped rather than searching again."
+              : "They were saved and are ready to pick from, so nothing needs researching again. This is a known gap in the research workflow rather than a problem with your idea."}
           </p>
           {access.isOwner && (
             <ResumeSourcesButton requestId={id} sourceCount={strandedSources} />
