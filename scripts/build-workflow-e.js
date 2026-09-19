@@ -281,7 +281,7 @@ connect("Config", "Fetch Request Row");
 // one whose id gets updated in place, or superseded by a new version.
 supabaseGet(
   "fetch-current-post", "Fetch Current Channel Post",
-  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/channel_posts?request_id=eq.{{$('Config').first().json.request_id}}&channel=eq.{{$('Config').first().json.channel}}&chosen=eq.true&order=version.desc&limit=1&select=*"
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/channel_posts?request_id=eq.{{$('Config').first().json.request_id}}&channel=eq.{{$('Config').first().json.channel}}&chosen=eq.true&order=created_at.desc&limit=1&select=*"
 );
 connect("Fetch Request Row", "Fetch Current Channel Post");
 
@@ -292,13 +292,13 @@ connect("Fetch Request Row", "Fetch Current Channel Post");
 // the cumulative-drift guard work without any extra bookkeeping.
 supabaseGet(
   "fetch-last-eval", "Fetch Last Evaluation",
-  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/evaluation_results?request_id=eq.{{$('Config').first().json.request_id}}&channel=eq.{{$('Config').first().json.channel}}&pass=eq.pass_2_channel&order=content_version.desc&limit=1&select=*"
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/evaluation_results?request_id=eq.{{$('Config').first().json.request_id}}&channel=eq.{{$('Config').first().json.channel}}&pass=eq.pass_2_channel&order=created_at.desc&limit=1&select=*"
 );
 connect("Fetch Current Channel Post", "Fetch Last Evaluation");
 
 supabaseGet(
   "fetch-anchor-post", "Fetch Anchor Post",
-  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/channel_posts?request_id=eq.{{$('Config').first().json.request_id}}&channel=eq.{{$('Config').first().json.channel}}&version=eq.{{$('Fetch Last Evaluation').first().json.content_version}}&select=*"
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/channel_posts?request_id=eq.{{$('Config').first().json.request_id}}&channel=eq.{{$('Config').first().json.channel}}&version=eq.{{$('Fetch Last Evaluation').first().json.content_version}}&order=created_at.desc&limit=1&select=*"
 );
 connect("Fetch Last Evaluation", "Fetch Anchor Post");
 

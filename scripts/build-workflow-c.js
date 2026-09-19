@@ -346,7 +346,7 @@ connectToSetupFailureHandler("Fetch Chosen Angle");
 
 supabaseGet(
   "fetch-latest-section", "Fetch Latest Section",
-  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/sections?request_id=eq.{{$('Config').first().json.request_id}}&order=version.desc&limit=1&select=*",
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/sections?request_id=eq.{{$('Config').first().json.request_id}}&order=created_at.desc&limit=1&select=*",
   { onError: "continueErrorOutput" }
 );
 connect("Fetch Chosen Angle", "Fetch Latest Section");

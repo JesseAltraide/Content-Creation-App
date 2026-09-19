@@ -724,7 +724,7 @@ connect("Claude: Generate Article", "Parse Generated Article", 0);
 supabaseGet(
   "fetch-latest-section-version",
   "Fetch Latest Section Version",
-  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/sections?request_id=eq.{{$('Config').first().json.request_id}}&select=version&order=version.desc&limit=1",
+  "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/sections?request_id=eq.{{$('Config').first().json.request_id}}&select=version&order=created_at.desc&limit=1",
   { alwaysOutputData: true, executeOnce: true }
 );
 connect("Parse Generated Article", "Fetch Latest Section Version");

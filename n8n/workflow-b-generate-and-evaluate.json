@@ -1002,7 +1002,7 @@
     },
     {
       "parameters": {
-        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/sections?request_id=eq.{{$('Config').first().json.request_id}}&select=version&order=version.desc&limit=1",
+        "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/sections?request_id=eq.{{$('Config').first().json.request_id}}&select=version&order=created_at.desc&limit=1",
         "options": {},
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "supabaseApi"
