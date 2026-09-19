@@ -3,16 +3,21 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getManagerState, announceSettingsChange } from "@/lib/content-manager";
+import { findLinkInToneSample, TONE_SAMPLE_LINK_MESSAGE } from "@/lib/tone-sample-content";
 
 const bodySchema = z.object({
   channel: z.enum(["linkedin", "x", "newsletter"]),
   source: z.enum(["real_post", "described_target"]).default("real_post"),
   content: z.string().trim().min(20, "That's too short. Add more detail."),
 }).superRefine((data, ctx) => {
-  if (data.source === "real_post" && /^https?:\/\/\S+$/i.test(data.content)) {
+  // Any link, not just a sample that is nothing but a link. Nothing fetches these:
+  // the stored characters ARE what Tone is graded against, so a URL in the field
+  // teaches the evaluator that a URL is the house voice.
+  const link = findLinkInToneSample(data.content);
+  if (link) {
     ctx.addIssue({
       code: "custom",
-      message: "That looks like a URL, not post content. Paste the actual text.",
+      message: `${TONE_SAMPLE_LINK_MESSAGE} Found: ${link}`,
       path: ["content"],
     });
   }

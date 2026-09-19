@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { findLinkInToneSample, TONE_SAMPLE_LINK_MESSAGE } from "@/lib/tone-sample-content";
 
 type Sample = { id: string; content: string; source: string; created_at: string };
 
@@ -36,6 +37,13 @@ export default function ChannelToneSection({
   }
 
   async function handleAdd() {
+    // Caught here as well as on the server, so the link is named before a round trip
+    // rather than after. The server check is the one that counts.
+    const link = findLinkInToneSample(content);
+    if (link) {
+      setError(`${TONE_SAMPLE_LINK_MESSAGE} Found: ${link}`);
+      return;
+    }
     setSubmitting(true);
     setError(null);
     const res = await fetch("/api/tone-samples", {
@@ -91,6 +99,14 @@ export default function ChannelToneSection({
           </button>
         </div>
 
+        {mode === "real_post" && (
+          <p className="mb-2 text-xs text-muted">
+            Paste the words of the post itself. Links are not read and are refused:
+            nothing here is fetched, so what you paste is exactly what the voice is
+            learned and graded from.
+          </p>
+        )}
+
         {mode === "described_target" && (
           <p className="mb-2 text-xs text-muted">
             For a brand-new channel with no posts yet. Weaker than a real sample, but better than
@@ -104,7 +120,7 @@ export default function ChannelToneSection({
           rows={4}
           placeholder={
             mode === "real_post"
-              ? `Paste a real ${label} post here…`
+              ? `Paste the text of a real ${label} post here, links removed…`
               : `Describe the ${label} voice you're going for, e.g. "confident but not salesy, short sentences, no corporate jargon, occasional dry humor"`
           }
           className="w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
