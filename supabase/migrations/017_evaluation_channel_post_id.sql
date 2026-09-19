@@ -27,9 +27,10 @@ alter table evaluation_results
 -- channel with the same version number that already existed when the evaluation was
 -- written, taking the newest such row: a run evaluates the version it has just
 -- inserted, so the closest preceding insert is the right one.
+-- A correlated scalar subquery in SET, not UPDATE ... FROM LATERAL: the lateral
+-- cannot reference the row being updated, which Postgres rejects with 42P10.
 update evaluation_results e
-set channel_post_id = p.id
-from lateral (
+set channel_post_id = (
   select cp.id
   from channel_posts cp
   where cp.request_id = e.request_id
@@ -38,7 +39,7 @@ from lateral (
     and cp.created_at <= e.created_at
   order by cp.created_at desc
   limit 1
-) p
+)
 where e.pass = 'pass_2_channel'
   and e.channel_post_id is null;
 
