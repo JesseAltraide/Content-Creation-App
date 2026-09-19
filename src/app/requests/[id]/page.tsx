@@ -551,6 +551,7 @@ export default async function RequestDetailPage({
             brandChangedAt={brandChangedAt}
             isOwner={canAct}
             manuallyEditedChannels={manuallyEditedChannels}
+            latestEventAt={latestEvent?.created_at ?? null}
           />
           ),
           sources: (

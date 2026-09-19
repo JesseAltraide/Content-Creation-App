@@ -379,36 +379,22 @@ Fidelity of figures: carry every number, unit, percentage, date and conditional 
     );
   }
 
-  // A revision that scores lower is not an improvement, and replacing the current
-  // post with it would mean the button quietly makes things worse the moment the
-  // rewrite trades one criterion for another. The evaluator is also an independent
-  // judgement each time, so some of any drop is variance rather than the text getting
-  // worse; either way, keeping the better version is the honest default.
+  // A rewrite is always kept as a version; what changes is whether it becomes the one
+  // in use. The old behaviour discarded a lower-scoring rewrite entirely and returned
+  // an error, which threw away work the author might have preferred and gave them
+  // nothing to look at.
   //
-  // The one exception is a post that cannot be published at all: a version over the
-  // character limit is worth replacing even by a lower-scoring one that fits, because
-  // an unschedulable post is worth nothing regardless of its score.
+  // Now every attempt lands in the version history and the higher score is selected
+  // automatically. Nothing is lost, nothing is silently downgraded, and the version
+  // picker is there if the author disagrees with the number.
+  //
+  // The exception is a current version that cannot be published at all: a post over
+  // the character limit is worth replacing even by a lower-scoring one that fits,
+  // because an unschedulable post is worth nothing regardless of its score.
   const previousScore = latestEval?.overall_score ?? null;
   const previousBlocked = lengthViolations.length > 0;
   const scoredWorse = previousScore !== null && evalInput.overall_score < previousScore;
-
-  if (scoredWorse && !previousBlocked) {
-    await logEvent({
-      requestId,
-      stage: "channel_revision",
-      status: "failed",
-      detail: `${channel} rewrite scored ${evalInput.overall_score}/100 against the current ${previousScore}/100, so it was discarded and the current version kept.`,
-    });
-    return NextResponse.json(
-      {
-        error: `The rewrite came back at ${evalInput.overall_score}/100, below the ${previousScore}/100 you already have, so your current version was kept. Try again, or use "Add your own steer" to say what you actually want changed.`,
-        score: evalInput.overall_score,
-        previousScore,
-        keptExisting: true,
-      },
-      { status: 409 }
-    );
-  }
+  const keepPrevious = scoredWorse && !previousBlocked;
 
   const newVersion = current.version + 1;
   const { error: insertError } = await admin.from("channel_posts").insert({
@@ -417,21 +403,22 @@ Fidelity of figures: carry every number, unit, percentage, date and conditional 
     version: newVersion,
     body: bodyForStorage(channel, genInput),
     tone_variant: "default",
-    chosen: true,
+    chosen: !keepPrevious,
   });
   if (insertError) {
     return NextResponse.json({ error: "Couldn't save the revision. Try again." }, { status: 500 });
   }
 
-  // The new version is the one every "latest chosen per channel" query should find.
-  // Done after the insert so a failed insert leaves the old version still chosen
-  // rather than leaving the channel with nothing chosen at all.
-  await admin
-    .from("channel_posts")
-    .update({ chosen: false })
-    .eq("request_id", requestId)
-    .eq("channel", channel)
-    .eq("version", current.version);
+  // Only when the new version won. Done after the insert so a failed insert leaves
+  // the old version still chosen rather than leaving the channel with nothing chosen.
+  if (!keepPrevious) {
+    await admin
+      .from("channel_posts")
+      .update({ chosen: false })
+      .eq("request_id", requestId)
+      .eq("channel", channel)
+      .eq("id", current.id);
+  }
 
   // The gate's verdict, not the model's own word for it. Caught live: this route
   // stored an X rewrite as "pass" at 81, and the log said so too, while the schedule
@@ -463,14 +450,22 @@ Fidelity of figures: carry every number, unit, percentage, date and conditional 
     requestId,
     stage: "channel_revision",
     status: "success",
-    detail: `${channel} revised against the evaluator's suggestions: ${latestEval?.overall_score ?? "?"}/100 to ${evalInput.overall_score}/100 (${gateStatus})${violations.length ? `, still over the character limit` : ""}.`,
+    detail:
+      `${channel} revised against the evaluator's suggestions: ${latestEval?.overall_score ?? "?"}/100 to ${evalInput.overall_score}/100 (${gateStatus})` +
+      (keepPrevious
+        ? `, so the higher-scoring version stays in use and this one is in the version history.`
+        : `, and it is now the version in use.`) +
+      `${violations.length ? " Still over the character limit." : ""}`,
   });
 
   return NextResponse.json({
     ok: true,
     score: evalInput.overall_score,
     previousScore: latestEval?.overall_score ?? null,
-    status: evalInput.status,
+    status: gateStatus,
+    // Whether the rewrite took over, so the page can say which version it is showing
+    // rather than leaving the author to work it out from a number that went down.
+    inUse: !keepPrevious,
     lengthViolations: violations,
   });
 }

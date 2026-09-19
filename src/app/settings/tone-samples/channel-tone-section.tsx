@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { findLinkInToneSample, TONE_SAMPLE_LINK_MESSAGE } from "@/lib/tone-sample-content";
+import { findLink, TONE_SAMPLE_LINK_MESSAGE } from "@/lib/find-link";
 
 type Sample = { id: string; content: string; source: string; created_at: string };
 
@@ -39,7 +39,7 @@ export default function ChannelToneSection({
   async function handleAdd() {
     // Caught here as well as on the server, so the link is named before a round trip
     // rather than after. The server check is the one that counts.
-    const link = findLinkInToneSample(content);
+    const link = findLink(content);
     if (link) {
       setError(`${TONE_SAMPLE_LINK_MESSAGE} Found: ${link}`);
       return;

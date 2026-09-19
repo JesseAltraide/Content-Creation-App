@@ -18,9 +18,9 @@ export default function ReviseWithSuggestionsButton({
   const [note, setNote] = useState("");
   const [showNote, setShowNote] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /** The route discarded a lower-scoring rewrite, as opposed to genuinely failing. */
+  /** Kept only for a hard block, which is the one case that still saves nothing. */
   const [keptExisting, setKeptExisting] = useState(false);
-  const [result, setResult] = useState<{ previousScore: number | null; score: number; status: string } | null>(null);
+  const [result, setResult] = useState<{ previousScore: number | null; score: number; status: string; inUse: boolean } | null>(null);
 
   async function handleRevise() {
     setSubmitting(true);
@@ -39,6 +39,7 @@ export default function ReviseWithSuggestionsButton({
         score?: number;
         status?: string;
         keptExisting?: boolean;
+        inUse?: boolean;
       } = {};
       try {
         payload = await res.json();
@@ -56,6 +57,7 @@ export default function ReviseWithSuggestionsButton({
         previousScore: payload.previousScore ?? null,
         score: payload.score ?? 0,
         status: payload.status ?? "revise",
+        inUse: payload.inUse !== false,
       });
       setConfirming(false);
     } catch (err) {
@@ -81,8 +83,8 @@ export default function ReviseWithSuggestionsButton({
           It acts on every suggestion at once, and the criteria pull against each other: adding
           line breaks for Channel Fit can cost you on Tone. The evaluator also scores
           independently each time, so a few points either way is normal variance. If the
-          rewrite comes back lower, your current version is kept and nothing is lost except the
-          wait.
+          rewrite comes back lower, it is saved to the version history and your current
+          version stays in use, so nothing is lost except the wait.
         </p>
         <p className="mt-1.5 text-xs text-warning/90">
           For a specific fix, editing the post yourself against the list above is usually faster
@@ -140,10 +142,12 @@ export default function ReviseWithSuggestionsButton({
               ? `Rescored ${result.previousScore}/100 to ${result.score}/100 (${result.status}).`
               : `Scored ${result.score}/100 (${result.status}).`}
           </p>
+          {/* Which version is actually in use now, rather than leaving the author to
+              infer it from a score that may have gone down. */}
           <p className="mt-1 text-xs text-success/90">
-            This rewrite scored at least as well as the version it replaced, so it is now the
-            one up for scheduling. The highest-scoring version is always the one that goes out:
-            had it come back lower, your previous post would have been kept instead.
+            {result.inUse === false
+              ? "That is lower than the version you already had, so your existing post stays in use and this rewrite is saved in the version history. Open the version list on the post to compare them and switch if you prefer it."
+              : "That is at least as good as the version it replaced, so it is now the one up for scheduling. Every attempt is kept in the version history, and the higher score is always the one selected."}
           </p>
           <div className="mt-2">
             <Button variant="secondary" onClick={() => window.location.reload()}>

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getManagerState, announceSettingsChange } from "@/lib/content-manager";
-import { findLinkInToneSample, TONE_SAMPLE_LINK_MESSAGE } from "@/lib/tone-sample-content";
+import { findLink, TONE_SAMPLE_LINK_MESSAGE } from "@/lib/find-link";
 
 const bodySchema = z.object({
   channel: z.enum(["linkedin", "x", "newsletter"]),
@@ -13,7 +13,7 @@ const bodySchema = z.object({
   // Any link, not just a sample that is nothing but a link. Nothing fetches these:
   // the stored characters ARE what Tone is graded against, so a URL in the field
   // teaches the evaluator that a URL is the house voice.
-  const link = findLinkInToneSample(data.content);
+  const link = findLink(data.content);
   if (link) {
     ctx.addIssue({
       code: "custom",

@@ -4,6 +4,7 @@ import { CHANNEL_LABELS, findLengthViolations, evaluationPassed } from "@/lib/ch
 import ScheduleChannelForm from "./schedule-channel-form";
 import NewsletterEmailPreview from "./newsletter-email-preview";
 import UseVersionButton from "./use-version-button";
+import PendingSendWatcher from "./pending-send-watcher";
 
 // Newsletter shares this same table/cron job but gets real delivery to every
 // active subscriber instead of a reminder email (Decision #22/#48) - see
@@ -52,6 +53,7 @@ export default function PublishingQueue({
   isOwner,
   subscriberCount,
   manuallyEditedChannels,
+  latestEventAt,
 }: {
   requestId: string;
   channelPosts: ChannelPost[];
@@ -70,6 +72,8 @@ export default function PublishingQueue({
    * never swapped out, an automated round is the system's own work and can be.
    */
   manuallyEditedChannels: string[];
+  /** Newest event as of this render, so a send elsewhere can be noticed. */
+  latestEventAt: string | null;
 }) {
   // Only shows once there's at least one eligible (passing) channel post to
   // schedule, or an existing queue entry to display - nothing to show before
@@ -82,8 +86,14 @@ export default function PublishingQueue({
   }
   if (latestByChannel.size === 0 && scheduledContent.length === 0) return null;
 
+  // Anything still waiting to go out means this page can go stale on a timer.
+  const hasPendingSend = scheduledContent.some((s) => s.status === "scheduled");
+
   return (
     <section className="mt-8">
+      {hasPendingSend && (
+        <PendingSendWatcher requestId={requestId} renderedEventAt={latestEventAt} />
+      )}
       <h2 className="text-sm font-semibold text-muted">Publishing queue</h2>
       <p className="mt-1 text-xs text-muted">
         LinkedIn and X are scheduled reminders, not automated publishing. You get the

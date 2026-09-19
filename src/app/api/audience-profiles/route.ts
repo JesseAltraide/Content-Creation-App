@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getManagerState, announceSettingsChange } from "@/lib/content-manager";
+import { findLink, AUDIENCE_LINK_MESSAGE } from "@/lib/find-link";
 
 // A profile of "everyone" / "professionals" / "people online" isn't a description
 // of anyone - every idea scores as resonant against it, which defeats the whole
@@ -43,13 +44,23 @@ function isVagueAudienceDescription(description: string): boolean {
 }
 
 const bodySchema = z.object({
-  name: z.string().trim().min(1, "Name is required."),
+  name: z
+    .string()
+    .trim()
+    .min(1, "Name is required.")
+    .refine((s) => !findLink(s), { message: AUDIENCE_LINK_MESSAGE }),
   description: z
     .string()
     .trim()
     .min(10, "Description must be a real description (at least 10 characters).")
     .refine((s) => s.split(/[.!?]+/).filter(Boolean).length <= 3, {
       message: "Keep it to 3 sentences or less.",
+    })
+    // Same reasoning as the tone samples: this text is never fetched, it is handed to
+    // the resonance gate and to every Audience Fit score as the description of who the
+    // reader is. A URL there describes nobody, and could not be followed anyway.
+    .refine((s) => !findLink(s), {
+      message: AUDIENCE_LINK_MESSAGE,
     })
     .refine((s) => !isVagueAudienceDescription(s), {
       message:
