@@ -41,6 +41,7 @@ export default function ChannelPostsReview({
   channelOnly,
   isOwner,
   pendingSends,
+  channelRewrites,
 }: {
   requestId: string;
   requestStatus: string;
@@ -57,6 +58,8 @@ export default function ChannelPostsReview({
   isOwner: boolean;
   /** Channel to the time of a send still waiting to go out, for the version picker. */
   pendingSends: Record<string, string>;
+  /** Channel to how many rewrites it has already had, against the cap of five. */
+  channelRewrites: Record<string, number>;
 }) {
   const isAdapting = requestStatus === "adapting";
   // A failed adaptation attempt reverts to 'approved' (see approve/route.ts and
@@ -151,6 +154,7 @@ export default function ChannelPostsReview({
         imageSuggestion={post.image_suggestion ?? null}
         versions={versionsFor(post.channel)}
         pendingSendAt={pendingSends[post.channel] ?? null}
+        rewritesUsed={channelRewrites[post.channel] ?? 0}
       />
     );
   }

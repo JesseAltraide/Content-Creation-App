@@ -21,7 +21,7 @@ import RequestTabs from "./request-tabs";
 import CopyLinkButton from "@/components/copy-link-button";
 import ReviewComments from "./review-comments";
 import { getRequestAccess, REVIEWABLE_STATUSES } from "@/lib/request-access";
-import { CHANNEL_LABELS } from "@/lib/channel-post-format";
+import { CHANNEL_LABELS, evaluationPassed, findLengthViolations } from "@/lib/channel-post-format";
 import { looksPaywalled } from "@/lib/source-quality";
 
 const CHANNEL_TABS = [
@@ -255,9 +255,36 @@ export default async function RequestDetailPage({
   const isTimeoutEvent = /timed out|\b(408|502|503|504|52[234])\b/.test(latestEvent?.detail ?? "");
   const latestIsDeadFailure = latestEvent?.status === "failed" && !isTimeoutEvent;
   const needsAttention = req.status === "needs_human_attention" && latestFailedEvent;
-  const attentionExplanation = needsAttention
-    ? explainNeedsAttention(latestFailedEvent!.stage, latestFailedEvent!.detail)
-    : null;
+
+  // Whether every channel currently in use passes, computed from the posts and their
+  // scores rather than from the event that last failed. A "revision cap reached"
+  // explanation describes the moment the automated loop gave up; a manual rewrite
+  // afterwards can carry a channel over the mark without touching requests.status or
+  // writing a newer failure, leaving the page insisting something is wrong while
+  // every channel reads as passing. Same class as the stale ready banner (Error #54).
+  const chosenChannelPosts = (channelPosts ?? []).filter((p) => p.chosen);
+  const channelsAllPass =
+    chosenChannelPosts.length > 0 &&
+    chosenChannelPosts.every((post) => {
+      const ev = [...(pass2Evaluations ?? [])]
+        .reverse()
+        .find((e) => e.channel === post.channel && e.content_version === post.version);
+      return evaluationPassed(ev) && findLengthViolations(post.channel, post.body ?? "").length === 0;
+    });
+
+  const attentionExplanation =
+    needsAttention && !(latestFailedEvent!.stage === "pass2_evaluation" && channelsAllPass)
+      ? explainNeedsAttention(latestFailedEvent!.stage, latestFailedEvent!.detail)
+      : null;
+
+  // How many times each channel has been rewritten by hand, read from the same events
+  // the cap counts, so the number on screen is the number the server enforces.
+  const channelRewrites: Record<string, number> = {};
+  for (const e of events ?? []) {
+    if (e.stage !== "channel_revision" || e.status !== "success") continue;
+    const match = /^(\w+) revised against/.exec(e.detail ?? "");
+    if (match) channelRewrites[match[1]] = (channelRewrites[match[1]] ?? 0) + 1;
+  }
   // angle_proposal excluded deliberately: a hard block there means Claude returned
   // an empty angles array (see workflow-a's prompt), so there is nothing to fall
   // back to - "back to angle selection" on that stage produces a dead screen with
@@ -444,6 +471,7 @@ export default async function RequestDetailPage({
         evaluations={pass2Evaluations ?? []}
         isOwner={canAct}
         pendingSends={pendingSends}
+        channelRewrites={channelRewrites}
       />
 
       <RequestTabs
@@ -548,6 +576,7 @@ export default async function RequestDetailPage({
                   evaluations={pass2Evaluations ?? []}
                   isOwner={canAct}
                   pendingSends={pendingSends}
+                  channelRewrites={channelRewrites}
                   channelOnly={c}
                 />,
               ])

@@ -105,6 +105,7 @@ export default function ChannelPostCard({
   imageSuggestion,
   versions,
   pendingSendAt,
+  rewritesUsed,
 }: {
   requestId: string;
   channel: "linkedin" | "x" | "newsletter";
@@ -118,6 +119,8 @@ export default function ChannelPostCard({
   versions: ChannelVersion[];
   /** Time of a still-pending send on this channel, if there is one. */
   pendingSendAt?: string | null;
+  /** Rewrites already spent on this channel, against the cap. */
+  rewritesUsed: number;
 }) {
   const [editing, setEditing] = useState(false);
   const [confirmingEdit, setConfirmingEdit] = useState(false);
@@ -225,7 +228,13 @@ export default function ChannelPostCard({
                   <li key={i}>{s}</li>
                 ))}
               </ul>
-              {isOwner && !editing && <ReviseWithSuggestionsButton requestId={requestId} channel={channel} />}
+              {isOwner && !editing && (
+                <ReviseWithSuggestionsButton
+                  requestId={requestId}
+                  channel={channel}
+                  rewritesUsed={rewritesUsed}
+                />
+              )}
             </div>
           )}
         </div>

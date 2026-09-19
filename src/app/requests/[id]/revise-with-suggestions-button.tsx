@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { REGENERATION_CAP } from "@/lib/regeneration";
 
 // The evaluator already says exactly what would close the gap. Making the human
 // hand-apply that is the worst of both worlds, and for an X thread it means manually
@@ -9,9 +10,13 @@ import { Button } from "@/components/ui/button";
 export default function ReviseWithSuggestionsButton({
   requestId,
   channel,
+  rewritesUsed,
 }: {
   requestId: string;
   channel: "linkedin" | "x" | "newsletter";
+  /** Spent so far, against REGENERATION_CAP. Shown because the limit is real and
+   *  hitting it without warning reads as the button breaking. */
+  rewritesUsed: number;
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -103,12 +108,20 @@ export default function ReviseWithSuggestionsButton({
     );
   }
 
+  const atCap = rewritesUsed >= REGENERATION_CAP;
+
   return (
     <div className="mt-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Button onClick={() => setConfirming(true)} disabled={submitting}>
+        <Button onClick={() => setConfirming(true)} disabled={submitting || atCap}>
           {submitting ? "Revising and re-scoring…" : "Apply these suggestions"}
         </Button>
+        {/* The budget, on screen, before it runs out. The server refuses the sixth
+            attempt, and a button that simply stops working reads as broken. */}
+        <span className={`text-xs ${atCap ? "text-danger" : "text-muted"}`}>
+          {rewritesUsed} of {REGENERATION_CAP} rewrites used
+          {atCap ? " - edit it yourself, or regenerate the article" : ""}
+        </span>
         {!showNote && !submitting && (
           <Button variant="ghost" onClick={() => setShowNote(true)}>
             Add your own steer
