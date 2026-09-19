@@ -84,14 +84,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     );
   }
 
-  const { data: evaluation } = await admin
+  const { data: evaluationRows } = await admin
     .from("evaluation_results")
     .select("status, overall_score")
     .eq("request_id", requestId)
     .eq("channel", parsed.data.channel)
     .eq("pass", "pass_2_channel")
+    // Newest first, take one: version numbers repeat across adaptation runs, so this
+    // can match several rows and maybeSingle() hands back null on PGRST116, which
+    // reads as "never scored" and refuses a post that actually passed.
     .eq("content_version", post.version)
-    .maybeSingle();
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const evaluation = evaluationRows?.[0] ?? null;
 
   // Same discipline as approving the article (Decision #36): can't schedule
   // something that hasn't actually passed evaluation, checked here at the API

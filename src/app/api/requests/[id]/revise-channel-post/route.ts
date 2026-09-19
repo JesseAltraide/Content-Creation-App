@@ -191,14 +191,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     );
   }
 
-  const { data: latestEval } = await admin
+  // Newest first, take one. NOT maybeSingle(): version numbers repeat across
+  // adaptation runs, so this filter can match several rows, and maybeSingle then
+  // fails with PGRST116 and hands back null rather than a row.
+  //
+  // That null was read as "this post has never been scored", with two consequences in
+  // one call: the rewrite ran with no suggestions to act on, and the comparison that
+  // keeps the better version had nothing to compare against, so a rewrite scoring 82
+  // replaced a version scoring 85 and the response said it was at least as good.
+  const { data: latestEvals } = await admin
     .from("evaluation_results")
     .select("overall_score, status, criteria, weakest_criteria_suggestions")
     .eq("request_id", requestId)
     .eq("channel", channel)
     .eq("pass", "pass_2_channel")
     .eq("content_version", current.version)
-    .maybeSingle();
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const latestEval = latestEvals?.[0] ?? null;
 
   const lengthViolations = findLengthViolations(channel, current.body ?? "");
 

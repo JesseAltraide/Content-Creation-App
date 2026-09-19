@@ -55,14 +55,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         return NextResponse.json({ error: `No adapted content exists yet for ${channel}.` }, { status: 409 });
       }
 
-      const { data: evaluation } = await admin
+      const { data: evaluationRows } = await admin
         .from("evaluation_results")
         .select("status, overall_score")
         .eq("request_id", requestId)
         .eq("channel", channel)
         .eq("pass", "pass_2_channel")
         .eq("content_version", post.version)
-        .maybeSingle();
+        .order("created_at", { ascending: false })
+        .limit(1);
+      const evaluation = evaluationRows?.[0] ?? null;
 
       if (!evaluationPassed(evaluation)) {
         return NextResponse.json(

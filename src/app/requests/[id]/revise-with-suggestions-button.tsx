@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { REGENERATION_CAP } from "@/lib/regeneration";
+import { hardRefresh } from "@/lib/hard-refresh";
+
+const OUTCOME_KEY = "content-agent:revise-outcome";
 
 // The evaluator already says exactly what would close the gap. Making the human
 // hand-apply that is the worst of both worlds, and for an X thread it means manually
@@ -58,13 +61,29 @@ export default function ReviseWithSuggestionsButton({
         setConfirming(false);
         return;
       }
-      setResult({
-        previousScore: payload.previousScore ?? null,
-        score: payload.score ?? 0,
-        status: payload.status ?? "revise",
-        inUse: payload.inUse !== false,
-      });
-      setConfirming(false);
+      // Reload rather than leaving the page half-updated. The score, the version
+      // picker, the publishing queue and the cap counter all live in server
+      // components, so without this the only thing that changed was this box.
+      //
+      // The outcome is handed across the reload in sessionStorage, because it is the
+      // one thing the reloaded page cannot work out for itself: whether the rewrite
+      // took over or was kept aside.
+      try {
+        window.sessionStorage.setItem(
+          OUTCOME_KEY,
+          JSON.stringify({
+            channel,
+            previousScore: payload.previousScore ?? null,
+            score: payload.score ?? 0,
+            status: payload.status ?? "revise",
+            inUse: payload.inUse !== false,
+          })
+        );
+      } catch {
+        // Losing the message is survivable: the card shows the new score anyway.
+      }
+      hardRefresh();
+      return;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
@@ -109,6 +128,20 @@ export default function ReviseWithSuggestionsButton({
   }
 
   const atCap = rewritesUsed >= REGENERATION_CAP;
+
+  // Picked up once after the reload, then cleared so it does not reappear on the next
+  // navigation.
+  useEffect(() => {
+    try {
+      const raw = window.sessionStorage.getItem(OUTCOME_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { channel?: string } & typeof result;
+      window.sessionStorage.removeItem(OUTCOME_KEY);
+      if (parsed && parsed.channel === channel) setResult(parsed);
+    } catch {
+      // Nothing to show, which is the same as not having reloaded.
+    }
+  }, [channel]);
 
   return (
     <div className="mt-3">
@@ -162,11 +195,6 @@ export default function ReviseWithSuggestionsButton({
               ? "That is lower than the version you already had, so your existing post stays in use and this rewrite is saved in the version history. Open the version list on the post to compare them and switch if you prefer it."
               : "That is at least as good as the version it replaced, so it is now the one up for scheduling. Every attempt is kept in the version history, and the higher score is always the one selected."}
           </p>
-          <div className="mt-2">
-            <Button variant="secondary" onClick={() => window.location.reload()}>
-              Show the updated post
-            </Button>
-          </div>
         </div>
       )}
       {error && (
