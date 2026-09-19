@@ -1,11 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import CopyLinkButton from "@/components/copy-link-button";
-import { assessSourceUrl } from "@/lib/source-quality";
+import { assessSourceUrl, blockSourceUrl } from "@/lib/source-quality";
 
 export default function SourceSelection({
   requestId,
@@ -14,7 +13,6 @@ export default function SourceSelection({
   requestId: string;
   sources: { id: string; url: string; title: string | null }[];
 }) {
-  const router = useRouter();
   const [selected, setSelected] = useState<string[]>(sources.map((s) => s.id));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,9 +21,14 @@ export default function SourceSelection({
   // is not written until after this selection is made, so nothing about the page body
   // can be checked at the moment the human is actually choosing.
   const issues = new Map(sources.map((s) => [s.id, assessSourceUrl(s.url)]));
+  // The server refuses these outright, so offering them as a choice sets the human up
+  // to pick one and be told no. Caught live: a search returned two http:// results
+  // among eight, and continuing failed with a 400 that was easy to miss.
+  const blocked = new Map(sources.map((s) => [s.id, blockSourceUrl(s.url)]));
   const weakSelected = selected.filter((id) => issues.get(id)?.severity === "weak").length;
 
   function toggle(id: string) {
+    if (blocked.get(id)) return;
     setSelected((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
   }
 
@@ -43,7 +46,11 @@ export default function SourceSelection({
       setError(body.error ?? "Something went wrong.");
       return;
     }
-    router.refresh();
+    // Not router.refresh(). Client navigation has repeatedly failed to re-render the
+    // server components on this page (the same reason the polling had to stop using
+    // it), and here that reads as the button saying "Continuing" and nothing else
+    // happening, which is exactly how this was reported.
+    window.location.reload();
   }
 
   return (
@@ -60,14 +67,20 @@ export default function SourceSelection({
                 type="checkbox"
                 checked={selected.includes(s.id)}
                 onChange={() => toggle(s.id)}
-                className="mt-1 h-4 w-4 accent-accent"
+                disabled={!!blocked.get(s.id)}
+                className="mt-1 h-4 w-4 accent-accent disabled:cursor-not-allowed disabled:opacity-40"
               />
               {/* min-w-0 is load-bearing: a flex child defaults to min-width:auto, so
                   without it this span can't shrink below its content and the long
                   URL pushes the whole card wider than the page instead of truncating. */}
               <span className="min-w-0 flex-1">
                 <span className="block font-medium">{s.title || s.url}</span>
-                {issues.get(s.id) && (
+                {blocked.get(s.id) && (
+                  <span className="mt-0.5 block text-xs text-danger">
+                    Can&apos;t be fetched: {blocked.get(s.id)}
+                  </span>
+                )}
+                {!blocked.get(s.id) && issues.get(s.id) && (
                   <span
                     className={`mt-0.5 block text-xs ${
                       issues.get(s.id)!.severity === "weak" ? "text-danger" : "text-warning"
