@@ -26,6 +26,11 @@ export const intakeSchema = z
     urls: z.array(z.string()).optional(),
     context: z.string().optional(),
     primaryKeyword: z.string().trim().min(1, "Primary keyword is required."),
+    /**
+     * A word count, not free text. It was an open string, so "soon", "a bit long" or
+     * an empty space all reached the generation prompt as the stated target length.
+     * Accepted as a bare number or as "900 words"; normalised to the latter.
+     */
     desiredLength: z.string().optional(),
     channels: z.array(z.enum(CHANNELS)).min(1, "Select at least one channel."),
     audienceProfileId: z.string().uuid().optional().nullable(),
@@ -45,6 +50,19 @@ export const intakeSchema = z
           code: "custom",
           message: "Content idea must be a real idea (at least 10 characters), not a placeholder.",
           path: ["rawIdea"],
+        });
+      }
+    }
+
+    const length = (data.desiredLength ?? "").trim();
+    if (length) {
+      const match = /^(\d{2,5})(\s*words?)?$/i.exec(length);
+      const count = match ? Number(match[1]) : NaN;
+      if (!match || !Number.isFinite(count) || count < 100 || count > 5000) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Desired length must be a number of words between 100 and 5000, or left empty.",
+          path: ["desiredLength"],
         });
       }
     }

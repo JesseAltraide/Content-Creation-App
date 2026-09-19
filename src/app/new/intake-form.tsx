@@ -184,11 +184,16 @@ export default function IntakeForm({
 
         {inputPath === "raw_idea" ? (
           <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium">Content idea</span>
+            {/* Marked required in the markup as well as on the server. The rule has
+                always been enforced (10 characters minimum), but the field looked
+                optional next to "Channels *" and only said otherwise after submitting. */}
+            <span className="text-sm font-medium">Content idea *</span>
             <textarea
               value={rawIdea}
               onChange={(e) => setRawIdea(e.target.value)}
               rows={3}
+              required
+              minLength={10}
               placeholder="What's the article about?"
               className={inputClass}
             />
@@ -230,12 +235,20 @@ export default function IntakeForm({
 
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-medium">Desired length</span>
+            {/* A number, not free text. As an open string, "soon" or "a bit long"
+                reached the generation prompt as the stated target. */}
             <input
+              type="number"
+              inputMode="numeric"
+              min={100}
+              max={5000}
+              step={50}
               value={desiredLength}
               onChange={(e) => setDesiredLength(e.target.value)}
-              placeholder="e.g. 800-1000 words"
+              placeholder="900"
               className={inputClass}
             />
+            <span className="text-xs text-muted">Words. Leave empty for no target.</span>
           </label>
         </div>
 

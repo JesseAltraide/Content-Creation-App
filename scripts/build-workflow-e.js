@@ -424,7 +424,24 @@ codeNode(
     "const orphanedSentences = removedSentences.filter(s => !newSentenceList.some(n => overlap(s, n) >= 0.5));" + NL +
     "const wholeSentenceChanged = orphanedSentences.length > 0 || newSentenceSet.size !== oldSentences.length;" + NL +
     "const mechanicalEscalate = numeralsChanged || citationSentenceChanged || wholeSentenceChanged || editRatio > 0.15;" + NL +
-    "return [{ json: { anchorText, editedText, evaluatorText, editRatio, numeralsChanged, citationSentenceChanged, wholeSentenceChanged, mechanicalEscalate, hasAnyEvaluation: anchorRows.length > 0 } }];",
+    // An edit that survives the filters above still went to Haiku, and Haiku called
+    // a single contraction substantive: "Here is the problem" to "Here's the problem"
+    // cost a full Opus re-evaluation and moved the score. Asking a model whether a
+    // contraction changes meaning invites it to find a reason to say yes.
+    //
+    // So the unarguable case is decided here instead. Expand the contractions in
+    // both texts, drop punctuation and case, and if what remains is identical then
+    // not one word changed and there is nothing for a classifier to weigh. A ratio
+    // threshold would NOT be safe in its place: deleting the single word "not"
+    // barely moves the ratio and inverts the sentence.
+    "const CONTRACTIONS = [['here’s','here is'],[\"here's\",'here is'],[\"it's\",'it is'],[\"that's\",'that is'],[\"there's\",'there is'],[\"what's\",'what is'],[\"who's\",'who is'],[\"let's\",'let us'],[\"don't\",'do not'],[\"doesn't\",'does not'],[\"didn't\",'did not'],[\"isn't\",'is not'],[\"aren't\",'are not'],[\"wasn't\",'was not'],[\"weren't\",'were not'],[\"hasn't\",'has not'],[\"haven't\",'have not'],[\"hadn't\",'had not'],[\"can't\",'cannot'],[\"won't\",'will not'],[\"wouldn't\",'would not'],[\"couldn't\",'could not'],[\"shouldn't\",'should not'],[\"you're\",'you are'],[\"we're\",'we are'],[\"they're\",'they are'],[\"i'm\",'i am'],[\"you've\",'you have'],[\"we've\",'we have'],[\"they've\",'they have'],[\"i've\",'i have'],[\"you'll\",'you will'],[\"we'll\",'we will'],[\"they'll\",'they will'],[\"i'll\",'i will'],[\"it'll\",'it will']];" + NL +
+    "const cosmeticNormal = (raw) => {" + NL +
+    "  let t = String(raw || '').toLowerCase().split(String.fromCharCode(8217)).join(String.fromCharCode(39));" + NL +
+    "  for (const [short, long] of CONTRACTIONS) t = t.split(short).join(long);" + NL +
+    "  return t.replace(/[^a-z0-9]+/g, ' ').trim();" + NL +
+    "};" + NL +
+    "const cosmeticOnly = !mechanicalEscalate && cosmeticNormal(anchorPlain) === cosmeticNormal(editedPlain);" + NL +
+    "return [{ json: { anchorText, editedText, evaluatorText, editRatio, numeralsChanged, citationSentenceChanged, wholeSentenceChanged, mechanicalEscalate, cosmeticOnly, hasAnyEvaluation: anchorRows.length > 0 } }];",
   {
     notes:
       "Word-diff ratio uses the same 1 - 2*LCS/(lenA+lenB) metric as Python's difflib.SequenceMatcher.ratio. Mechanical pre-filters (numeral change, a removed excerpt-cited sentence, any whole sentence added/removed, or >15% edit distance) force full re-evaluation regardless of what Haiku would say - these are the project's own judgment calls on what 'numerals changed' / 'excerpt-cited sentence changed' / 'whole sentence added or removed' concretely mean, since the source docs describe the categories but not exact detection logic.",
@@ -458,10 +475,15 @@ const TRIAGE_TOOL = {
 };
 
 const triagePrompt =
-  "`An editor changed a piece of published content. Classify the edit as 'grammatical' (spelling, punctuation, word choice, sentence structure with no change in meaning, claims, or tone) or 'substantive' (changes what's being claimed, adds/removes information, shifts tone or emphasis). If genuinely unsure, classify as 'substantive' - treating an ambiguous edit as needing review is the safe default, silently skipping review on a real content change is not.\\n\\nOriginal:\\n${$('Compute Diff').first().json.anchorText}\\n\\nEdited:\\n${$('Compute Diff').first().json.evaluatorText}`";
+  "`An editor changed a piece of published content. Classify the edit as 'grammatical' (spelling, punctuation, capitalisation, contractions, and rewording that leaves the meaning, the claims and the tone intact) or 'substantive' (changes what's being claimed, adds/removes information, shifts tone or emphasis). If genuinely unsure, classify as 'substantive' - treating an ambiguous edit as needing review is the safe default, silently skipping review on a real content change is not.\\n\\nOriginal:\\n${$('Compute Diff').first().json.anchorText}\\n\\nEdited:\\n${$('Compute Diff').first().json.evaluatorText}`";
 
 claudeNode("claude-triage", "Claude: Classify Edit", "claude-haiku-4-5-20251001", TRIAGE_TOOL, triagePrompt, 500);
-connect("IF Mechanical Escalate", "Claude: Classify Edit: Build Request", 1);
+// The mechanical filters passed, so before paying for a judgement, ask whether there
+// is anything to judge. A cosmetic-only edit goes straight down the grammatical path
+// and never reaches the classifier; everything else does.
+ifNode("if-cosmetic-only", "IF Cosmetic Only", "={{$('Compute Diff').first().json.cosmeticOnly}}", true, { type: "boolean", operation: "equals" });
+connect("IF Mechanical Escalate", "IF Cosmetic Only", 1);
+connect("IF Cosmetic Only", "Claude: Classify Edit: Build Request", 1);
 
 codeNode(
   "parse-triage", "Parse Triage Classification",
@@ -485,6 +507,9 @@ withLane(-260, () => {
     "={{ JSON.stringify({ body: $('Config').first().json.edited_body }) }}"
   );
   connect("IF Grammatical", "Update Post In Place", 0);
+  // The cosmetic-only branch joins here rather than having its own copy of the
+  // save: one path that writes the edit in place, reached two ways.
+  connect("IF Cosmetic Only", "Update Post In Place", 0);
   supabaseWrite(
     "log-grammatical", "Log Event (grammatical)", "POST",
     "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/event_log",

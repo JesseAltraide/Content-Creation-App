@@ -8,6 +8,13 @@ import { getOnboardingStatus } from "@/lib/onboarding";
 import { preflightResonance } from "@/lib/resonance-preflight";
 import { assessSourceUrls } from "@/lib/source-quality";
 
+/** "900" and "900 words" both become "900 words"; anything empty stays null. */
+function normaliseDesiredLength(raw: string | undefined): string | null {
+  const match = /^(\d{2,5})(\s*words?)?$/i.exec((raw ?? "").trim());
+  return match ? `${match[1]} words` : null;
+}
+
+
 // This route either calls a model, triggers an n8n workflow, or keeps working in
 // after() once the response has gone out. Serverless kills the function at its
 // duration limit whether or not that work finished, and work cut off halfway is
@@ -165,7 +172,9 @@ export async function POST(request: Request) {
       raw_idea: input.rawIdea?.trim() || null,
       context: input.context?.trim() || null,
       primary_keyword: input.primaryKeyword.trim(),
-      desired_length: input.desiredLength || null,
+      // Normalised to "N words" so the generation prompt reads as a target rather
+      // than a bare integer, whichever form was submitted.
+      desired_length: normaliseDesiredLength(input.desiredLength),
       channels: input.channels,
       audience_profile_id: input.audienceProfileId || null,
       x_thread_length: input.xThreadLength,
