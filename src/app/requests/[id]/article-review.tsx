@@ -7,6 +7,7 @@ import ReviewActions from "./review-actions";
 import BackToAngleSelectionButton from "./back-to-angle-selection-button";
 import { pickDraft, scoreForDraft } from "@/lib/pick-draft";
 import DraftVersionPicker from "./draft-version-picker";
+import { REGENERATION_CAP } from "@/lib/regeneration";
 
 const CRITERION_FLOORS: Record<string, number> = {
   "topic relevance": 15,
@@ -155,6 +156,17 @@ export default function ArticleReview({
         )}
 
         <DraftVersionPicker requestId={requestId} versions={draftVersions} isOwner={isOwner} />
+
+        {/* Outside the review actions on purpose: those only render while the draft is
+            awaiting a decision, and the budget is worth knowing at every stage,
+            including after a run has dead-ended. */}
+        <p className="mt-2 text-xs text-muted">
+          {regenerationCount} of {REGENERATION_CAP} article regenerations used
+          {regenerationCount >= REGENERATION_CAP
+            ? " - go back to angle selection if this draft is not working"
+            : ""}
+          .
+        </p>
       </Card>
 
       {latestEval && (

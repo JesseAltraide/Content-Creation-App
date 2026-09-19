@@ -161,9 +161,11 @@ export default function ReviewActions({
         {error && <span className="text-sm text-danger">{error}</span>}
       </div>
       <p className="text-xs text-muted">
+        {/* Counted the same way as the channel rewrite budget, so the two read as one
+            allowance rather than two unrelated numbers. */}
         {attemptsLeft > 0
-          ? `${attemptsLeft} regeneration${attemptsLeft === 1 ? "" : "s"} left for this article.`
-          : "Regeneration limit reached. Reject this draft or go back to angle selection instead."}
+          ? `${regenerationCount} of ${REGENERATION_CAP} regenerations used for this article.`
+          : `All ${REGENERATION_CAP} regenerations used. Reject this draft or go back to angle selection instead.`}
       </p>
     </div>
   );
