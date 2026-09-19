@@ -5,6 +5,7 @@ import ScheduleChannelForm from "./schedule-channel-form";
 import NewsletterEmailPreview from "./newsletter-email-preview";
 import UseVersionButton from "./use-version-button";
 import PendingSendWatcher from "./pending-send-watcher";
+import { evalForPost } from "@/lib/score-for-post";
 
 // Newsletter shares this same table/cron job but gets real delivery to every
 // active subscriber instead of a reminder email (Decision #22/#48) - see
@@ -110,16 +111,12 @@ export default function PublishingQueue({
           // text beside an older post's score (seen live: 54 shown where the current
           // post had scored 61). Ordered by created_at upstream, so scanning to the
           // last match takes the evaluation written most recently.
-          const evalForPost = post
-            ? [...evaluations]
-                .reverse()
-                .find((e) => e.channel === channel && e.content_version === post.version)
-            : undefined;
+          const evalForThisPost = post ? evalForPost(post, evaluations, channelPosts) : undefined;
           // Over-limit content is unpublishable regardless of its score, so it
           // blocks scheduling the same way a failed evaluation does. Same helper
           // the schedule route enforces with, so the two can't drift.
           const lengthViolations = post ? findLengthViolations(channel, post.body ?? "") : [];
-          const eligible = evaluationPassed(evalForPost) && lengthViolations.length === 0;
+          const eligible = evaluationPassed(evalForThisPost) && lengthViolations.length === 0;
           // Changing the audience or tone does not re-score anything already
           // evaluated, and re-scoring automatically would be worse: it could
           // invalidate something already scheduled to send, and cost a full
@@ -127,8 +124,8 @@ export default function PublishingQueue({
           // instead, so the author decides whether it still reads right.
           const evaluatedBeforeBrandChange =
             !!brandChangedAt &&
-            !!evalForPost?.created_at &&
-            new Date(evalForPost.created_at) < new Date(brandChangedAt);
+            !!evalForThisPost?.created_at &&
+            new Date(evalForThisPost.created_at) < new Date(brandChangedAt);
           const pending = scheduledContent.find(
             (s) => s.channel === channel && (!post || s.channel_post_id === post.id) && s.status === "scheduled"
           );
@@ -152,7 +149,7 @@ export default function PublishingQueue({
           // Two lowest-scoring criteria by proportion of their own max, which is what
           // the human can actually act on. A criterion out of 25 losing 7 points
           // matters more than one out of 15 losing 2, and raw scores hide that.
-          const weakest = [...asList<Criterion>(evalForPost?.criteria)]
+          const weakest = [...asList<Criterion>(evalForThisPost?.criteria)]
             .filter((c) => c && typeof c.score === "number" && typeof c.max === "number" && c.max > 0)
             .sort((a, b) => a.score / a.max - b.score / b.max)
             .slice(0, 2);
@@ -169,7 +166,7 @@ export default function PublishingQueue({
             null
           );
           const bestForChannel = bestEval?.overall_score ?? null;
-          const currentScore = evalForPost?.overall_score ?? null;
+          const currentScore = evalForThisPost?.overall_score ?? null;
           const betterExisted =
             currentScore !== null && bestForChannel !== null && bestForChannel > currentScore;
           // The banner used to state flatly that a manual edit caused this, because
@@ -189,7 +186,7 @@ export default function PublishingQueue({
                 )
               : undefined;
 
-          const suggestions = asList<string>(evalForPost?.weakest_criteria_suggestions).filter(
+          const suggestions = asList<string>(evalForThisPost?.weakest_criteria_suggestions).filter(
             (s): s is string => typeof s === "string" && s.trim().length > 0
           );
 
@@ -314,14 +311,14 @@ export default function PublishingQueue({
                 </div>
               )}
 
-              {post && !evaluationPassed(evalForPost) && (
+              {post && !evaluationPassed(evalForThisPost) && (
                 <div className="mt-2 rounded-lg bg-warning-soft p-3">
                   <p className="text-xs font-semibold text-warning">
-                    {typeof evalForPost?.overall_score !== "number"
+                    {typeof evalForThisPost?.overall_score !== "number"
                       ? "This draft hasn't been scored yet, so it can't be scheduled."
-                      : evalForPost.overall_score < PASS_MARK
-                        ? `Scored ${evalForPost.overall_score}/100, ${PASS_MARK - evalForPost.overall_score} short of the ${PASS_MARK} needed to schedule.`
-                        : `Scored ${evalForPost.overall_score}/100 but still marked for revision.`}
+                      : evalForThisPost.overall_score < PASS_MARK
+                        ? `Scored ${evalForThisPost.overall_score}/100, ${PASS_MARK - evalForThisPost.overall_score} short of the ${PASS_MARK} needed to schedule.`
+                        : `Scored ${evalForThisPost.overall_score}/100 but still marked for revision.`}
                   </p>
                   {weakest.length > 0 && (
                     <p className="mt-1 text-xs text-warning/90">

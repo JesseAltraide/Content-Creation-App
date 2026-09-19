@@ -461,6 +461,9 @@ Fidelity of figures: carry every number, unit, percentage, date and conditional 
     section_id: null,
     channel,
     pass: "pass_2_channel",
+    // The identity, alongside the number. Version numbers restart on every adaptation
+    // run, so the number alone has matched the wrong post five separate times.
+    channel_post_id: inserted.id,
     content_version: newVersion,
     overall_score: evalInput.overall_score,
     status: gateStatus,

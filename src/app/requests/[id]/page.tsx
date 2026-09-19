@@ -23,6 +23,7 @@ import ReviewComments from "./review-comments";
 import { getRequestAccess, REVIEWABLE_STATUSES } from "@/lib/request-access";
 import { CHANNEL_LABELS, evaluationPassed, findLengthViolations } from "@/lib/channel-post-format";
 import { looksPaywalled } from "@/lib/source-quality";
+import { evalForPost } from "@/lib/score-for-post";
 
 const CHANNEL_TABS = [
   { key: "linkedin" as const, label: CHANNEL_LABELS.linkedin },
@@ -266,9 +267,7 @@ export default async function RequestDetailPage({
   const channelsAllPass =
     chosenChannelPosts.length > 0 &&
     chosenChannelPosts.every((post) => {
-      const ev = [...(pass2Evaluations ?? [])]
-        .reverse()
-        .find((e) => e.channel === post.channel && e.content_version === post.version);
+      const ev = evalForPost(post, pass2Evaluations ?? [], channelPosts ?? []);
       return evaluationPassed(ev) && findLengthViolations(post.channel, post.body ?? "").length === 0;
     });
 

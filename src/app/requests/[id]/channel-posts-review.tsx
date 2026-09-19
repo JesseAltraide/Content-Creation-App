@@ -7,6 +7,7 @@ import ChannelPostCard from "./channel-post-card";
 import type { StoredImageSuggestion } from "./image-suggestion";
 import MarkReadyButton from "./mark-ready-button";
 import type { ChannelVersion } from "./channel-version-picker";
+import { evalForPost } from "@/lib/score-for-post";
 
 type ChannelPost = {
   id: string;
@@ -79,13 +80,13 @@ export default function ChannelPostsReview({
   }
   const latestPosts = Array.from(latestByChannel.values());
 
+  // One join rule for every score read in the app (src/lib/score-for-post.ts), by
+  // channel_post_id where it exists. Matching on the version number is what let an
+  // older run's score attach to this run's post.
   const evalByChannel = new Map<string, EvalResult>();
-  for (const ev of evaluations) {
-    if (!ev.channel) continue;
-    const post = latestByChannel.get(ev.channel);
-    // Last write wins for the same reason as the publishing queue: duplicate version
-    // numbers across adaptation runs mean the first match can be an older score.
-    if (post && ev.content_version === post.version) evalByChannel.set(ev.channel, ev);
+  for (const post of latestPosts) {
+    const found = evalForPost(post, evaluations, channelPosts) as EvalResult | undefined;
+    if (found) evalByChannel.set(post.channel, found);
   }
 
   // The generic needs_human_attention banner (with the why/action explanation) is
@@ -125,9 +126,7 @@ export default function ChannelPostsReview({
     channelPosts
       .filter((p) => p.channel === channel)
       .map((p) => {
-        const ev = [...evaluations]
-          .reverse()
-          .find((e) => e.channel === channel && e.content_version === p.version);
+        const ev = evalForPost(p, evaluations, channelPosts);
         return {
           // The row id, because version numbers are NOT unique per channel: re-running
           // adaptation restarts them at 1, so a request holds two v1 posts and React
