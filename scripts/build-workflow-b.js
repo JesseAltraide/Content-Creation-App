@@ -829,25 +829,37 @@ function buildEvalRound(roundLabel, sectionSourceName, isFinalRound) {
   );
   connect(`Claude: Evaluate (${roundLabel})`, `Parse Evaluation (${roundLabel})`, 0);
 
+  // The gate runs BEFORE the row is written, so the row can store the gate's verdict
+  // rather than the model's own opinion of itself.
+  //
+  // It used to run after, which left `status` as whatever Claude called it. Four rows
+  // in the live database say "pass" while scoring 83, 84 and 80, all under the 85 the
+  // gate actually enforces. The runs behaved correctly, so this never broke a
+  // pipeline; it broke every consumer that reads the label instead of the number,
+  // which is the whole of Error #46 and Error #54.
+  codeNode(`gate-${idBase}`, `Gate (${roundLabel})`, gateCode());
+  connect(`Parse Evaluation (${roundLabel})`, `Gate (${roundLabel})`);
+
   supabaseWrite(
     `insert-eval-${idBase}`,
     `Insert Evaluation (${roundLabel})`,
     "POST",
     "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/evaluation_results",
-    `={{ JSON.stringify({ request_id: $('Config').first().json.request_id, section_id: $('${sectionSourceName}').first().json.id, pass: 'pass_1_article', content_version: $('${sectionSourceName}').first().json.version, overall_score: $json.overall_score, status: $json.status, criteria: $json.criteria, unsupported_or_weak_claims: $json.unsupported_or_weak_claims, weakest_criteria_suggestions: $json.weakest_criteria_suggestions, hard_block_triggered: $json.hard_block_triggered, hard_block_reason: $json.hard_block_reason }) }}`,
+    `={{ JSON.stringify({ request_id: $('Config').first().json.request_id, section_id: $('${sectionSourceName}').first().json.id, pass: 'pass_1_article', content_version: $('${sectionSourceName}').first().json.version, overall_score: $json.overall_score, status: $json.decision, criteria: $json.criteria, unsupported_or_weak_claims: $json.unsupported_or_weak_claims, weakest_criteria_suggestions: $json.weakest_criteria_suggestions, hard_block_triggered: $json.hard_block_triggered, hard_block_reason: $json.hard_block_reason }) }}`,
     { returnMinimal: false }
   );
-  connect(`Parse Evaluation (${roundLabel})`, `Insert Evaluation (${roundLabel})`);
+  connect(`Gate (${roundLabel})`, `Insert Evaluation (${roundLabel})`);
 
-  // Gate reads from the write's own return=representation output, not a separate
-  // reference back to Parse Evaluation - either works, but this keeps the chain
-  // linear and matches what actually got persisted (see Error #3 in
-  // week4-progress.md: never assume $json survives a return=minimal write).
-  codeNode(`gate-${idBase}`, `Gate (${roundLabel})`, gateCode());
-  connect(`Insert Evaluation (${roundLabel})`, `Gate (${roundLabel})`);
-
-  ifNode(`if-pass-${idBase}`, `IF Pass (${roundLabel})`, "={{$json.decision}}", "pass", { type: "string", operation: "equals" });
-  connect(`Gate (${roundLabel})`, `IF Pass (${roundLabel})`);
+  // Reads the gate by name rather than $json, because $json here is the inserted row
+  // coming back from PostgREST, which has no `decision` field on it.
+  ifNode(
+    `if-pass-${idBase}`,
+    `IF Pass (${roundLabel})`,
+    `={{$('Gate (${roundLabel})').first().json.decision}}`,
+    "pass",
+    { type: "string", operation: "equals" }
+  );
+  connect(`Insert Evaluation (${roundLabel})`, `IF Pass (${roundLabel})`);
 
   withLane(-260, () => {
   supabaseWrite(

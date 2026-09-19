@@ -1257,11 +1257,24 @@
     },
     {
       "parameters": {
+        "jsCode": "const c = $json.criteria || [];\nconst floor = (name, f) => { const crit = c.find(x => x.name.toLowerCase().includes(name)); return crit ? crit.score < f : false; };\nconst hardBlock = $json.hard_block_triggered || floor('topic', 15) || floor('grounding', 15) || floor('factual', 15) || floor('consistency', 15);\nconst score = $json.overall_score;\nlet decision;\nif (hardBlock) { decision = score < 60 ? 'reject' : 'revise'; }\nelse if (score >= 85) { decision = 'pass'; }\nelse if (score >= 60) { decision = 'revise'; }\nelse { decision = 'reject'; }\nreturn [{ json: { ...$json, hardBlock, decision } }];"
+      },
+      "id": "gate-round-0",
+      "name": "Gate (Round 0)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        12760,
+        0
+      ]
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/evaluation_results",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ request_id: $('Config').first().json.request_id, section_id: $('Insert Section v1').first().json.id, pass: 'pass_1_article', content_version: $('Insert Section v1').first().json.version, overall_score: $json.overall_score, status: $json.status, criteria: $json.criteria, unsupported_or_weak_claims: $json.unsupported_or_weak_claims, weakest_criteria_suggestions: $json.weakest_criteria_suggestions, hard_block_triggered: $json.hard_block_triggered, hard_block_reason: $json.hard_block_reason }) }}",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('Config').first().json.request_id, section_id: $('Insert Section v1').first().json.id, pass: 'pass_1_article', content_version: $('Insert Section v1').first().json.version, overall_score: $json.overall_score, status: $json.decision, criteria: $json.criteria, unsupported_or_weak_claims: $json.unsupported_or_weak_claims, weakest_criteria_suggestions: $json.weakest_criteria_suggestions, hard_block_triggered: $json.hard_block_triggered, hard_block_reason: $json.hard_block_reason }) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -1286,19 +1299,6 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        12760,
-        0
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "const c = $json.criteria || [];\nconst floor = (name, f) => { const crit = c.find(x => x.name.toLowerCase().includes(name)); return crit ? crit.score < f : false; };\nconst hardBlock = $json.hard_block_triggered || floor('topic', 15) || floor('grounding', 15) || floor('factual', 15) || floor('consistency', 15);\nconst score = $json.overall_score;\nlet decision;\nif (hardBlock) { decision = score < 60 ? 'reject' : 'revise'; }\nelse if (score >= 85) { decision = 'pass'; }\nelse if (score >= 60) { decision = 'revise'; }\nelse { decision = 'reject'; }\nreturn [{ json: { ...$json, hardBlock, decision } }];"
-      },
-      "id": "gate-round-0",
-      "name": "Gate (Round 0)",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
         13020,
         0
       ]
@@ -1313,7 +1313,7 @@
           },
           "conditions": [
             {
-              "leftValue": "={{$json.decision}}",
+              "leftValue": "={{$('Gate (Round 0)').first().json.decision}}",
               "rightValue": "pass",
               "operator": {
                 "type": "string",
@@ -1842,11 +1842,24 @@
     },
     {
       "parameters": {
+        "jsCode": "const c = $json.criteria || [];\nconst floor = (name, f) => { const crit = c.find(x => x.name.toLowerCase().includes(name)); return crit ? crit.score < f : false; };\nconst hardBlock = $json.hard_block_triggered || floor('topic', 15) || floor('grounding', 15) || floor('factual', 15) || floor('consistency', 15);\nconst score = $json.overall_score;\nlet decision;\nif (hardBlock) { decision = score < 60 ? 'reject' : 'revise'; }\nelse if (score >= 85) { decision = 'pass'; }\nelse if (score >= 60) { decision = 'revise'; }\nelse { decision = 'reject'; }\nreturn [{ json: { ...$json, hardBlock, decision } }];"
+      },
+      "id": "gate-round-1",
+      "name": "Gate (Round 1)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        18740,
+        0
+      ]
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/evaluation_results",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ request_id: $('Config').first().json.request_id, section_id: $('Insert Section v2').first().json.id, pass: 'pass_1_article', content_version: $('Insert Section v2').first().json.version, overall_score: $json.overall_score, status: $json.status, criteria: $json.criteria, unsupported_or_weak_claims: $json.unsupported_or_weak_claims, weakest_criteria_suggestions: $json.weakest_criteria_suggestions, hard_block_triggered: $json.hard_block_triggered, hard_block_reason: $json.hard_block_reason }) }}",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('Config').first().json.request_id, section_id: $('Insert Section v2').first().json.id, pass: 'pass_1_article', content_version: $('Insert Section v2').first().json.version, overall_score: $json.overall_score, status: $json.decision, criteria: $json.criteria, unsupported_or_weak_claims: $json.unsupported_or_weak_claims, weakest_criteria_suggestions: $json.weakest_criteria_suggestions, hard_block_triggered: $json.hard_block_triggered, hard_block_reason: $json.hard_block_reason }) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -1871,19 +1884,6 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        18740,
-        0
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "const c = $json.criteria || [];\nconst floor = (name, f) => { const crit = c.find(x => x.name.toLowerCase().includes(name)); return crit ? crit.score < f : false; };\nconst hardBlock = $json.hard_block_triggered || floor('topic', 15) || floor('grounding', 15) || floor('factual', 15) || floor('consistency', 15);\nconst score = $json.overall_score;\nlet decision;\nif (hardBlock) { decision = score < 60 ? 'reject' : 'revise'; }\nelse if (score >= 85) { decision = 'pass'; }\nelse if (score >= 60) { decision = 'revise'; }\nelse { decision = 'reject'; }\nreturn [{ json: { ...$json, hardBlock, decision } }];"
-      },
-      "id": "gate-round-1",
-      "name": "Gate (Round 1)",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
         19000,
         0
       ]
@@ -1898,7 +1898,7 @@
           },
           "conditions": [
             {
-              "leftValue": "={{$json.decision}}",
+              "leftValue": "={{$('Gate (Round 1)').first().json.decision}}",
               "rightValue": "pass",
               "operator": {
                 "type": "string",
@@ -2427,11 +2427,24 @@
     },
     {
       "parameters": {
+        "jsCode": "const c = $json.criteria || [];\nconst floor = (name, f) => { const crit = c.find(x => x.name.toLowerCase().includes(name)); return crit ? crit.score < f : false; };\nconst hardBlock = $json.hard_block_triggered || floor('topic', 15) || floor('grounding', 15) || floor('factual', 15) || floor('consistency', 15);\nconst score = $json.overall_score;\nlet decision;\nif (hardBlock) { decision = score < 60 ? 'reject' : 'revise'; }\nelse if (score >= 85) { decision = 'pass'; }\nelse if (score >= 60) { decision = 'revise'; }\nelse { decision = 'reject'; }\nreturn [{ json: { ...$json, hardBlock, decision } }];"
+      },
+      "id": "gate-round-2",
+      "name": "Gate (Round 2)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        24720,
+        0
+      ]
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/evaluation_results",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ request_id: $('Config').first().json.request_id, section_id: $('Insert Section v3').first().json.id, pass: 'pass_1_article', content_version: $('Insert Section v3').first().json.version, overall_score: $json.overall_score, status: $json.status, criteria: $json.criteria, unsupported_or_weak_claims: $json.unsupported_or_weak_claims, weakest_criteria_suggestions: $json.weakest_criteria_suggestions, hard_block_triggered: $json.hard_block_triggered, hard_block_reason: $json.hard_block_reason }) }}",
+        "jsonBody": "={{ JSON.stringify({ request_id: $('Config').first().json.request_id, section_id: $('Insert Section v3').first().json.id, pass: 'pass_1_article', content_version: $('Insert Section v3').first().json.version, overall_score: $json.overall_score, status: $json.decision, criteria: $json.criteria, unsupported_or_weak_claims: $json.unsupported_or_weak_claims, weakest_criteria_suggestions: $json.weakest_criteria_suggestions, hard_block_triggered: $json.hard_block_triggered, hard_block_reason: $json.hard_block_reason }) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -2456,19 +2469,6 @@
       },
       "onError": "continueErrorOutput",
       "position": [
-        24720,
-        0
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "const c = $json.criteria || [];\nconst floor = (name, f) => { const crit = c.find(x => x.name.toLowerCase().includes(name)); return crit ? crit.score < f : false; };\nconst hardBlock = $json.hard_block_triggered || floor('topic', 15) || floor('grounding', 15) || floor('factual', 15) || floor('consistency', 15);\nconst score = $json.overall_score;\nlet decision;\nif (hardBlock) { decision = score < 60 ? 'reject' : 'revise'; }\nelse if (score >= 85) { decision = 'pass'; }\nelse if (score >= 60) { decision = 'revise'; }\nelse { decision = 'reject'; }\nreturn [{ json: { ...$json, hardBlock, decision } }];"
-      },
-      "id": "gate-round-2",
-      "name": "Gate (Round 2)",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
         24980,
         0
       ]
@@ -2483,7 +2483,7 @@
           },
           "conditions": [
             {
-              "leftValue": "={{$json.decision}}",
+              "leftValue": "={{$('Gate (Round 2)').first().json.decision}}",
               "rightValue": "pass",
               "operator": {
                 "type": "string",
@@ -3330,11 +3330,22 @@
         ]
       ]
     },
-    "Insert Evaluation (Round 0)": {
+    "Parse Evaluation (Round 0)": {
       "main": [
         [
           {
             "node": "Gate (Round 0)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Evaluation (Round 0)": {
+      "main": [
+        [
+          {
+            "node": "IF Pass (Round 0)",
             "type": "main",
             "index": 0
           }
@@ -3348,22 +3359,11 @@
         ]
       ]
     },
-    "Parse Evaluation (Round 0)": {
-      "main": [
-        [
-          {
-            "node": "Insert Evaluation (Round 0)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Gate (Round 0)": {
       "main": [
         [
           {
-            "node": "IF Pass (Round 0)",
+            "node": "Insert Evaluation (Round 0)",
             "type": "main",
             "index": 0
           }
@@ -3641,11 +3641,22 @@
         ]
       ]
     },
-    "Insert Evaluation (Round 1)": {
+    "Parse Evaluation (Round 1)": {
       "main": [
         [
           {
             "node": "Gate (Round 1)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Evaluation (Round 1)": {
+      "main": [
+        [
+          {
+            "node": "IF Pass (Round 1)",
             "type": "main",
             "index": 0
           }
@@ -3659,22 +3670,11 @@
         ]
       ]
     },
-    "Parse Evaluation (Round 1)": {
-      "main": [
-        [
-          {
-            "node": "Insert Evaluation (Round 1)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Gate (Round 1)": {
       "main": [
         [
           {
-            "node": "IF Pass (Round 1)",
+            "node": "Insert Evaluation (Round 1)",
             "type": "main",
             "index": 0
           }
@@ -3952,11 +3952,22 @@
         ]
       ]
     },
-    "Insert Evaluation (Round 2)": {
+    "Parse Evaluation (Round 2)": {
       "main": [
         [
           {
             "node": "Gate (Round 2)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Evaluation (Round 2)": {
+      "main": [
+        [
+          {
+            "node": "IF Pass (Round 2)",
             "type": "main",
             "index": 0
           }
@@ -3970,22 +3981,11 @@
         ]
       ]
     },
-    "Parse Evaluation (Round 2)": {
-      "main": [
-        [
-          {
-            "node": "Insert Evaluation (Round 2)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Gate (Round 2)": {
       "main": [
         [
           {
-            "node": "IF Pass (Round 2)",
+            "node": "Insert Evaluation (Round 2)",
             "type": "main",
             "index": 0
           }

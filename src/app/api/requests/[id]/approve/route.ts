@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanModifyRequest } from "@/lib/request-access";
 import { logEvent } from "@/lib/events";
 import { triggerAdaptAndEvaluate } from "@/lib/n8n";
+import { PASS_MARK } from "@/lib/channel-post-format";
 
 // This route either calls a model, triggers an n8n workflow, or keeps working in
 // after() once the response has gone out. Serverless kills the function at its
@@ -47,12 +48,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "No generated article to approve." }, { status: 409 });
   }
 
+  // The score as well as the label. The label is the workflow's word for what the
+  // score means, and the two have drifted apart in real data: four Pass 1 rows in the
+  // live database said "pass" while scoring 83, 84 and 80, because the row was written
+  // before the gate ran and stored the model's own self-assessment. On the old check
+  // an article at 83 was approvable and went straight to channel adaptation.
+  //
+  // The workflow now stores the gate's verdict, which is the real fix. This is the
+  // second lock: the number is not an opinion, and anything reading a label alone has
+  // already been wrong three times in this build (Errors #46, #54).
   const { data: passingEval } = await admin
     .from("evaluation_results")
     .select("id")
     .eq("section_id", latestSection.id)
     .eq("content_version", latestSection.version)
     .eq("status", "pass")
+    .gte("overall_score", PASS_MARK)
     .limit(1)
     .maybeSingle();
 

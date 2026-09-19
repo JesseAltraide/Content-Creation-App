@@ -885,14 +885,23 @@ function buildPass2EvalRound(roundLabel, channelPostsSourceName, isFinalRound) {
   // dies partway.
   supabaseGet(
     `fetch-all-evals-${idBase}`, `Fetch All Channel Evaluations (${roundLabel})`,
-    "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/evaluation_results?request_id=eq.{{$('Config').first().json.request_id}}&pass=eq.pass_2_channel&select=channel,content_version,overall_score"
+    "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/evaluation_results?request_id=eq.{{$('Config').first().json.request_id}}&pass=eq.pass_2_channel&select=channel,content_version,overall_score,created_at"
   );
   connect(`Insert Evaluations (${roundLabel})`, `Fetch All Channel Evaluations (${roundLabel})`);
 
   codeNode(
     `pick-best-${idBase}`,
     `Pick Best Version Per Channel (${roundLabel})`,
-    "const evals = $input.all().map(i => i.json).filter(e => e && e.channel && typeof e.overall_score === 'number');" + NL +
+    "// Re-running adaptation restarts channel post numbering at 1, so a request can hold" + NL +
+      "// two different v1 posts per channel from two different runs. Selecting on" + NL +
+      "// (channel, version) alone then matches BOTH, and marks two rows chosen for one" + NL +
+      "// channel - caught live, six chosen rows on a three channel request. Everything" + NL +
+      "// here is scoped to the run that is executing, which is also the right comparison:" + NL +
+      "// rounds are judged against each other, not against a run from two days ago." + NL +
+      "const runRows = $('Fetch Channel Posts v1').all().map(i => i.json).filter(r => r && r.created_at);" + NL +
+      "const runStartMs = runRows.length ? Math.min(...runRows.map(r => new Date(r.created_at).getTime())) : 0;" + NL +
+      "const runStart = new Date(runStartMs).toISOString();" + NL +
+      "const evals = $input.all().map(i => i.json).filter(e => e && e.channel && typeof e.overall_score === 'number' && new Date(e.created_at).getTime() >= runStartMs);" + NL +
       "const best = {};" + NL +
       // Ties keep the EARLIER version: if a rewrite only matched what it replaced, it
       // changed the text for nothing, and the version already reviewed is the safer one.
@@ -907,7 +916,7 @@ function buildPass2EvalRound(roundLabel, channelPostsSourceName, isFinalRound) {
       // every version of every channel chosen at once, which is the one outcome worse
       // than choosing the wrong version. A filter that matches nothing is the safe
       // reading of "no scores to go on": version 0 does not exist.
-      "return [{ json: { hasBest: parts.length > 0, orFilter: parts.length ? 'or=(' + parts.join(',') + ')' : 'version=eq.0', summary } }];",
+      "return [{ json: { hasBest: parts.length > 0, orFilter: parts.length ? 'or=(' + parts.join(',') + ')' : 'version=eq.0', runStart: encodeURIComponent(runStart), summary } }];",
     {
       notes:
         "Highest score wins, ties going to the earlier version. Produces a PostgREST or=(...) filter so the choice is applied in one write.",
@@ -924,7 +933,7 @@ function buildPass2EvalRound(roundLabel, channelPostsSourceName, isFinalRound) {
 
   supabaseWrite(
     `choose-best-${idBase}`, `Choose Best Versions (${roundLabel})`, "PATCH",
-    "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/channel_posts?request_id=eq.{{$('Config').first().json.request_id}}&{{$('Pick Best Version Per Channel (" + roundLabel + ")').first().json.orFilter}}",
+    "={{$('Config').first().json.SUPABASE_URL}}/rest/v1/channel_posts?request_id=eq.{{$('Config').first().json.request_id}}&created_at=gte.{{$('Pick Best Version Per Channel (" + roundLabel + ")').first().json.runStart}}&{{$('Pick Best Version Per Channel (" + roundLabel + ")').first().json.orFilter}}",
     "={{ JSON.stringify({ chosen: true }) }}"
   );
   connect(`Unchoose All Versions (${roundLabel})`, `Choose Best Versions (${roundLabel})`);
