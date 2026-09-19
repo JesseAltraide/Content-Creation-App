@@ -72,8 +72,8 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "PASTE_ID_HERE",
-          "name": "Supabase account"
+          "id": "YfdzwOiHXQtecdtJ",
+          "name": "Workflow A - Supabase account"
         }
       },
       "position": [
@@ -106,8 +106,8 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "PASTE_ID_HERE",
-          "name": "Supabase account"
+          "id": "YfdzwOiHXQtecdtJ",
+          "name": "Workflow A - Supabase account"
         }
       },
       "position": [
@@ -139,8 +139,8 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "PASTE_ID_HERE",
-          "name": "Supabase account"
+          "id": "YfdzwOiHXQtecdtJ",
+          "name": "Workflow A - Supabase account"
         }
       },
       "alwaysOutputData": true,
@@ -163,8 +163,8 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "PASTE_ID_HERE",
-          "name": "Supabase account"
+          "id": "YfdzwOiHXQtecdtJ",
+          "name": "Workflow A - Supabase account"
         }
       },
       "alwaysOutputData": true,
@@ -187,8 +187,8 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "PASTE_ID_HERE",
-          "name": "Supabase account"
+          "id": "YfdzwOiHXQtecdtJ",
+          "name": "Workflow A - Supabase account"
         }
       },
       "alwaysOutputData": true,
@@ -211,8 +211,8 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "PASTE_ID_HERE",
-          "name": "Supabase account"
+          "id": "YfdzwOiHXQtecdtJ",
+          "name": "Workflow A - Supabase account"
         }
       },
       "alwaysOutputData": true,
@@ -261,8 +261,8 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "PASTE_ID_HERE",
-          "name": "Supabase account"
+          "id": "YfdzwOiHXQtecdtJ",
+          "name": "Workflow A - Supabase account"
         }
       },
       "onError": "continueErrorOutput",
@@ -314,8 +314,8 @@
       "typeVersion": 4.2,
       "credentials": {
         "anthropicApi": {
-          "id": "PASTE_ID_HERE",
-          "name": "Anthropic account"
+          "id": "TBcA5E6WCfEniLGk",
+          "name": "Week 4 Claude"
         }
       },
       "onError": "continueErrorOutput",
@@ -362,8 +362,8 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "PASTE_ID_HERE",
-          "name": "Supabase account"
+          "id": "YfdzwOiHXQtecdtJ",
+          "name": "Workflow A - Supabase account"
         }
       },
       "position": [
@@ -396,8 +396,8 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "PASTE_ID_HERE",
-          "name": "Supabase account"
+          "id": "YfdzwOiHXQtecdtJ",
+          "name": "Workflow A - Supabase account"
         }
       },
       "position": [
@@ -454,8 +454,8 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "PASTE_ID_HERE",
-          "name": "Supabase account"
+          "id": "YfdzwOiHXQtecdtJ",
+          "name": "Workflow A - Supabase account"
         }
       },
       "position": [
@@ -506,8 +506,8 @@
       "typeVersion": 4.2,
       "credentials": {
         "anthropicApi": {
-          "id": "PASTE_ID_HERE",
-          "name": "Anthropic account"
+          "id": "TBcA5E6WCfEniLGk",
+          "name": "Week 4 Claude"
         }
       },
       "onError": "continueErrorOutput",
@@ -554,8 +554,8 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "PASTE_ID_HERE",
-          "name": "Supabase account"
+          "id": "YfdzwOiHXQtecdtJ",
+          "name": "Workflow A - Supabase account"
         }
       },
       "position": [
@@ -588,8 +588,8 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "PASTE_ID_HERE",
-          "name": "Supabase account"
+          "id": "YfdzwOiHXQtecdtJ",
+          "name": "Workflow A - Supabase account"
         }
       },
       "position": [
@@ -646,8 +646,8 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "PASTE_ID_HERE",
-          "name": "Supabase account"
+          "id": "YfdzwOiHXQtecdtJ",
+          "name": "Workflow A - Supabase account"
         }
       },
       "position": [
@@ -724,8 +724,8 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "PASTE_ID_HERE",
-          "name": "Supabase account"
+          "id": "YfdzwOiHXQtecdtJ",
+          "name": "Workflow A - Supabase account"
         }
       },
       "position": [
@@ -758,8 +758,8 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "PASTE_ID_HERE",
-          "name": "Supabase account"
+          "id": "YfdzwOiHXQtecdtJ",
+          "name": "Workflow A - Supabase account"
         }
       },
       "position": [
@@ -834,8 +834,8 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "PASTE_ID_HERE",
-          "name": "Supabase account"
+          "id": "YfdzwOiHXQtecdtJ",
+          "name": "Workflow A - Supabase account"
         }
       },
       "position": [
@@ -868,8 +868,8 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "PASTE_ID_HERE",
-          "name": "Supabase account"
+          "id": "YfdzwOiHXQtecdtJ",
+          "name": "Workflow A - Supabase account"
         }
       },
       "position": [
@@ -913,8 +913,8 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "PASTE_ID_HERE",
-          "name": "Supabase account"
+          "id": "YfdzwOiHXQtecdtJ",
+          "name": "Workflow A - Supabase account"
         }
       },
       "position": [
@@ -947,8 +947,8 @@
       "typeVersion": 4.2,
       "credentials": {
         "supabaseApi": {
-          "id": "PASTE_ID_HERE",
-          "name": "Supabase account"
+          "id": "YfdzwOiHXQtecdtJ",
+          "name": "Workflow A - Supabase account"
         }
       },
       "position": [
