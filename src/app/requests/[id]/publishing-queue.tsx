@@ -6,6 +6,7 @@ import NewsletterEmailPreview from "./newsletter-email-preview";
 import UseVersionButton from "./use-version-button";
 import PendingSendWatcher from "./pending-send-watcher";
 import { evalForPost } from "@/lib/score-for-post";
+import LocalTime from "@/components/local-time";
 
 // Newsletter shares this same table/cron job but gets real delivery to every
 // active subscriber instead of a reminder email (Decision #22/#48) - see
@@ -218,18 +219,24 @@ export default function PublishingQueue({
 
               {latestForChannel && (
                 <p className="mt-1 text-xs text-muted">
-                  {latestForChannel.status === "published"
-                    ? `Sent ${new Date(latestForChannel.published_at ?? latestForChannel.scheduled_for).toLocaleString()}${
-                        latestForChannel.notification_sent ? "" : ", notification email failed to send"
-                      }`
-                    : `Scheduled for ${new Date(latestForChannel.scheduled_for).toLocaleString()}`}
+                  {latestForChannel.status === "published" ? "Sent " : "Scheduled for "}
+                  <LocalTime
+                    value={
+                      latestForChannel.status === "published"
+                        ? latestForChannel.published_at ?? latestForChannel.scheduled_for
+                        : latestForChannel.scheduled_for
+                    }
+                  />
+                  {latestForChannel.status === "published" && !latestForChannel.notification_sent
+                    ? ", notification email failed to send"
+                    : ""}
                 </p>
               )}
 
               {earlierSend && !sent && (
                 <p className="mt-1 text-xs text-muted">
                   An earlier version of this post was sent on{" "}
-                  {new Date(earlierSend.published_at ?? earlierSend.scheduled_for).toLocaleString()}.
+                  <LocalTime value={earlierSend.published_at ?? earlierSend.scheduled_for} />.
                   The version in use now has not been sent.
                 </p>
               )}
@@ -243,7 +250,7 @@ export default function PublishingQueue({
                   {channel === "newsletter"
                     ? "Sent to subscribers"
                     : "Reminder sent to you"}{" "}
-                  on {new Date(sent.published_at ?? sent.scheduled_for).toLocaleString()}. This
+                  on <LocalTime value={sent.published_at ?? sent.scheduled_for} />. This
                   version has gone out and cannot be scheduled again.
                   {/* Not a dead end: there is a real way forward, and it is the one the
                       version picker already supports. */}

@@ -30,6 +30,24 @@ export default function ReviseWithSuggestionsButton({
   const [keptExisting, setKeptExisting] = useState(false);
   const [result, setResult] = useState<{ previousScore: number | null; score: number; status: string; inUse: boolean } | null>(null);
 
+  // Above every conditional return: this component returns early while confirming,
+  // and a hook after that point runs on some renders and not others, which React
+  // reports as "Rendered fewer hooks than expected".
+  //
+  // Picked up once after the reload, then cleared so it does not reappear on the next
+  // navigation.
+  useEffect(() => {
+    try {
+      const raw = window.sessionStorage.getItem(OUTCOME_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { channel?: string } & typeof result;
+      window.sessionStorage.removeItem(OUTCOME_KEY);
+      if (parsed && parsed.channel === channel) setResult(parsed);
+    } catch {
+      // Nothing to show, which is the same as not having reloaded.
+    }
+  }, [channel]);
+
   async function handleRevise() {
     setSubmitting(true);
     setError(null);
@@ -129,19 +147,6 @@ export default function ReviseWithSuggestionsButton({
 
   const atCap = rewritesUsed >= REGENERATION_CAP;
 
-  // Picked up once after the reload, then cleared so it does not reappear on the next
-  // navigation.
-  useEffect(() => {
-    try {
-      const raw = window.sessionStorage.getItem(OUTCOME_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as { channel?: string } & typeof result;
-      window.sessionStorage.removeItem(OUTCOME_KEY);
-      if (parsed && parsed.channel === channel) setResult(parsed);
-    } catch {
-      // Nothing to show, which is the same as not having reloaded.
-    }
-  }, [channel]);
 
   return (
     <div className="mt-3">

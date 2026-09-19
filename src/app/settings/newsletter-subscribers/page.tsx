@@ -5,6 +5,7 @@ import { getManagerState } from "@/lib/content-manager";
 import { createClient as createUserClient } from "@/lib/supabase/server";
 import ImportSubscribersForm from "./import-subscribers-form";
 import RemoveSubscriberButton from "./remove-subscriber-button";
+import LocalTime from "@/components/local-time";
 
 export default async function NewsletterSubscribersPage() {
 
@@ -72,7 +73,7 @@ export default async function NewsletterSubscribersPage() {
               <div key={s.id} className="flex items-center justify-between gap-3 px-4 py-3">
                 <span className="text-sm text-muted line-through">{s.email}</span>
                 <span className="text-xs text-muted">
-                  {new Date(s.unsubscribed_at).toLocaleDateString()}
+                  <LocalTime value={s.unsubscribed_at} mode="date" />
                 </span>
               </div>
             ))}

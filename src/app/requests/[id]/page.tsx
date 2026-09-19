@@ -24,6 +24,7 @@ import { getRequestAccess, REVIEWABLE_STATUSES } from "@/lib/request-access";
 import { CHANNEL_LABELS, evaluationPassed, findLengthViolations } from "@/lib/channel-post-format";
 import { looksPaywalled } from "@/lib/source-quality";
 import { evalForPost } from "@/lib/score-for-post";
+import LocalTime from "@/components/local-time";
 
 const CHANNEL_TABS = [
   { key: "linkedin" as const, label: CHANNEL_LABELS.linkedin },
@@ -676,7 +677,7 @@ export default async function RequestDetailPage({
                   {ev.stage}: {ev.detail}
                 </span>
                 <span className="shrink-0 text-xs text-muted">
-                  {new Date(ev.created_at).toLocaleTimeString()}
+                  <LocalTime value={ev.created_at} mode="time" />
                 </span>
               </div>
             ))}

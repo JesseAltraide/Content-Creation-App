@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { parseNewsletter } from "@/lib/channel-post-format";
 import ReactMarkdown from "react-markdown";
+import LocalTime from "@/components/local-time";
 
 // The card preview shows the subject and body. This shows the actual email: who it
 // comes from, who it goes to, the unsubscribe footer the publish job appends, and the
@@ -55,7 +56,7 @@ export default function NewsletterEmailPreview({
             {scheduledFor && (
               <div className="flex gap-2">
                 <span className="w-16 shrink-0 font-semibold uppercase tracking-wide text-muted">Sends</span>
-                <span className="text-foreground">{new Date(scheduledFor).toLocaleString()}</span>
+                <LocalTime value={scheduledFor} className="text-foreground" />
               </div>
             )}
           </div>

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { CHANNEL_LABELS } from "@/lib/channel-post-format";
 import { hardRefresh } from "@/lib/hard-refresh";
+import LocalTime from "@/components/local-time";
 
 export type Comment = {
   id: string;
@@ -117,7 +118,7 @@ export default function ReviewComments({
                       {CHANNEL_LABELS[c.channel] ?? c.channel}
                     </span>
                   )}
-                  <span>{new Date(c.created_at).toLocaleString()}</span>
+                  <LocalTime value={c.created_at} />
                   {c.user_id === currentUserId && (
                     <button
                       type="button"

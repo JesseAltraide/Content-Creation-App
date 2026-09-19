@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { hardRefresh } from "@/lib/hard-refresh";
+import LocalTime from "@/components/local-time";
 
 export type Announcement = {
   id: string;
@@ -94,7 +95,7 @@ export default function SettingsAnnouncementPopup({
               <p className="mt-1 text-sm text-foreground">{a.summary}</p>
               <p className="mt-1 text-xs text-muted">
                 {a.author_email ? `${a.author_email}, ` : ""}
-                {new Date(a.created_at).toLocaleString()}
+                <LocalTime value={a.created_at} />
               </p>
             </li>
           ))}
