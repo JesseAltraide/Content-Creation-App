@@ -14,7 +14,12 @@ export default function SourceSelection({
   requestId: string;
   sources: { id: string; url: string; title: string | null }[];
 }) {
-  const [selected, setSelected] = useState<string[]>(sources.map((s) => s.id));
+  // Everything starts ticked EXCEPT what the server would refuse. Ticking those by
+  // default and then disabling the checkbox left them selected and impossible to
+  // unselect, so the only route forward was blocked by the very guard meant to help.
+  const [selected, setSelected] = useState<string[]>(
+    sources.filter((s) => !blockSourceUrl(s.url)).map((s) => s.id)
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,8 +34,13 @@ export default function SourceSelection({
   const weakSelected = selected.filter((id) => issues.get(id)?.severity === "weak").length;
 
   function toggle(id: string) {
-    if (blocked.get(id)) return;
-    setSelected((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
+    // Removing is always allowed. Only ADDING a refused source is prevented, so a
+    // guard can never be the thing that traps a selection.
+    setSelected((prev) => {
+      if (prev.includes(id)) return prev.filter((s) => s !== id);
+      if (blocked.get(id)) return prev;
+      return [...prev, id];
+    });
   }
 
   async function handleContinue() {
@@ -39,7 +49,9 @@ export default function SourceSelection({
     const res = await fetch(`/api/requests/${requestId}/select-sources`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ selectedSourceIds: selected }),
+      body: JSON.stringify({
+        selectedSourceIds: selected.filter((id) => !blocked.get(id)),
+      }),
     });
     const body = await res.json();
     setSubmitting(false);
