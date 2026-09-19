@@ -65,17 +65,50 @@ export async function GET(request: Request) {
   // busy indefinitely (seen live at 'adapting' for 112 minutes). The manual reset in
   // the banner covers the human who is looking at the page. This covers the one who
   // is not.
+  // Silence is measured from the newest EVENT, not from requests.updated_at.
+  //
+  // updated_at never moves: nothing sets it, no trigger maintains it, and neither this
+  // app nor n8n writes it. Every request older than the threshold therefore looked
+  // permanently stalled, and the sweep reset healthy runs the moment they started.
+  // Caught live: a run entered 'generating' at 09:22:33 and was reset 28 seconds later
+  // with "86 minutes of silence", twice in a row, on a request that then passed at
+  // 91/100. The safety net was the thing breaking the pipeline.
+  //
+  // The event log is the real activity signal: every stage writes one, and a run that
+  // has genuinely died stops writing them.
   const reclaimed: string[] = [];
   const { data: working } = await admin
     .from("requests")
-    .select("id, status, updated_at, user_id, raw_idea, primary_keyword")
+    .select("id, status, created_at, user_id, raw_idea, primary_keyword")
     .in("status", Object.keys(SAFE_STATE))
-    .lt("updated_at", new Date(Date.now() - STALLED_SWEEP_MS).toISOString())
     .limit(25);
 
-  for (const req of working ?? []) {
+  const cutoff = Date.now() - STALLED_SWEEP_MS;
+  const stalledCandidates = working ?? [];
+  const { data: recentEvents } = stalledCandidates.length
+    ? await admin
+        .from("event_log")
+        .select("request_id, created_at")
+        .in(
+          "request_id",
+          stalledCandidates.map((r) => r.id)
+        )
+        .order("created_at", { ascending: false })
+    : { data: [] };
+
+  const lastActivity = new Map<string, string>();
+  for (const e of recentEvents ?? []) {
+    if (!lastActivity.has(e.request_id)) lastActivity.set(e.request_id, e.created_at);
+  }
+
+  for (const req of stalledCandidates) {
     const target = SAFE_STATE[req.status];
     if (!target) continue;
+
+    // No events at all falls back to when the request was created, which is the only
+    // other timestamp that means anything here.
+    const since = lastActivity.get(req.id) ?? req.created_at;
+    if (new Date(since).getTime() > cutoff) continue;
 
     // Guarded on the exact status read, so a run that finishes between the query and
     // this write keeps its own result rather than being dragged backwards.
@@ -92,7 +125,7 @@ export async function GET(request: Request) {
       await admin.from("angles").update({ chosen: false }).eq("request_id", req.id);
     }
 
-    const minutes = Math.round((Date.now() - new Date(req.updated_at).getTime()) / 60000);
+    const minutes = Math.round((Date.now() - new Date(since).getTime()) / 60000);
     await logEvent({
       requestId: req.id,
       stage: "pipeline_setup",

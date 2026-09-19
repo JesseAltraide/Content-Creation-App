@@ -45,9 +45,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const { data: current } = await admin
     .from("requests")
-    .select("status, updated_at")
+    .select("status, created_at")
     .eq("id", requestId)
     .single();
+
+  // Measured from the newest event, not from updated_at, which nothing maintains and
+  // which therefore always looked stale. On that reading this guard never fired and
+  // the button would cancel a run that had just started.
+  const { data: lastEvent } = await admin
+    .from("event_log")
+    .select("created_at")
+    .eq("request_id", requestId)
+    .order("created_at", { ascending: false })
+    .limit(1);
 
   const target = current ? SAFE_STATE[current.status] : undefined;
   if (!current || !target) {
@@ -59,7 +69,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   // The same threshold the banner uses before it stops claiming the work is running.
   // Without it this becomes a button that cancels a healthy run.
-  const silentFor = Date.now() - new Date(current.updated_at).getTime();
+  const since = lastEvent?.[0]?.created_at ?? current.created_at;
+  const silentFor = Date.now() - new Date(since).getTime();
   if (silentFor < STALLED_MANUAL_MS) {
     return NextResponse.json(
       { error: "This has only just started. Give it five minutes before resetting it." },
