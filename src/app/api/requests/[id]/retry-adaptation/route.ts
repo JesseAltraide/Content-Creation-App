@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanModifyRequest } from "@/lib/request-access";
 import { triggerAdaptAndEvaluate } from "@/lib/n8n";
 import { logEvent } from "@/lib/events";
+import { REGENERATION_CAP, countHumanRegenerations } from "@/lib/regeneration";
 
 // This route either calls a model, triggers an n8n workflow, or keeps working in
 // after() once the response has gone out. Serverless kills the function at its
@@ -34,6 +35,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   const admin = createAdminClient();
+
+  // Retrying adaptation was not capped at all, which is how one request ran it three
+  // times in four minutes and ended up with nine LinkedIn posts. It costs a full
+  // adaptation and two evaluation rounds, so it draws on the same budget as every
+  // other way of asking for the work to be done again.
+  const priorRetries = await countHumanRegenerations(requestId, "adaptation");
+  if (priorRetries >= REGENERATION_CAP) {
+    return NextResponse.json(
+      {
+        error: `Adaptation has already been retried ${priorRetries} times, which is the limit. If it still is not right, the article is usually the thing to change.`,
+      },
+      { status: 409 }
+    );
+  }
 
   const { data: updatedRequest, error: transitionError } = await admin
     .from("requests")

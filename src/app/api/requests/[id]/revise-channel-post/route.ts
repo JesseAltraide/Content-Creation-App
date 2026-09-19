@@ -11,6 +11,7 @@ import { getClaude, GENERATION_MODEL, EVALUATION_MODEL } from "@/lib/claude";
 // Shared with the pages that render these rows, so what is written and what is read
 // can never disagree about the shape.
 import { asList } from "@/lib/eval-shape";
+import { REGENERATION_CAP, countHumanRegenerations } from "@/lib/regeneration";
 
 // This route either calls a model, triggers an n8n workflow, or keeps working in
 // after() once the response has gone out. Serverless kills the function at its
@@ -38,7 +39,6 @@ const bodySchema = z.object({
 // revisions before the channel is declared a dead end. A cap on versions rather than
 // on a counter column: it needs no migration and it cannot drift from reality, since
 // the versions are the attempts.
-const MAX_CHANNEL_VERSION = 8;
 
 const PASS2_RUBRIC_TEXT =
   "Score out of 100 across: Factual Consistency re-verified against the excerpts (20, floor 15 - hard block tier), Tone (25, floor 10), Channel Fit (25, floor 10 - does it genuinely read as native to that platform), Audience Fit re-verified (15, floor 6), Clarity (15, floor 6). Topic Relevance, SEO Fit, and Completeness do not apply post-adaptation. If Factual Consistency scores below its floor, hard_block_triggered must be true regardless of the total.";
@@ -178,11 +178,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "No adapted content exists yet for this channel." }, { status: 409 });
   }
 
-  if (current.version >= MAX_CHANNEL_VERSION) {
+  // Counted from what the human actually asked for, not from the version number.
+  // Versions restart at 1 on every adaptation run, so the old check against
+  // MAX_CHANNEL_VERSION never bound: one channel reached nine posts untouched by it.
+  const priorRewrites = await countHumanRegenerations(requestId, { channel });
+  if (priorRewrites >= REGENERATION_CAP) {
     return NextResponse.json(
       {
-        error:
-          "This channel has been revised as many times as it's worth. Edit it yourself, or regenerate the article if the source material is the problem.",
+        error: `You have rewritten this channel ${priorRewrites} times, which is the limit. Edit it yourself, or regenerate the article if the source material is the problem.`,
       },
       { status: 409 }
     );
@@ -397,27 +400,38 @@ Fidelity of figures: carry every number, unit, percentage, date and conditional 
   const keepPrevious = scoredWorse && !previousBlocked;
 
   const newVersion = current.version + 1;
-  const { error: insertError } = await admin.from("channel_posts").insert({
-    request_id: requestId,
-    channel,
-    version: newVersion,
-    body: bodyForStorage(channel, genInput),
-    tone_variant: "default",
-    chosen: !keepPrevious,
-  });
-  if (insertError) {
+  const { data: inserted, error: insertError } = await admin
+    .from("channel_posts")
+    .insert({
+      request_id: requestId,
+      channel,
+      version: newVersion,
+      body: bodyForStorage(channel, genInput),
+      tone_variant: "default",
+      chosen: !keepPrevious,
+    })
+    .select("id")
+    .single();
+  if (insertError || !inserted) {
     return NextResponse.json({ error: "Couldn't save the revision. Try again." }, { status: 500 });
   }
 
-  // Only when the new version won. Done after the insert so a failed insert leaves
-  // the old version still chosen rather than leaving the channel with nothing chosen.
+  // Clears EVERY other chosen row on this channel, not just the one it replaced.
+  // Unchoosing only `current.id` assumed there was exactly one, and the invariant was
+  // already broken: this request had four chosen LinkedIn rows and four chosen
+  // newsletter rows, because each retried adaptation run marked its own and nothing
+  // cleared the rest. With several chosen, which post the page shows depends on which
+  // row a query happens to reach first, which is what "my version disappeared" was.
+  //
+  // Done after the insert so a failed insert leaves the old version still chosen
+  // rather than leaving the channel with nothing chosen at all.
   if (!keepPrevious) {
     await admin
       .from("channel_posts")
       .update({ chosen: false })
       .eq("request_id", requestId)
       .eq("channel", channel)
-      .eq("id", current.id);
+      .neq("id", inserted.id);
   }
 
   // The gate's verdict, not the model's own word for it. Caught live: this route
