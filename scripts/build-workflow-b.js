@@ -594,8 +594,23 @@ codeNode(
     // by definition: the model returned one passage, its source_url did not match,
     // and the run stopped at "none could be matched back to a scraped source".
     "const soleSource = sources.length === 1 ? sources[0] : null;" + NL +
+    // Last resort, and the only one that does not depend on the model getting a label
+    // right: find the passage in the scraped text. An excerpt is required to be an
+    // exact quote, so the source that literally contains it IS the source, whatever
+    // the model wrote in source_url.
+    //
+    // Reproduced the failing call by hand and it returned six excerpts all correctly
+    // attributed, so the URL going wrong is variance rather than a broken prompt. A
+    // whole run should not die on it.
+    "const squash = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();" + NL +
+    "const findByText = (text) => {" + NL +
+    "  const needle = squash(text).slice(0, 80);" + NL +
+    "  if (needle.length < 30) return null;" + NL +
+    "  const hits = sources.filter(s => squash(s.scraped_text).includes(needle));" + NL +
+    "  return hits.length === 1 ? hits[0] : null;" + NL +
+    "};" + NL +
     "const mapped = excerpts.map(e => {" + NL +
-    "  const source = findSource(e.source_url) || soleSource;" + NL +
+    "  const source = findSource(e.source_url) || findByText(e.text) || soleSource;" + NL +
     "  return { request_id: requestId, source_id: source ? source.id : null, text: e.text, reason: e.reason };" + NL +
     "}).filter(e => e.source_id);" + NL +
     "// Surfaced so a zero-excerpt outcome can be told apart from Claude simply" + NL +
